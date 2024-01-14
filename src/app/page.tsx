@@ -3,18 +3,12 @@ import { IOptions, MoveDirection, RecursivePartial } from '@tsparticles/engine'
 import Particles, { initParticlesEngine } from '@tsparticles/react'
 import { loadSlim } from '@tsparticles/slim' // if you are going to use `loadSlim`, install the "@tsparticles/slim" package too.
 import { useEffect, useMemo, useState } from 'react'
-import Image from 'next/image'
+import RubiLoader from './components/Loaders/RubiLoader'
 export default function Home() {
   const [initialized, setInitialized] = useState(false)
   useEffect(() => {
     initParticlesEngine(async (engine) => {
-      // you can initiate the tsParticles instance (engine) here, adding custom shapes or presets
-      // this loads the tsparticles package bundle, it's the easiest method for getting everything ready
-      // starting from v2 you can add only the features you need reducing the bundle size
-      //await loadAll(engine);
-      //await loadFull(engine);
       await loadSlim(engine)
-      //await loadBasic(engine);
     }).then(() => setInitialized(true))
   }, [])
   const options: RecursivePartial<IOptions> = useMemo(
@@ -94,27 +88,78 @@ export default function Home() {
   )
   return initialized ? (
     <>
-      <h1 className="text-content center text-4xl mt-10 font-extrabold">
-        <span className="border-b-[2px]">Manav Da</span>
+      <h1 className="center mt-5">
+        <span className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-200 shadow-inner">
+          Manav Da
+        </span>
       </h1>
-      <h2 className="text-content center text-3xl mt-10">
-        <span className="border-b-[2px]">Software Engineer</span>
+      <h2 className="center mt-2">
+        <span className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-200">
+          Software Engineer
+        </span>
       </h2>
+      <div className="center mt-8">
+        <div className="grid gap-4 grid-cols-8 mt-5 w-[80vw] min-h-[75vh]">
+          <div className="col-span-2 min-h-full p-5">
+            <p className="text-xl">About Me</p>
+            <p className="tracking-wider">
+              I&apos;m a software engineer and seeker that enjoys solving
+              complex problems. I love working with like minded people in
+              tackling hard problems, and coming up with novel and creative
+              solutions. I&apos;m a big fan of open source software.
+            </p>
+            <p></p>
+            <p className="pt-10 center">
+              <a
+                href="https://www.linkedin.com/in/manav-dhindsa/"
+                target="_blank"
+                className="border-b-2 border-white hover:border-gray-500">
+                LinkedIn Profile
+              </a>
+            </p>
+          </div>
+          <div className="col-span-4 p-5">
+            <div className="center text-xl">Skills</div>
+          </div>
+          <div className="col-span-2 p-5">
+            <p className="text-xl center">Stuff I Like</p>
+            <div className="center flex flex-wrap space-x-4 text-xs">
+              <a
+                href="https://xkcd.com/"
+                target="_blank"
+                className="border-b-2 border-white hover:border-gray-500">
+                XKCD
+              </a>
+              <a
+                href="https://pbfcomics.com/"
+                target="_blank"
+                className="border-b-2 border-white hover:border-gray-500">
+                PBF
+              </a>
+              <a
+                href="https://www.pathofexile.com/"
+                target="_blank"
+                className="border-b-2 border-white hover:border-gray-500">
+                POE
+              </a>
+            </div>
+          </div>
+          <div className="p-5">
+            <span className="border-b-2 border-white hover:border-gray-500 hover:text-gray-500 hover:cursor-pointer">
+              Contact Me
+            </span>
+          </div>
+        </div>
+      </div>
       <Particles
         id="particles"
-        particlesLoaded={async (container: any) => console.log(container)}
+        particlesLoaded={async (container: any) => {}}
         options={options}
       />
     </>
   ) : (
     <div className="center h-screen">
-      <Image
-        className="center"
-        alt="loading gif"
-        src="/loader.gif"
-        height={64}
-        width={64}
-      />
+      <RubiLoader type="white" height={32} width={32} />
     </div>
   )
 }

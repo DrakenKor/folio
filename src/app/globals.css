@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 body {
+  font-family: 'roboto', sans-serif;
+  font-variant: small-caps;
   color: white;
 }
 
@@ -18,10 +20,4 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-}
-.text-content {
-  font-family: 'roboto', sans-serif;
-  color: white;
-  z-index: 1;
-  font-variant: small-caps;
 }

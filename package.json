@@ -14,17 +14,20 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@react-three/fiber": "^8.15.14",
     "@tsparticles/engine": "^3.0.3",
     "@tsparticles/react": "^3.0.0",
     "@tsparticles/slim": "^3.0.3",
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.47",
     "@types/react-dom": "^18.2.18",
+    "@types/three": "^0.160.0",
     "autoprefixer": "^10.4.16",
     "eslint": "^8.56.0",
     "eslint-config-next": "14.0.4",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
+    "three": "^0.160.0",
     "typescript": "^5.3.3"
   }
 }
