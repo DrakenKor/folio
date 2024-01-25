@@ -4,6 +4,10 @@ import Particles, { initParticlesEngine } from '@tsparticles/react'
 import { loadSlim } from '@tsparticles/slim' // if you are going to use `loadSlim`, install the "@tsparticles/slim" package too.
 import { useEffect, useMemo, useState } from 'react'
 import RubiLoader from './components/Loaders/RubiLoader'
+import ProfilePhoto from './components/Svg/ProfilePhoto'
+import { CiLinkedin } from 'react-icons/ci'
+import { FaGithubSquare } from 'react-icons/fa'
+
 export default function Home() {
   const [initialized, setInitialized] = useState(false)
   useEffect(() => {
@@ -98,61 +102,23 @@ export default function Home() {
           Software Engineer
         </span>
       </h2>
-      <div className="center mt-8">
-        <div className="grid gap-4 grid-cols-8 mt-5 w-[80vw] min-h-[75vh]">
-          <div className="col-span-2 min-h-full p-5">
-            <p className="text-xl">About Me</p>
-            <p className="tracking-wider">
-              I&apos;m a software engineer and seeker that enjoys solving
-              complex problems. I love working with like minded people in
-              tackling hard problems, and coming up with novel and creative
-              solutions. I&apos;m a big fan of open source software.
-            </p>
-            <p></p>
-            <p className="pt-10 center">
-              <a
-                href="https://www.linkedin.com/in/manav-dhindsa/"
-                target="_blank"
-                className="border-b-2 border-white hover:border-gray-500">
-                LinkedIn Profile
-              </a>
-            </p>
-          </div>
-          <div className="col-span-4 p-5">
-            <div className="center text-xl">Skills</div>
-          </div>
-          <div className="col-span-2 p-5">
-            <p className="text-xl center">Stuff I Like</p>
-            <div className="center flex flex-wrap space-x-4 text-xs">
-              <a
-                href="https://xkcd.com/"
-                target="_blank"
-                className="border-b-2 border-white hover:border-gray-500">
-                XKCD
-              </a>
-              <a
-                href="https://pbfcomics.com/"
-                target="_blank"
-                className="border-b-2 border-white hover:border-gray-500">
-                PBF
-              </a>
-              <a
-                href="https://www.pathofexile.com/"
-                target="_blank"
-                className="border-b-2 border-white hover:border-gray-500">
-                POE
-              </a>
-            </div>
-          </div>
-          <div className="p-5">
-            <span className="border-b-2 border-white hover:border-gray-500 hover:text-gray-500 hover:cursor-pointer">
-              Contact Me
-            </span>
-          </div>
-        </div>
+      <div className="center mt-16">
+        <ProfilePhoto className="w-64 h-64" />
+      </div>
+      <div className="center flex flex-row justify-center mt-16 gap-x-4">
+        <a href="https://www.linkedin.com/in/manav-dhindsa/" target="_blank">
+          <CiLinkedin className="w-8 h-8 cursor-pointer" />
+        </a>
+        <a
+          href="https://github.com/DrakenKor"
+          target="_blank"
+          aria-label="a wasteland">
+          <FaGithubSquare className="w-8 h-8" />
+        </a>
       </div>
       <Particles
         id="particles"
+        className="z-0"
         particlesLoaded={async (container: any) => {}}
         options={options}
       />

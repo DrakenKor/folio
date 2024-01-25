@@ -21,3 +21,23 @@ body {
   justify-content: center;
   align-items: center;
 }
+
+svg {
+  opacity: 0.4;
+}
+
+svg:hover {
+  animation: fade 1s;
+}
+
+@keyframes fade {
+  0% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
