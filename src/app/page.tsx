@@ -7,6 +7,7 @@ import RubiLoader from './components/Loaders/RubiLoader'
 import ProfilePhoto from './components/Svg/ProfilePhoto'
 import { CiLinkedin } from 'react-icons/ci'
 import { FaGithubSquare } from 'react-icons/fa'
+import XkcdIcon from './components/Svg/XkcdIcon'
 
 export default function Home() {
   const [initialized, setInitialized] = useState(false)
@@ -103,9 +104,9 @@ export default function Home() {
         </span>
       </h2>
       <div className="center mt-16">
-        <ProfilePhoto className="w-64 h-64" />
+        <ProfilePhoto className="w-64 h-96" />
       </div>
-      <div className="center flex flex-row justify-center mt-16 gap-x-4">
+      <div className="center flex flex-row justify-center mt-8 -ml-8 gap-x-4">
         <a href="https://www.linkedin.com/in/manav-dhindsa/" target="_blank">
           <CiLinkedin className="w-8 h-8 cursor-pointer" />
         </a>
@@ -114,6 +115,9 @@ export default function Home() {
           target="_blank"
           aria-label="a wasteland">
           <FaGithubSquare className="w-8 h-8" />
+        </a>
+        <a href="https://xkcd.com" target="_blank">
+          <XkcdIcon className="w-8 h-8" />
         </a>
       </div>
       <Particles
