@@ -111,7 +111,7 @@ export default function Home() {
           <CiLinkedin className="w-8 h-8 cursor-pointer" />
         </a>
         <a
-          href="https://github.com/DrakenKor"
+          href="https://github.com/manavdia"
           target="_blank"
           aria-label="a wasteland">
           <FaGithubSquare className="w-8 h-8" />
