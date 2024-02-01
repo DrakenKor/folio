@@ -124,11 +124,6 @@ export default function Home() {
         <p className="text-lg">Profile Stack</p>
         <div className="center flex flex-col">
           <p className="opacity-40 hover:opacity-100 fade duration-1000">
-            <span className="underline">Framework</span>
-            &nbsp;
-            <span>NextJS Typescript</span>
-          </p>
-          <p className="opacity-40 hover:opacity-100 fade duration-1000">
             <span className="underline">Host</span>
             &nbsp;
             <span>Github Pages</span>
