@@ -106,7 +106,7 @@ export default function Home() {
       <div className="center mt-16">
         <ProfilePhoto className="w-64 h-96" />
       </div>
-      <div className="center flex flex-row justify-center mt-8 -ml-8 gap-x-4">
+      <div className="center flex flex-row justify-center mt-8 gap-x-4">
         <a href="https://www.linkedin.com/in/manav-dhindsa/" target="_blank">
           <CiLinkedin className="w-8 h-8 cursor-pointer" />
         </a>
@@ -119,6 +119,36 @@ export default function Home() {
         <a href="https://xkcd.com" target="_blank">
           <XkcdIcon className="w-8 h-8" />
         </a>
+      </div>
+      <div className="center mt-10 flex flex-col">
+        <p className="text-lg">Profile Stack</p>
+        <div className="center flex flex-col">
+          <p className="opacity-40 hover:opacity-100 fade duration-1000">
+            <span className="underline">Framework</span>
+            &nbsp;
+            <span>NextJS Typescript</span>
+          </p>
+          <p className="opacity-40 hover:opacity-100 fade duration-1000">
+            <span className="underline">Host</span>
+            &nbsp;
+            <span>Github Pages</span>
+          </p>
+          <p className="opacity-40 hover:opacity-100 fade duration-1000">
+            <span className="underline">CICD</span>
+            &nbsp;
+            <span>Github Actions</span>
+          </p>
+          <p className="opacity-40 hover:opacity-100 fade duration-1000">
+            <span className="underline">Framework</span>
+            &nbsp;
+            <span>NextJS Typescript</span>
+          </p>
+          <p className="opacity-40 hover:opacity-100 fade duration-1000">
+            <span className="underline">Domain Registrar</span>
+            &nbsp;
+            <span>AWS Route 53</span>
+          </p>
+        </div>
       </div>
       <Particles
         id="particles"
