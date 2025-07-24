@@ -3,6 +3,7 @@ import { subscribeWithSelector } from 'zustand/middleware'
 import {
   AppConfig,
   DeviceCapabilities,
+  ExtendedDeviceCapabilities,
   PerformanceMetrics,
   QualityLevel,
   SectionType,
@@ -14,8 +15,12 @@ import {
 interface AppState {
   // Configuration
   config: AppConfig
-  deviceCapabilities: DeviceCapabilities | null
+  deviceCapabilities: ExtendedDeviceCapabilities | null
   performanceMetrics: PerformanceMetrics | null
+
+  // Adaptive Quality
+  adaptiveQualityEnabled: boolean
+  qualityOverride: QualityLevel | null
 
   // Navigation
   navigation: NavigationState
@@ -26,9 +31,11 @@ interface AppState {
   loadingProgress: number
 
   // Actions
-  setDeviceCapabilities: (capabilities: DeviceCapabilities) => void
+  setDeviceCapabilities: (capabilities: ExtendedDeviceCapabilities) => void
   setPerformanceMetrics: (metrics: PerformanceMetrics) => void
   setQualityLevel: (level: QualityLevel) => void
+  setAdaptiveQualityEnabled: (enabled: boolean) => void
+  setQualityOverride: (level: QualityLevel | null) => void
   setCurrentSection: (section: SectionType) => void
   startTransition: (to: SectionType) => void
   completeTransition: () => void
@@ -69,6 +76,8 @@ export const useAppStore = create<AppState>()(
     config: defaultConfig,
     deviceCapabilities: null,
     performanceMetrics: null,
+    adaptiveQualityEnabled: true,
+    qualityOverride: null,
     navigation: defaultNavigation,
     isInitializing: true,
     isTransitioning: false,
@@ -131,6 +140,14 @@ export const useAppStore = create<AppState>()(
           }
         }
       }))
+    },
+
+    setAdaptiveQualityEnabled: (enabled) => {
+      set({ adaptiveQualityEnabled: enabled })
+    },
+
+    setQualityOverride: (level) => {
+      set({ qualityOverride: level })
     },
 
     setCurrentSection: (section) => {
@@ -206,6 +223,7 @@ export const useDeviceCapabilities = () => useAppStore(state => state.deviceCapa
 export const usePerformanceMetrics = () => useAppStore(state => state.performanceMetrics)
 export const useQualityLevel = () => useAppStore(state => state.config.quality)
 export const useCurrentSection = () => useAppStore(state => state.navigation.currentSection)
+export const useNavigationState = () => useAppStore(state => state.navigation)
 export const useIsTransitioning = () => useAppStore(state => state.navigation.isTransitioning)
 export const useFeatureFlags = () => useAppStore(state => state.config.features)
 export const usePerformanceConfig = () => useAppStore(state => state.config.performance)

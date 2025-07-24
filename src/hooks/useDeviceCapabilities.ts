@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DeviceDetector } from '@/lib/device-detection'
 import { useAppStore } from '@/stores/app-store'
-import { DeviceCapabilities } from '@/types'
+import { ExtendedDeviceCapabilities } from '@/types'
 
 export const useDeviceCapabilities = () => {
   const [isLoading, setIsLoading] = useState(true)
@@ -38,8 +38,21 @@ export const useDeviceCapabilities = () => {
     capabilities: deviceCapabilities,
     isLoading,
     error,
-    isSupported: (feature: keyof DeviceCapabilities) => {
+    isSupported: (feature: keyof ExtendedDeviceCapabilities) => {
       return deviceCapabilities ? deviceCapabilities[feature] : false
+    },
+    // Helper methods for common checks
+    supportsAdvancedShaders: () => {
+      const detector = DeviceDetector.getInstance()
+      return detector.supportsAdvancedShaders()
+    },
+    supportsHighQualityTextures: () => {
+      const detector = DeviceDetector.getInstance()
+      return detector.supportsHighQualityTextures()
+    },
+    shouldUseLowPowerMode: () => {
+      const detector = DeviceDetector.getInstance()
+      return detector.shouldUseLowPowerMode()
     }
   }
 }

@@ -41,6 +41,39 @@ export interface DeviceCapabilities {
   cores: number
 }
 
+export interface ExtendedDeviceCapabilities extends DeviceCapabilities {
+  gpu: GPUInfo
+  network: NetworkInfo
+  battery?: BatteryInfo
+  performanceScore: number
+}
+
+export interface GPUInfo {
+  vendor: string
+  renderer: string
+  maxFragmentUniforms: number
+  maxVertexAttributes: number
+  maxVaryingVectors: number
+  maxCombinedTextureImageUnits: number
+  supportsFloatTextures: boolean
+  supportsHalfFloatTextures: boolean
+  maxAnisotropy: number
+}
+
+export interface NetworkInfo {
+  effectiveType: string
+  downlink: number
+  rtt: number
+  saveData: boolean
+}
+
+export interface BatteryInfo {
+  charging: boolean
+  level: number
+  chargingTime: number
+  dischargingTime: number
+}
+
 export interface PerformanceMetrics {
   fps: number
   memoryUsage: number
