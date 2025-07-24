@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { Scene3D, SceneConfig, SceneLifecycleEvents } from './types'
-import { QualityLevel } from '@/types'
+import { QualityLevel } from '../../types'
 
 /**
  * Abstract base class for all 3D scenes

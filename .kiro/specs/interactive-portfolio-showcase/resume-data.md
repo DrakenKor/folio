@@ -9,7 +9,6 @@ This document contains the specific work experience, education, and project deta
 - **Contact:** manav.da@gmail.com
 - **Portfolio:** https://manavda.net
 - **LinkedIn:** linkedin.com/in/manav-dhindsa
-- **Phone:** +81-70-9186-9933
 
 ## About
 
@@ -48,7 +47,7 @@ Versatile Software Engineer with over 8 years of experience developing and scali
   - Integrated multiple third-party APIs
   - Rapid delivery with transparent communication
 
-### Lead Engineer - StaffLink
+### Devops Lead - StaffLink
 
 - **Duration:** 2022 - Feb 2024
 - **Location:** Brisbane, Australia

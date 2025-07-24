@@ -1,0 +1,246 @@
+'use client'
+
+import React, { useRef, useEffect, useState, useCallback } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
+import * as THREE from 'three'
+import { TimelineScene3D } from './scenes/TimelineScene3D'
+import { SceneManager } from '../lib/scene-management/SceneManager'
+import { QualityLevel, SectionType } from '../types'
+import { TimelineManager } from '../lib/timeline-manager'
+import { TimelineExperience } from '../types/resume'
+
+interface Timeline3DProps {
+  qualityLevel?: QualityLevel
+  autoNavigate?: boolean
+  navigationSpeed?: number
+  onExperienceSelect?: (experience: TimelineExperience) => void
+  className?: string
+}
+
+/**
+ * Timeline3D Component
+ * Renders the 3D helical timeline with experience cards and smooth camera movement
+ */
+export const Timeline3D: React.FC<Timeline3DProps> = ({
+  qualityLevel = QualityLevel.HIGH,
+  autoNavigate = false,
+  navigationSpeed = 0.1,
+  onExperienceSelect,
+  className = ''
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [experiences, setExperiences] = useState<TimelineExperience[]>([])
+
+  // Load timeline data
+  useEffect(() => {
+    const loadTimelineData = async () => {
+      try {
+        setIsLoading(true)
+        const timelineManager = TimelineManager.getInstance()
+        const timelineData = await timelineManager.initializeTimeline()
+        setExperiences(timelineData.experiences)
+        setError(null)
+      } catch (err) {
+        console.error('Failed to load timeline data:', err)
+        setError('Failed to load timeline data')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadTimelineData()
+  }, [])
+
+  if (isLoading) {
+    return (
+      <div className={`flex items-center justify-center h-full ${className}`}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading timeline...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className={`flex items-center justify-center h-full ${className}`}>
+        <div className="text-center text-red-500">
+          <p className="text-lg font-semibold mb-2">Error</p>
+          <p>{error}</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div ref={containerRef} className={`relative w-full h-full ${className}`}>
+      <Canvas
+        camera={{ position: [30, 25, 30], fov: 60 }}
+        gl={{
+          antialias: qualityLevel !== QualityLevel.LOW,
+          alpha: true,
+          powerPreference: 'high-performance'
+        }}
+        shadows={qualityLevel === QualityLevel.HIGH || qualityLevel === QualityLevel.ULTRA}
+      >
+        <TimelineScene
+          qualityLevel={qualityLevel}
+          autoNavigate={autoNavigate}
+          navigationSpeed={navigationSpeed}
+          onExperienceSelect={onExperienceSelect}
+        />
+        <OrbitControls
+          enablePan={true}
+          enableZoom={true}
+          enableRotate={true}
+          minDistance={10}
+          maxDistance={100}
+          minPolarAngle={0}
+          maxPolarAngle={Math.PI}
+        />
+      </Canvas>
+
+      {/* Timeline Controls */}
+      <TimelineControls
+        experiences={experiences}
+        onExperienceSelect={onExperienceSelect}
+      />
+    </div>
+  )
+}
+
+/**
+ * Timeline Scene Component (inside Canvas)
+ */
+interface TimelineSceneProps {
+  qualityLevel: QualityLevel
+  autoNavigate: boolean
+  navigationSpeed: number
+  onExperienceSelect?: (experience: TimelineExperience) => void
+}
+
+const TimelineScene: React.FC<TimelineSceneProps> = ({
+  qualityLevel,
+  autoNavigate,
+  navigationSpeed,
+  onExperienceSelect
+}) => {
+  const { gl, camera, scene } = useThree()
+  const sceneManagerRef = useRef<SceneManager | null>(null)
+  const timelineSceneRef = useRef<TimelineScene3D | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  // Initialize scene manager and timeline scene
+  useEffect(() => {
+    const initializeScene = async () => {
+      try {
+        // Create scene manager
+        sceneManagerRef.current = SceneManager.getInstance()
+        sceneManagerRef.current.initialize(gl, camera as THREE.PerspectiveCamera, qualityLevel)
+
+        // Create timeline scene
+        timelineSceneRef.current = new TimelineScene3D({
+          id: SectionType.RESUME,
+          name: 'Timeline Scene',
+          supportedQualityLevels: [QualityLevel.LOW, QualityLevel.MEDIUM, QualityLevel.HIGH, QualityLevel.ULTRA],
+          defaultQualityLevel: qualityLevel
+        })
+
+        // Register and activate scene
+        sceneManagerRef.current.registerScene(timelineSceneRef.current)
+        await sceneManagerRef.current.transitionTo(SectionType.RESUME)
+
+        setIsInitialized(true)
+      } catch (error) {
+        console.error('Failed to initialize timeline scene:', error)
+      }
+    }
+
+    initializeScene()
+
+    return () => {
+      if (sceneManagerRef.current) {
+        sceneManagerRef.current.dispose()
+      }
+    }
+  }, [gl, camera, qualityLevel])
+
+  // Update auto-navigation settings
+  useEffect(() => {
+    if (timelineSceneRef.current) {
+      if (autoNavigate) {
+        timelineSceneRef.current.startAutoNavigation()
+        timelineSceneRef.current.setNavigationSpeed(navigationSpeed)
+      } else {
+        timelineSceneRef.current.stopAutoNavigation()
+      }
+    }
+  }, [autoNavigate, navigationSpeed])
+
+  // Update quality level
+  useEffect(() => {
+    if (sceneManagerRef.current) {
+      sceneManagerRef.current.setQualityLevel(qualityLevel)
+    }
+  }, [qualityLevel])
+
+  // Animation loop
+  useFrame(() => {
+    if (sceneManagerRef.current && isInitialized) {
+      sceneManagerRef.current.update()
+    }
+  })
+
+  return null
+}
+
+/**
+ * Timeline Controls Component
+ */
+interface TimelineControlsProps {
+  experiences: TimelineExperience[]
+  onExperienceSelect?: (experience: TimelineExperience) => void
+}
+
+const TimelineControls: React.FC<TimelineControlsProps> = ({
+  experiences,
+  onExperienceSelect
+}) => {
+  const [selectedExperience, setSelectedExperience] = useState<string | null>(null)
+
+  const handleExperienceClick = useCallback((experience: TimelineExperience) => {
+    setSelectedExperience(experience.id)
+    onExperienceSelect?.(experience)
+  }, [onExperienceSelect])
+
+  return (
+    <div className="absolute top-4 left-4 bg-black/20 backdrop-blur-sm rounded-lg p-4 max-w-xs">
+      <h3 className="text-white font-semibold mb-3">Timeline Navigation</h3>
+      <div className="space-y-2 max-h-64 overflow-y-auto">
+        {experiences.map((experience) => (
+          <button
+            key={experience.id}
+            onClick={() => handleExperienceClick(experience)}
+            className={`w-full text-left p-2 rounded text-sm transition-colors ${
+              selectedExperience === experience.id
+                ? 'bg-blue-500/50 text-white'
+                : 'bg-white/10 text-gray-200 hover:bg-white/20'
+            }`}
+          >
+            <div className="font-medium">{experience.company}</div>
+            <div className="text-xs opacity-75">{experience.position}</div>
+            <div className="text-xs opacity-60">
+              {experience.startDate.getFullYear()} - {experience.endDate?.getFullYear() || 'Present'}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export default Timeline3D

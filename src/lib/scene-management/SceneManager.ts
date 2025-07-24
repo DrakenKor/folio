@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { Scene3D, SceneType, CameraController } from './types'
-import { TransitionOptions } from '@/types'
-import { QualityLevel } from '@/types'
-import { PerformanceMonitor } from '@/lib/performance-monitor'
+import { TransitionOptions } from '../../types'
+import { QualityLevel } from '../../types'
+import { PerformanceMonitor } from '../performance-monitor'
 import { CameraControllerImpl } from './CameraController'
 
 /**
