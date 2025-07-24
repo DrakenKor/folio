@@ -236,19 +236,11 @@ export abstract class BaseScene3D implements Scene3D {
       // Dispose of materials
       if ((object as THREE.Mesh).material) {
         const materials = Array.isArray((object as THREE.Mesh).material)
-          ? (object as THREE.Mesh).material
-          : [(object as THREE.Mesh).material]
+          ? (object as THREE.Mesh).material as THREE.Material[]
+          : [(object as THREE.Mesh).material] as THREE.Material[]
 
         materials.forEach((material) => {
           material.dispose()
-
-          // Dispose of textures
-          for (const key in material) {
-            const value = material[key]
-            if (value && typeof value === 'object' && 'isTexture' in value) {
-              value.dispose()
-            }
-          }
         })
       }
     })

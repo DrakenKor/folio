@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { Scene3D, SceneType, TransitionOptions, CameraController } from './types'
+import { Scene3D, SceneType, CameraController } from './types'
+import { TransitionOptions } from '@/types'
 import { QualityLevel } from '@/types'
 import { PerformanceMonitor } from '@/lib/performance-monitor'
 import { CameraControllerImpl } from './CameraController'
@@ -76,7 +77,7 @@ export class SceneManager {
     }
 
     this.scenes.delete(sceneId)
-    console.log(`Scene unregistered: ${sceneId}`)
+
   }
 
   /**
@@ -155,6 +156,7 @@ export class SceneManager {
       }
     } catch (error) {
       console.error('Scene transition failed:', error)
+      throw error // Re-throw for SceneTransitionManager to handle
     } finally {
       this._isTransitioning = false
     }
