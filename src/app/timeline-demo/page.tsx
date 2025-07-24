@@ -32,15 +32,18 @@ export default function TimelineDemoPage() {
 
   const handleExperienceSelect = (experience: TimelineExperience) => {
     setSelectedExperience(experience)
-    navigateToExperience(experience.id)
+    // Only navigate manually if not auto-navigating
+    if (!autoNavigate) {
+      navigateToExperience(experience.id)
+    }
   }
 
   const handleAutoNavigationToggle = () => {
-    if (isAutoNavigating) {
-      stopAutoNavigation()
+    if (autoNavigate) {
+      // Stop auto-navigation
       setAutoNavigate(false)
     } else {
-      startAutoNavigation()
+      // Start auto-navigation
       setAutoNavigate(true)
     }
   }
@@ -93,12 +96,12 @@ export default function TimelineDemoPage() {
               <button
                 onClick={handleAutoNavigationToggle}
                 className={`w-full px-3 py-2 rounded text-sm font-medium transition-colors ${
-                  isAutoNavigating
+                  autoNavigate
                     ? 'bg-blue-500 text-white'
                     : 'bg-white/10 text-gray-300 hover:bg-white/20'
                 }`}
               >
-                {isAutoNavigating ? 'Stop Auto' : 'Start Auto'}
+                {autoNavigate ? 'Stop Auto' : 'Start Auto'}
               </button>
             </div>
 

@@ -125,7 +125,7 @@ export class ResumeDataLoader {
       {
         id: 'stafflink-2022',
         company: 'StaffLink',
-        position: 'Lead Engineer',
+        position: 'Devops Lead / Lead Fullstack',
         startDate: new Date('2022-01-01'),
         endDate: new Date('2024-02-01'),
         location: 'Brisbane, Australia',
@@ -135,7 +135,7 @@ export class ResumeDataLoader {
         projects: [
           {
             projectId: 'proptech-platform',
-            role: 'Lead Engineer',
+            role: 'Lead Devops/Fullstack Engineer',
             impact: 'Scaled to thousands of monthly active users'
           },
           {

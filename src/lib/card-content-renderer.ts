@@ -134,7 +134,7 @@ export class CardContentRenderer {
       reflectivity: 0.5,
       iridescence: 0.3,
       iridescenceIOR: 1.3,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide // Single-sided only
     })
 
     const mesh = new THREE.Mesh(geometry, material)
@@ -248,7 +248,7 @@ export class CardContentRenderer {
     const material = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide // Single-sided only
     })
 
     const mesh = new THREE.Mesh(geometry, material)

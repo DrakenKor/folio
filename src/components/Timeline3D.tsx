@@ -33,6 +33,34 @@ export const Timeline3D: React.FC<Timeline3DProps> = ({
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [experiences, setExperiences] = useState<TimelineExperience[]>([])
+  const [currentSelectedExperience, setCurrentSelectedExperience] = useState<string | null>(null)
+
+  // Reference to access the timeline scene for camera control
+  const timelineSceneRef = useRef<any>(null)
+
+  // Wrapper function to update timeline controls, animate camera, and call parent callback
+  const handleExperienceSelection = useCallback((experience: TimelineExperience) => {
+    console.log('Experience selected:', experience.company, 'Auto-navigate:', autoNavigate)
+    setCurrentSelectedExperience(experience.id)
+
+    // Only animate camera if auto-navigation is not active
+    if (!autoNavigate && timelineSceneRef.current) {
+      console.log('Attempting to navigate to experience:', experience.id)
+      console.log('Timeline scene ref:', timelineSceneRef.current)
+
+      // Stop auto-navigation first to ensure manual navigation works
+      timelineSceneRef.current.stopAutoNavigation()
+
+      // Trigger smooth camera animation to the selected experience
+      timelineSceneRef.current.navigateToExperience(experience.id)
+    } else if (autoNavigate) {
+      console.log('Auto-navigation is active, skipping manual camera move')
+    } else {
+      console.log('Timeline scene ref is null')
+    }
+
+    onExperienceSelect?.(experience)
+  }, [onExperienceSelect, autoNavigate])
 
   // Load timeline data
   useEffect(() => {
@@ -91,7 +119,8 @@ export const Timeline3D: React.FC<Timeline3DProps> = ({
           qualityLevel={qualityLevel}
           autoNavigate={autoNavigate}
           navigationSpeed={navigationSpeed}
-          onExperienceSelect={onExperienceSelect}
+          onExperienceSelect={handleExperienceSelection}
+          parentTimelineSceneRef={timelineSceneRef}
         />
          <OrbitControls
           enabled={!autoNavigate}
@@ -108,7 +137,8 @@ export const Timeline3D: React.FC<Timeline3DProps> = ({
       {/* Timeline Controls */}
       <TimelineControls
         experiences={experiences}
-        onExperienceSelect={onExperienceSelect}
+        selectedExperience={currentSelectedExperience}
+        onExperienceSelect={handleExperienceSelection}
       />
     </div>
   )
@@ -122,14 +152,16 @@ interface TimelineSceneProps {
   autoNavigate: boolean
   navigationSpeed: number
   onExperienceSelect?: (experience: TimelineExperience) => void
+  parentTimelineSceneRef?: React.MutableRefObject<any>
 }
 
-const TimelineScene: React.FC<TimelineSceneProps> = ({
+const TimelineScene = React.forwardRef<any, TimelineSceneProps>(({
   qualityLevel,
   autoNavigate,
   navigationSpeed,
-  onExperienceSelect
-}) => {
+  onExperienceSelect,
+  parentTimelineSceneRef
+}, ref) => {
   const { gl, camera, scene } = useThree()
   const sceneManagerRef = useRef<SceneManager | null>(null)
   const timelineSceneRef = useRef<TimelineScene3D | null>(null)
@@ -178,6 +210,13 @@ const TimelineScene: React.FC<TimelineSceneProps> = ({
     }
   }, [gl, camera, qualityLevel])
 
+  // Expose timeline scene to parent component
+  useEffect(() => {
+    if (parentTimelineSceneRef && timelineSceneRef.current) {
+      parentTimelineSceneRef.current = timelineSceneRef.current
+    }
+  }, [parentTimelineSceneRef, timelineSceneRef.current])
+
   // Update auto-navigation settings
   useEffect(() => {
     if (timelineSceneRef.current) {
@@ -225,24 +264,26 @@ const TimelineScene: React.FC<TimelineSceneProps> = ({
   }, [camera])
 
   return null
-}
+})
+
+TimelineScene.displayName = 'TimelineScene'
 
 /**
  * Timeline Controls Component
  */
 interface TimelineControlsProps {
   experiences: TimelineExperience[]
+  selectedExperience?: string | null
   onExperienceSelect?: (experience: TimelineExperience) => void
 }
 
 const TimelineControls: React.FC<TimelineControlsProps> = ({
   experiences,
+  selectedExperience = null,
   onExperienceSelect
 }) => {
-  const [selectedExperience, setSelectedExperience] = useState<string | null>(null)
-
   const handleExperienceClick = useCallback((experience: TimelineExperience) => {
-    setSelectedExperience(experience.id)
+    // This will trigger the camera animation in the parent component
     onExperienceSelect?.(experience)
   }, [onExperienceSelect])
 

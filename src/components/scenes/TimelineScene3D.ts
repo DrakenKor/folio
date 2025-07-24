@@ -46,6 +46,16 @@ export class TimelineScene3D extends BaseScene3D {
   private cameraRadiusOffset = -0.5 // Radius offset from helix curve (inside the helix)
   private currentDisplayedExperience: TimelineExperience | null = null
 
+  // Camera transition system
+  private isCameraTransitioning = false
+  private cameraTransitionStartTime = 0
+  private cameraTransitionDuration = 2000 // 2 seconds
+  private cameraStartPosition: THREE.Vector3 = new THREE.Vector3()
+  private cameraStartTarget: THREE.Vector3 = new THREE.Vector3()
+  private cameraEndPosition: THREE.Vector3 = new THREE.Vector3()
+  private cameraEndTarget: THREE.Vector3 = new THREE.Vector3()
+  private currentCamera: THREE.Camera | null = null
+
   // Lighting
   private ambientLight: THREE.AmbientLight | null = null
   private directionalLight: THREE.DirectionalLight | null = null
@@ -58,6 +68,9 @@ export class TimelineScene3D extends BaseScene3D {
 
   protected async onInitialize(renderer: THREE.WebGLRenderer, camera: THREE.Camera): Promise<void> {
     console.log('Initializing Timeline Scene 3D...')
+
+    // Store camera reference for transitions
+    this.currentCamera = camera
 
     // Initialize timeline data
     this.timelineData = await this.timelineManager.initializeTimeline()
@@ -99,8 +112,13 @@ export class TimelineScene3D extends BaseScene3D {
   protected onUpdate(deltaTime: number): void {
     if (!this.timelineData) return
 
-    // Update auto-navigation
-    if (this.isAutoNavigating) {
+    // Update camera transitions
+    if (this.isCameraTransitioning) {
+      this.updateCameraTransition(deltaTime)
+    }
+
+    // Update auto-navigation (only if not transitioning manually)
+    if (this.isAutoNavigating && !this.isCameraTransitioning) {
       this.updateAutoNavigation(deltaTime)
     }
 
@@ -715,6 +733,90 @@ export class TimelineScene3D extends BaseScene3D {
   }
 
   /**
+   * Update camera transition animation
+   */
+  private updateCameraTransition(deltaTime: number): void {
+    if (!this.isCameraTransitioning) return
+
+    const currentTime = Date.now()
+    const elapsed = currentTime - this.cameraTransitionStartTime
+    const progress = Math.min(elapsed / this.cameraTransitionDuration, 1)
+
+    // Use smooth easing function
+    const easedProgress = this.easeInOutCubic(progress)
+
+    // Interpolate camera position
+    const newCameraPosition = new THREE.Vector3().lerpVectors(
+      this.cameraStartPosition,
+      this.cameraEndPosition,
+      easedProgress
+    )
+
+    // Interpolate camera target
+    const newCameraTarget = new THREE.Vector3().lerpVectors(
+      this.cameraStartTarget,
+      this.cameraEndTarget,
+      easedProgress
+    )
+
+    // Apply to scene camera properties AND force update via camera controller
+    this.cameraPosition = newCameraPosition
+    this.cameraTarget = newCameraTarget
+
+    // Also directly update the camera if we have access to it
+    if (this.currentCamera) {
+      this.currentCamera.position.copy(newCameraPosition)
+      this.currentCamera.lookAt(newCameraTarget)
+      this.currentCamera.updateMatrixWorld()
+    }
+
+    console.log(`Camera transition progress: ${(progress * 100).toFixed(1)}%, pos: (${newCameraPosition.x.toFixed(1)}, ${newCameraPosition.y.toFixed(1)}, ${newCameraPosition.z.toFixed(1)})`)
+
+    // Complete transition
+    if (progress >= 1) {
+      this.isCameraTransitioning = false
+      console.log('Camera transition completed')
+    }
+  }
+
+  /**
+   * Easing function for smooth animations
+   */
+  private easeInOutCubic(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1
+  }
+
+  /**
+   * Start smooth camera transition
+   */
+  private startCameraTransition(targetPosition: THREE.Vector3, targetTarget: THREE.Vector3): void {
+    // Get current camera position from actual camera if available
+    if (this.currentCamera) {
+      this.cameraStartPosition.copy(this.currentCamera.position)
+
+      // Calculate what the camera is currently looking at
+      const direction = new THREE.Vector3()
+      this.currentCamera.getWorldDirection(direction)
+      const currentTarget = this.currentCamera.position.clone().add(direction.multiplyScalar(10))
+      this.cameraStartTarget.copy(currentTarget)
+    } else {
+      // Fallback to scene properties
+      this.cameraStartPosition.copy(this.cameraPosition || new THREE.Vector3(30, 25, 30))
+      this.cameraStartTarget.copy(this.cameraTarget || new THREE.Vector3(0, 0, 0))
+    }
+
+    // Store target state
+    this.cameraEndPosition.copy(targetPosition)
+    this.cameraEndTarget.copy(targetTarget)
+
+    // Start transition
+    this.isCameraTransitioning = true
+    this.cameraTransitionStartTime = Date.now()
+
+    console.log('Starting camera transition from', this.cameraStartPosition, 'to', this.cameraEndPosition)
+  }
+
+  /**
    * Public methods for external control
    */
   public startAutoNavigation(): void {
@@ -811,11 +913,10 @@ export class TimelineScene3D extends BaseScene3D {
       return
     }
 
-    console.log(`Setting camera for experience: ${experience.company}`)
+    console.log(`Starting smooth navigation to experience: ${experience.company}`)
 
     // Cards face inward toward helix center, so camera should be positioned inside looking out
     const cardPosition = experience.position3D.clone()
-    const cardRotation = experience.cardRotation
 
     // Calculate the direction the card is facing (toward helix center)
     const helixCenter = new THREE.Vector3(0, cardPosition.y, 0)
@@ -823,19 +924,26 @@ export class TimelineScene3D extends BaseScene3D {
 
     // Position camera in front of the card (between card and helix center)
     const cameraDistance = 6
-    const cameraPosition = cardPosition.clone().add(cardFaceDirection.multiplyScalar(cameraDistance))
+    const targetCameraPosition = cardPosition.clone().add(cardFaceDirection.multiplyScalar(cameraDistance))
 
     // Add slight upward offset for better viewing angle
-    cameraPosition.y += 2
+    targetCameraPosition.y += 2
 
     // Make sure we have valid positions
-    if (!cameraPosition || !experience.position3D) {
+    if (!targetCameraPosition || !experience.position3D) {
       console.log('Invalid camera position data')
       return
     }
 
-    this.cameraPosition = cameraPosition
-    this.cameraTarget = cardPosition
+    // Start smooth camera transition instead of instant positioning
+    this.startCameraTransition(targetCameraPosition, cardPosition)
+
+    // Highlight the experience card
+    this.highlightExperienceCard(experience.id)
+
+    console.log('Camera position set:', targetCameraPosition)
+    console.log('Camera target set:', cardPosition)
+    console.log('Card rotation:', experience.cardRotation)
   }
 
 
