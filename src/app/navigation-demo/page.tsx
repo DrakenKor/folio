@@ -80,19 +80,29 @@ export default function NavigationDemo() {
                 <h4 className="font-medium text-white mb-2">Mouse/Touch:</h4>
                 <ul className="space-y-1">
                   <li>• Click navigation items to switch sections</li>
-                  <li>• Hover for enhanced visual effects</li>
+                  <li>• Hover for enhanced 3D visual effects</li>
                   <li>• Mobile: Tap menu button to toggle</li>
+                  <li>• Enhanced particle systems respond to interaction</li>
                 </ul>
               </div>
               <div>
-                <h4 className="font-medium text-white mb-2">Keyboard:</h4>
+                <h4 className="font-medium text-white mb-2">Enhanced Keyboard Navigation:</h4>
                 <ul className="space-y-1">
-                  <li>• Arrow keys to navigate</li>
-                  <li>• Enter to select current section</li>
+                  <li>• Arrow keys or J/K to navigate</li>
+                  <li>• Home/H for home, End for last section</li>
                   <li>• Number keys 1-6 for direct access</li>
-                  <li>• Escape to close (mobile)</li>
+                  <li>• P to preload next section</li>
+                  <li>• ? to show full keyboard help</li>
+                  <li>• Deep linking and browser history support</li>
                 </ul>
               </div>
+            </div>
+
+            <div className="mt-4 p-4 bg-blue-500/10 rounded border border-blue-500/20">
+              <p className="text-sm text-blue-200">
+                <strong>New Features:</strong> Enhanced 3D effects, deep linking, keyboard shortcuts,
+                accessibility improvements, and dynamic lighting system. Press <kbd className="px-1 py-0.5 bg-blue-800/50 rounded text-xs">?</kbd> for full help.
+              </p>
             </div>
           </div>
         </div>
