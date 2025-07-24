@@ -134,6 +134,13 @@ const TimelineScene: React.FC<TimelineSceneProps> = ({
   const timelineSceneRef = useRef<TimelineScene3D | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
 
+  // Mouse event handlers
+  const handlePointerMove = useCallback((event: any) => {
+    if (timelineSceneRef.current && camera) {
+      timelineSceneRef.current.onMouseMove(event, camera as THREE.PerspectiveCamera)
+    }
+  }, [camera])
+
   // Initialize scene manager and timeline scene
   useEffect(() => {
     const initializeScene = async () => {
@@ -194,6 +201,20 @@ const TimelineScene: React.FC<TimelineSceneProps> = ({
       sceneManagerRef.current.update()
     }
   })
+
+  // Add global pointer move event listener
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (timelineSceneRef.current) {
+        timelineSceneRef.current.onMouseMove(event, camera as THREE.PerspectiveCamera)
+      }
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+    }
+  }, [camera])
 
   return null
 }

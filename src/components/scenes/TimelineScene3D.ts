@@ -4,6 +4,9 @@ import { SceneConfig, SceneLifecycleEvents } from '../../lib/scene-management/ty
 import { QualityLevel } from '../../types'
 import { TimelineManager } from '../../lib/timeline-manager'
 import { TimelineData, TimelineExperience } from '../../types/resume'
+import { ParticleTrailManager, ParticleTrailConfig } from '../../lib/particle-trail-system'
+import { SimpleCardRenderer, SimpleCardContent } from '../../lib/simple-card-renderer'
+import { InteractiveTooltip } from '../../lib/tooltip-system'
 
 /**
  * 3D Timeline Scene
@@ -15,10 +18,16 @@ export class TimelineScene3D extends BaseScene3D {
   private helixCurve: THREE.CatmullRomCurve3 | null = null
   private helixLine: THREE.Line | null = null
   private experienceCards: THREE.Group[] = []
-  private particleTrails: THREE.Points[] = []
+  private cardContents: Map<string, SimpleCardContent> = new Map()
+  private particleTrailManager: ParticleTrailManager | null = null
+  private simpleCardRenderer: SimpleCardRenderer | null = null
+  private tooltipSystem: InteractiveTooltip | null = null
   private currentCameraTime = 0
   private isAutoNavigating = false
   private autoNavigationSpeed = 0.1
+  private mousePosition: THREE.Vector3 = new THREE.Vector3()
+  private raycaster: THREE.Raycaster = new THREE.Raycaster()
+  private hoveredCard: THREE.Group | null = null
 
   // Lighting
   private ambientLight: THREE.AmbientLight | null = null
@@ -36,17 +45,23 @@ export class TimelineScene3D extends BaseScene3D {
     // Initialize timeline data
     this.timelineData = await this.timelineManager.initializeTimeline()
 
+    // Initialize simple card renderer
+    this.simpleCardRenderer = new SimpleCardRenderer()
+
+    // Initialize tooltip system
+    this.tooltipSystem = new InteractiveTooltip(this.scene, camera)
+
     // Setup lighting
     this.setupLighting()
 
     // Create helix curve visualization
     this.createHelixVisualization()
 
-    // Create experience cards
-    this.createExperienceCards()
+    // Create experience cards with enhanced content
+    this.createEnhancedExperienceCards()
 
-    // Create particle trails
-    this.createParticleTrails()
+    // Create enhanced particle trail system
+    this.createEnhancedParticleTrails()
 
     // Set initial camera position
     await this.setupInitialCamera()
@@ -72,11 +87,16 @@ export class TimelineScene3D extends BaseScene3D {
       this.updateAutoNavigation(deltaTime)
     }
 
-    // Update particle animations
-    this.updateParticleTrails(deltaTime)
+    // Update enhanced particle trails
+    this.updateEnhancedParticleTrails(deltaTime)
 
     // Update experience card animations
     this.updateExperienceCards(deltaTime)
+
+    // Update tooltip system
+    if (this.tooltipSystem && this.hoveredCard) {
+      this.tooltipSystem.updateTooltip(this.hoveredCard.position.clone())
+    }
   }
 
   protected onBeforeRender(renderer: THREE.WebGLRenderer, camera: THREE.Camera): void {
@@ -98,10 +118,26 @@ export class TimelineScene3D extends BaseScene3D {
     })
     this.experienceCards = []
 
-    this.particleTrails.forEach(trail => {
-      this.scene.remove(trail)
-    })
-    this.particleTrails = []
+    // Cleanup card contents
+    this.cardContents.clear()
+
+    // Cleanup particle trail manager
+    if (this.particleTrailManager) {
+      this.particleTrailManager.dispose()
+      this.particleTrailManager = null
+    }
+
+    // Cleanup simple card renderer
+    if (this.simpleCardRenderer) {
+      this.simpleCardRenderer.dispose()
+      this.simpleCardRenderer = null
+    }
+
+    // Cleanup tooltip system
+    if (this.tooltipSystem) {
+      this.tooltipSystem.dispose()
+      this.tooltipSystem = null
+    }
 
     if (this.helixLine) {
       this.scene.remove(this.helixLine)
@@ -122,6 +158,14 @@ export class TimelineScene3D extends BaseScene3D {
       case QualityLevel.ULTRA:
         this.setHighQualitySettings()
         break
+    }
+
+    // Update particle trail quality
+    if (this.particleTrailManager) {
+      this.particleTrailManager.updateGlobalConfig({
+        particleCount: this.getParticleCountForQuality(),
+        glowIntensity: level === QualityLevel.LOW ? 0.8 : 1.2
+      })
     }
   }
 
@@ -190,147 +234,99 @@ export class TimelineScene3D extends BaseScene3D {
   }
 
   /**
-   * Create 3D experience cards positioned along the helix
+   * Create simple 3D experience cards
    */
-  private createExperienceCards(): void {
-    if (!this.timelineData) return
+  private createEnhancedExperienceCards(): void {
+    if (!this.timelineData || !this.simpleCardRenderer) return
 
     this.timelineData.experiences.forEach((experience, index) => {
-      const cardGroup = this.createExperienceCard(experience, index)
+      const cardGroup = this.createSimpleExperienceCard(experience, index)
       this.experienceCards.push(cardGroup)
       this.scene.add(cardGroup)
     })
   }
 
   /**
-   * Create a single experience card
+   * Create a single simple experience card
    */
-  private createExperienceCard(experience: TimelineExperience, index: number): THREE.Group {
+  private createSimpleExperienceCard(experience: TimelineExperience, index: number): THREE.Group {
     const cardGroup = new THREE.Group()
 
-    // Card geometry - rounded rectangle
-    const cardWidth = 4
-    const cardHeight = 3
-    const cardDepth = 0.2
+    // Create simple card content
+    const cardContent = this.simpleCardRenderer!.createCard(experience)
 
-    const cardGeometry = new THREE.BoxGeometry(cardWidth, cardHeight, cardDepth)
+    // Store the card content for updates
+    this.cardContents.set(experience.id, cardContent)
 
-    // Glassmorphism material
-    const cardMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0x1a1a2e,
-      transparent: true,
-      opacity: 0.8,
-      roughness: 0.1,
-      metalness: 0.1,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.1,
-      transmission: 0.1,
-      thickness: 0.5
-    })
-
-    const cardMesh = new THREE.Mesh(cardGeometry, cardMaterial)
-    cardGroup.add(cardMesh)
-
-    // Add company name text (placeholder - would use actual text rendering)
-    const textGeometry = new THREE.PlaneGeometry(3, 0.5)
-    const textMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.9
-    })
-    const textMesh = new THREE.Mesh(textGeometry, textMaterial)
-    textMesh.position.set(0, 0.8, 0.11)
-    cardGroup.add(textMesh)
-
-    // Add technology indicators
-    experience.technologies.slice(0, 4).forEach((tech, techIndex) => {
-      const techGeometry = new THREE.SphereGeometry(0.1, 8, 8)
-      const techMaterial = new THREE.MeshBasicMaterial({
-        color: this.getTechnologyColor(tech)
-      })
-      const techMesh = new THREE.Mesh(techGeometry, techMaterial)
-      techMesh.position.set(
-        -1.5 + techIndex * 1,
-        -0.8,
-        0.15
-      )
-      cardGroup.add(techMesh)
-    })
+    // Add the content group to the card
+    cardGroup.add(cardContent.contentGroup)
 
     // Position and rotate the card
     cardGroup.position.copy(experience.position3D)
     cardGroup.rotation.setFromVector3(experience.cardRotation)
 
-    // Add hover animation data
+    // Enhanced user data for interactions
     cardGroup.userData = {
       originalPosition: experience.position3D.clone(),
       originalRotation: experience.cardRotation.clone(),
       experience: experience,
       index: index,
       hoverOffset: 0,
-      isHovered: false
+      isHovered: false,
+      isSelected: false,
+      cardContent: cardContent,
+      animationPhase: Math.random() * Math.PI * 2
     }
 
     return cardGroup
   }
 
   /**
-   * Create particle trails connecting experience cards
+   * Create enhanced particle trails connecting experience cards
    */
-  private createParticleTrails(): void {
+  private createEnhancedParticleTrails(): void {
     if (!this.timelineData) return
 
-    this.timelineData.experiences.forEach((experience, index) => {
-      if (experience.connectionPoints.length > 0) {
-        const trail = this.createParticleTrail(experience.connectionPoints)
-        this.particleTrails.push(trail)
-        this.scene.add(trail)
-      }
-    })
+    // Initialize particle trail manager
+    const trailConfig: Partial<ParticleTrailConfig> = {
+      particleCount: this.getParticleCountForQuality(),
+      trailSpeed: 0.3,
+      particleSize: 0.15,
+      opacity: 0.8,
+      glowIntensity: 1.2,
+      animationSpeed: 1.0,
+      colorScheme: 'tech',
+      interactionRadius: 3.0
+    }
+
+    this.particleTrailManager = new ParticleTrailManager(this.scene, trailConfig)
+
+    // Create trails between consecutive experiences
+    for (let i = 0; i < this.timelineData.experiences.length - 1; i++) {
+      const sourceExp = this.timelineData.experiences[i]
+      const targetExp = this.timelineData.experiences[i + 1]
+
+      const trailId = `trail_${sourceExp.id}_${targetExp.id}`
+      this.particleTrailManager.createTrail(trailId, sourceExp, targetExp)
+    }
   }
 
   /**
-   * Create a single particle trail
+   * Get particle count based on quality level
    */
-  private createParticleTrail(points: THREE.Vector3[]): THREE.Points {
-    const geometry = new THREE.BufferGeometry()
-    const positions = new Float32Array(points.length * 3)
-    const colors = new Float32Array(points.length * 3)
-    const sizes = new Float32Array(points.length)
-
-    points.forEach((point, index) => {
-      positions[index * 3] = point.x
-      positions[index * 3 + 1] = point.y
-      positions[index * 3 + 2] = point.z
-
-      // Gradient color along the trail
-      const t = index / (points.length - 1)
-      const color = new THREE.Color().lerpColors(
-        new THREE.Color(0x61dafb),
-        new THREE.Color(0x9f7aea),
-        t
-      )
-      colors[index * 3] = color.r
-      colors[index * 3 + 1] = color.g
-      colors[index * 3 + 2] = color.b
-
-      // Varying particle sizes
-      sizes[index] = Math.random() * 2 + 1
-    })
-
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
-
-    const material = new THREE.PointsMaterial({
-      size: 0.1,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.6,
-      blending: THREE.AdditiveBlending
-    })
-
-    return new THREE.Points(geometry, material)
+  private getParticleCountForQuality(): number {
+    switch (this.qualityLevel) {
+      case QualityLevel.LOW:
+        return 20
+      case QualityLevel.MEDIUM:
+        return 35
+      case QualityLevel.HIGH:
+        return 50
+      case QualityLevel.ULTRA:
+        return 75
+      default:
+        return 35
+    }
   }
 
   /**
@@ -364,30 +360,68 @@ export class TimelineScene3D extends BaseScene3D {
   }
 
   /**
-   * Update particle trail animations
+   * Update enhanced particle trail animations
    */
-  private updateParticleTrails(deltaTime: number): void {
-    this.particleTrails.forEach(trail => {
-      const material = trail.material as THREE.PointsMaterial
-      material.opacity = 0.6 + Math.sin(Date.now() * 0.001) * 0.2
-    })
+  private updateEnhancedParticleTrails(deltaTime: number): void {
+    if (this.particleTrailManager) {
+      this.particleTrailManager.update(deltaTime)
+      this.particleTrailManager.setMousePosition(this.mousePosition)
+    }
   }
 
   /**
-   * Update experience card animations
+   * Update simple experience card animations
    */
   private updateExperienceCards(deltaTime: number): void {
+    if (!this.simpleCardRenderer) return
+
     this.experienceCards.forEach((card, index) => {
       const userData = card.userData
 
-      // Floating animation
+      // Update animation phase
+      userData.animationPhase += deltaTime * 2
       userData.hoverOffset += deltaTime * 2
-      const floatOffset = Math.sin(userData.hoverOffset + index * 0.5) * 0.1
 
+      // Floating animation with individual phase offset
+      const floatOffset = Math.sin(userData.animationPhase + index * 0.5) * 0.1
       card.position.y = userData.originalPosition.y + floatOffset
 
-      // Gentle rotation
-      card.rotation.y = userData.originalRotation.y + Math.sin(userData.hoverOffset * 0.5) * 0.1
+      // Gentle rotation with breathing effect
+      const breathingRotation = Math.sin(userData.hoverOffset * 0.5) * 0.1
+      card.rotation.y = userData.originalRotation.y + breathingRotation
+
+      // Update card content based on interaction state
+      if (userData.cardContent) {
+        this.simpleCardRenderer!.updateCard(
+          userData.cardContent,
+          userData.isHovered || false,
+          userData.isSelected || false,
+          deltaTime
+        )
+      }
+
+      // Enhanced hover animation
+      if (userData.isHovered) {
+        // Slight lift and scale
+        const targetY = userData.originalPosition.y + floatOffset + 0.2
+        card.position.y = THREE.MathUtils.lerp(card.position.y, targetY, deltaTime * 8)
+
+        // Add subtle tilt toward camera
+        const tiltAmount = Math.sin(userData.hoverOffset * 3) * 0.05
+        card.rotation.x = THREE.MathUtils.lerp(card.rotation.x, tiltAmount, deltaTime * 5)
+      } else if (userData.isSelected) {
+        // More pronounced animation for selected state
+        const targetY = userData.originalPosition.y + floatOffset + 0.4
+        card.position.y = THREE.MathUtils.lerp(card.position.y, targetY, deltaTime * 8)
+
+        // Pulsing effect
+        const pulseScale = 1 + Math.sin(userData.hoverOffset * 4) * 0.05
+        card.scale.setScalar(THREE.MathUtils.lerp(card.scale.x, pulseScale, deltaTime * 10))
+      } else {
+        // Return to normal state
+        card.rotation.x = THREE.MathUtils.lerp(card.rotation.x, 0, deltaTime * 5)
+        card.scale.setScalar(THREE.MathUtils.lerp(card.scale.x, 1, deltaTime * 8))
+      }
     })
   }
 
@@ -488,5 +522,144 @@ export class TimelineScene3D extends BaseScene3D {
 
   public setNavigationSpeed(speed: number): void {
     this.autoNavigationSpeed = Math.max(0.01, Math.min(1, speed))
+  }
+
+  /**
+   * Handle mouse move for interaction effects
+   */
+  public onMouseMove(event: MouseEvent, camera: THREE.Camera): void {
+    // Convert mouse position to world space
+    const mouse = new THREE.Vector2()
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
+
+    this.raycaster.setFromCamera(mouse, camera)
+
+    // Update mouse position for particle effects
+    const intersects = this.raycaster.ray.intersectPlane(
+      new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
+      this.mousePosition
+    )
+
+    if (intersects) {
+      // Check for card intersections
+      const cardIntersects = this.raycaster.intersectObjects(
+        this.experienceCards,
+        true
+      )
+
+      if (cardIntersects.length > 0) {
+        const hoveredCard = cardIntersects[0].object.parent
+        this.handleCardHover(hoveredCard as THREE.Group)
+      } else {
+        this.clearCardHover()
+      }
+    }
+  }
+
+  /**
+   * Handle card hover state
+   */
+  private handleCardHover(card: THREE.Group): void {
+    // Only process if this is a new hover
+    if (this.hoveredCard === card) return
+
+    // Reset all cards to idle state
+    this.experienceCards.forEach(c => {
+      c.userData.isHovered = false
+    })
+
+    // Set hovered card
+    card.userData.isHovered = true
+    this.hoveredCard = card
+
+    // Show tooltip for hovered card
+    if (this.tooltipSystem && card.userData.experience) {
+      this.tooltipSystem.showTooltip(
+        card.userData.experience,
+        card.position.clone()
+      )
+    }
+
+    // Update particle trail interactions
+    if (this.particleTrailManager && card.userData.experience) {
+      const expId = card.userData.experience.id
+
+      // Find trails connected to this experience
+      const trailIds = this.particleTrailManager.getTrailIds()
+      trailIds.forEach(trailId => {
+        if (trailId.includes(expId)) {
+          this.particleTrailManager!.setTrailInteraction(trailId, 'hover')
+        } else {
+          this.particleTrailManager!.setTrailInteraction(trailId, 'idle')
+        }
+      })
+    }
+  }
+
+  /**
+   * Clear card hover states
+   */
+  private clearCardHover(): void {
+    this.experienceCards.forEach(card => {
+      card.userData.isHovered = false
+    })
+
+    this.hoveredCard = null
+
+    // Hide tooltip
+    if (this.tooltipSystem) {
+      this.tooltipSystem.hideTooltip()
+    }
+
+    // Reset all particle trails to idle
+    if (this.particleTrailManager) {
+      this.particleTrailManager.setAllTrailsInteraction('idle')
+    }
+  }
+
+  /**
+   * Handle card click/selection
+   */
+  public onCardClick(card: THREE.Group): void {
+    if (!card.userData.experience) return
+
+    // Update all cards selection state
+    this.experienceCards.forEach(c => {
+      c.userData.isSelected = (c === card)
+    })
+
+    // Update particle trail states
+    if (this.particleTrailManager) {
+      const expId = card.userData.experience.id
+      const trailIds = this.particleTrailManager.getTrailIds()
+
+      trailIds.forEach(trailId => {
+        if (trailId.includes(expId)) {
+          this.particleTrailManager!.setTrailInteraction(trailId, 'selected')
+        } else {
+          this.particleTrailManager!.setTrailInteraction(trailId, 'idle')
+        }
+      })
+    }
+
+    // Navigate camera to selected experience
+    this.navigateToExperience(card.userData.experience.id)
+  }
+
+  /**
+   * Get hovered experience
+   */
+  public getHoveredExperience(): TimelineExperience | null {
+    const hoveredCard = this.experienceCards.find(card => card.userData.isHovered)
+    return hoveredCard?.userData.experience || null
+  }
+
+  /**
+   * Get selected experience
+   */
+  public getSelectedExperience(): TimelineExperience | null {
+    const selectedCard = this.experienceCards.find(card => card.userData.isSelected)
+    return selectedCard?.userData.experience || null
   }
 }
