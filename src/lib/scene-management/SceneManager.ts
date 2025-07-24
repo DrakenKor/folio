@@ -176,6 +176,11 @@ export class SceneManager {
     // Update current scene
     if (this._currentScene) {
       this._currentScene.update(deltaTime)
+
+      // Apply scene camera position and target if set (for auto-navigation)
+      if (this._currentScene.cameraPosition && this._currentScene.cameraTarget && !this.cameraController.isTransitioning) {
+        this.cameraController.setPosition(this._currentScene.cameraPosition, this._currentScene.cameraTarget)
+      }
     }
 
     // Render the current scene

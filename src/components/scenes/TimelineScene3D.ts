@@ -29,6 +29,16 @@ export class TimelineScene3D extends BaseScene3D {
   private raycaster: THREE.Raycaster = new THREE.Raycaster()
   private hoveredCard: THREE.Group | null = null
 
+  // Enhanced auto-navigation
+  private currentExperienceIndex = 0
+  private isPausedAtExperience = false
+  private pauseStartTime = 0
+  private pauseDuration = 3000 // 3 seconds pause at each experience
+  private transitionDuration = 2000 // 2 seconds transition between experiences
+  private isTransitioningToNext = false
+  private transitionStartTime = 0
+  private onExperienceSelectCallback: ((experience: TimelineExperience) => void) | null = null
+
   // Lighting
   private ambientLight: THREE.AmbientLight | null = null
   private directionalLight: THREE.DirectionalLight | null = null
@@ -330,33 +340,149 @@ export class TimelineScene3D extends BaseScene3D {
   }
 
   /**
-   * Update auto-navigation along the timeline
+   * Update enhanced auto-navigation with card-to-card movement and pauses
    */
   private updateAutoNavigation(deltaTime: number): void {
-    if (!this.helixCurve) return
-
-    this.currentCameraTime += deltaTime * this.autoNavigationSpeed
-    if (this.currentCameraTime > 1) {
-      this.currentCameraTime = 0
+    // First check if auto-navigation is still enabled
+    if (!this.isAutoNavigating) {
+      return
     }
 
-    // Get position and tangent along the curve
-    const position = this.helixCurve.getPoint(this.currentCameraTime)
-    const tangent = this.helixCurve.getTangent(this.currentCameraTime)
+    if (!this.timelineData || this.timelineData.experiences.length === 0) {
+      console.log('No timeline data available for auto-navigation')
+      return
+    }
 
-    // Position camera at a distance from the curve
-    const cameraDistance = 15
-    const cameraOffset = new THREE.Vector3()
-      .crossVectors(tangent, new THREE.Vector3(0, 1, 0))
-      .normalize()
-      .multiplyScalar(cameraDistance)
+    const currentTime = Date.now()
 
-    const cameraPosition = position.clone().add(cameraOffset)
-    cameraPosition.y += 5
+    // Check if we're paused at an experience
+    if (this.isPausedAtExperience) {
+      const pauseElapsed = currentTime - this.pauseStartTime
 
-    // Update camera position and target
-    this.cameraPosition = cameraPosition
-    this.cameraTarget = position
+      if (pauseElapsed >= this.pauseDuration) {
+        console.log(`Pause complete, transitioning from experience ${this.currentExperienceIndex}`)
+        // Start transition to next experience
+        this.startTransitionToNext()
+      }
+      return
+    }
+
+    // Check if we're transitioning to next experience
+    if (this.isTransitioningToNext) {
+      const transitionElapsed = currentTime - this.transitionStartTime
+      const transitionProgress = Math.min(transitionElapsed / this.transitionDuration, 1)
+
+      if (transitionProgress >= 1) {
+        console.log(`Transition complete, pausing at experience ${this.currentExperienceIndex}`)
+        // Transition complete, pause at next experience
+        this.pauseAtCurrentExperience()
+      }
+      return
+    }
+
+    // If neither paused nor transitioning, start the cycle
+    console.log('Starting auto-navigation cycle')
+    this.pauseAtCurrentExperience()
+  }
+
+  /**
+   * Navigate to current experience and start pause
+   */
+  private navigateToCurrentExperience(): void {
+    if (!this.timelineData || this.timelineData.experiences.length === 0) {
+      console.log('Cannot navigate: no timeline data')
+      return
+    }
+
+    if (this.currentExperienceIndex >= this.timelineData.experiences.length) {
+      console.log('Invalid experience index, resetting to 0')
+      this.currentExperienceIndex = 0
+    }
+
+    const experience = this.timelineData.experiences[this.currentExperienceIndex]
+    if (!experience) {
+      console.log('No experience found at index', this.currentExperienceIndex)
+      return
+    }
+
+    console.log(`Navigating to experience: ${experience.company} (${this.currentExperienceIndex})`)
+
+    // Navigate camera to current experience
+    this.navigateToExperience(experience.id)
+
+    // Trigger experience selection callback
+    if (this.onExperienceSelectCallback) {
+      this.onExperienceSelectCallback(experience)
+    }
+
+    // Show tooltip for current experience
+    if (this.tooltipSystem) {
+      this.tooltipSystem.showTooltip(experience, experience.position3D.clone())
+    }
+
+    // Highlight current experience card
+    this.highlightExperienceCard(experience.id)
+  }
+
+  /**
+   * Start pause at current experience
+   */
+  private pauseAtCurrentExperience(): void {
+    if (this.isPausedAtExperience) return // Prevent multiple calls
+
+    console.log(`Starting pause at experience ${this.currentExperienceIndex}`)
+    this.isPausedAtExperience = true
+    this.pauseStartTime = Date.now()
+    this.navigateToCurrentExperience()
+  }
+
+  /**
+   * Start transition to next experience
+   */
+  private startTransitionToNext(): void {
+    this.isPausedAtExperience = false
+    this.isTransitioningToNext = true
+    this.transitionStartTime = Date.now()
+
+    // Hide current tooltip
+    if (this.tooltipSystem) {
+      this.tooltipSystem.hideTooltip()
+    }
+
+    // Move to next experience
+    this.currentExperienceIndex = (this.currentExperienceIndex + 1) % this.timelineData!.experiences.length
+  }
+
+  /**
+   * Highlight specific experience card
+   */
+  private highlightExperienceCard(experienceId: string): void {
+    // Reset all cards
+    this.experienceCards.forEach(card => {
+      card.userData.isSelected = false
+      card.userData.isHovered = false
+    })
+
+    // Find and highlight current card
+    const currentCard = this.experienceCards.find(
+      card => card.userData.experience?.id === experienceId
+    )
+
+    if (currentCard) {
+      currentCard.userData.isSelected = true
+
+      // Update particle trail states
+      if (this.particleTrailManager) {
+        const trailIds = this.particleTrailManager.getTrailIds()
+        trailIds.forEach(trailId => {
+          if (trailId.includes(experienceId)) {
+            this.particleTrailManager!.setTrailInteraction(trailId, 'selected')
+          } else {
+            this.particleTrailManager!.setTrailInteraction(trailId, 'idle')
+          }
+        })
+      }
+    }
   }
 
   /**
@@ -497,32 +623,125 @@ export class TimelineScene3D extends BaseScene3D {
    * Public methods for external control
    */
   public startAutoNavigation(): void {
+    if (this.isAutoNavigating) {
+      console.log('Auto-navigation already active, ignoring start request')
+      return
+    }
+
     this.isAutoNavigating = true
+    this.currentExperienceIndex = 0
+    this.isPausedAtExperience = false
+    this.isTransitioningToNext = false
+
+    // Don't immediately navigate, let the update loop handle it
+    console.log('Auto-navigation started')
   }
 
   public stopAutoNavigation(): void {
+    console.log('Stopping auto-navigation...')
     this.isAutoNavigating = false
+    this.isPausedAtExperience = false
+    this.isTransitioningToNext = false
+
+    // Reset all card states
+    this.experienceCards.forEach(card => {
+      card.userData.isSelected = false
+      card.userData.isHovered = false
+    })
+
+    // Reset particle trails
+    if (this.particleTrailManager) {
+      this.particleTrailManager.setAllTrailsInteraction('idle')
+    }
+
+    // Hide tooltip when stopping auto-navigation
+    if (this.tooltipSystem) {
+      this.tooltipSystem.hideTooltip()
+    }
+
+    console.log('Auto-navigation stopped')
   }
 
-  public navigateToExperience(experienceId: string): void {
-    if (!this.timelineData) return
-
-    const experience = this.timelineData.experiences.find(exp => exp.id === experienceId)
-    if (!experience) return
-
-    // Set camera to focus on specific experience
-    const cameraDistance = 10
-    const cameraPosition = experience.position3D.clone()
-    cameraPosition.x += cameraDistance
-    cameraPosition.y += 5
-
-    this.cameraPosition = cameraPosition
-    this.cameraTarget = experience.position3D
+  public setExperienceSelectCallback(callback: (experience: TimelineExperience) => void): void {
+    this.onExperienceSelectCallback = callback
   }
 
   public setNavigationSpeed(speed: number): void {
     this.autoNavigationSpeed = Math.max(0.01, Math.min(1, speed))
+    // Update pause duration based on speed (inverse relationship)
+    this.pauseDuration = Math.max(1000, 5000 / speed) // 1-5 seconds
   }
+
+  public setPauseDuration(duration: number): void {
+    this.pauseDuration = Math.max(1000, duration)
+  }
+
+  public setTransitionDuration(duration: number): void {
+    this.transitionDuration = Math.max(500, duration)
+  }
+
+  public getCurrentExperienceIndex(): number {
+    return this.currentExperienceIndex
+  }
+
+  public getTotalExperiences(): number {
+    return this.timelineData?.experiences.length || 0
+  }
+
+  public getIsAutoNavigating(): boolean {
+    return this.isAutoNavigating
+  }
+
+  public navigateToExperience(experienceId: string): void {
+    if (!this.timelineData) {
+      console.log('Cannot navigate: no timeline data')
+      return
+    }
+
+    const experience = this.timelineData.experiences.find(exp => exp.id === experienceId)
+    if (!experience) {
+      console.log(`Experience not found: ${experienceId}`)
+      return
+    }
+
+    console.log(`Setting camera for experience: ${experience.company}`)
+
+    // Calculate optimal camera position based on card rotation
+    const cardPosition = experience.position3D.clone()
+    const cardRotation = experience.cardRotation
+
+    // Get the card's forward direction (the direction the card is facing)
+    const cardForward = new THREE.Vector3(0, 0, 1) // Default forward direction
+    cardForward.applyEuler(new THREE.Euler(cardRotation.x, cardRotation.y, cardRotation.z))
+
+    // Position camera opposite to where the card is facing (so camera looks at front of card)
+    const cameraDistance = 8
+    const cameraOffset = cardForward.clone().multiplyScalar(-cameraDistance)
+
+    // Add slight upward offset for better viewing angle
+    const upwardOffset = new THREE.Vector3(0, 3, 0)
+    const cameraPosition = cardPosition.clone().add(cameraOffset).add(upwardOffset)
+
+    // Also add a slight inward offset to account for helix curvature
+    const helixCenter = new THREE.Vector3(0, cardPosition.y, 0)
+    const toCenter = helixCenter.clone().sub(cardPosition).normalize()
+    const inwardOffset = toCenter.multiplyScalar(2)
+    cameraPosition.add(inwardOffset)
+
+    // Make sure we have valid positions
+    if (!cameraPosition || !experience.position3D) {
+      console.log('Invalid camera position data')
+      return
+    }
+
+    this.cameraPosition = cameraPosition
+    this.cameraTarget = cardPosition
+
+    console.log('Camera position set:', this.cameraPosition)
+    console.log('Camera target set:', this.cameraTarget)
+    console.log('Card rotation:', cardRotation)
+  }
+
 
   /**
    * Handle mouse move for interaction effects

@@ -93,7 +93,7 @@ export const Timeline3D: React.FC<Timeline3DProps> = ({
           navigationSpeed={navigationSpeed}
           onExperienceSelect={onExperienceSelect}
         />
-        <OrbitControls
+         <OrbitControls
           enablePan={true}
           enableZoom={true}
           enableRotate={true}
@@ -133,6 +133,7 @@ const TimelineScene: React.FC<TimelineSceneProps> = ({
   const sceneManagerRef = useRef<SceneManager | null>(null)
   const timelineSceneRef = useRef<TimelineScene3D | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
+
 
   // Mouse event handlers
   const handlePointerMove = useCallback((event: any) => {
@@ -179,6 +180,12 @@ const TimelineScene: React.FC<TimelineSceneProps> = ({
   // Update auto-navigation settings
   useEffect(() => {
     if (timelineSceneRef.current) {
+      // Set the experience selection callback
+      if (onExperienceSelect) {
+        timelineSceneRef.current.setExperienceSelectCallback(onExperienceSelect)
+        timelineSceneRef.current.stopAutoNavigation() // Stop auto-navigation if a callback is set
+      }
+
       if (autoNavigate) {
         timelineSceneRef.current.startAutoNavigation()
         timelineSceneRef.current.setNavigationSpeed(navigationSpeed)
@@ -186,7 +193,7 @@ const TimelineScene: React.FC<TimelineSceneProps> = ({
         timelineSceneRef.current.stopAutoNavigation()
       }
     }
-  }, [autoNavigate, navigationSpeed])
+  }, [autoNavigate, navigationSpeed]) // Remove onExperienceSelect to prevent re-triggering
 
   // Update quality level
   useEffect(() => {
