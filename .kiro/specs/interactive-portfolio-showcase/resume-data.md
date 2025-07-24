@@ -3,6 +3,7 @@
 This document contains the specific work experience, education, and project details that will be visualized in the 3D Interactive Resume Timeline.
 
 ## Personal Information
+
 - **Name:** Manav Dhindsa
 - **Title:** Software Engineer
 - **Contact:** manav.da@gmail.com
@@ -11,11 +12,13 @@ This document contains the specific work experience, education, and project deta
 - **Phone:** +81-70-9186-9933
 
 ## About
+
 Versatile Software Engineer with over 8 years of experience developing and scaling high-performance applications in the cloud. Language agnostic engineer with expertise in front-end (React, Svelte, HTML, CSS) and back-end (Python, Golang, Typescript, NodeJS) technologies. Proven track record in architecting complex software solutions with focus on performance optimization.
 
 ## Work Experience Timeline
 
 ### Software Engineer - Autify Inc (Current)
+
 - **Duration:** Oct 2024 - Present
 - **Location:** Tokyo, Japan
 - **Company Type:** Startup in test automation space
@@ -30,6 +33,7 @@ Versatile Software Engineer with over 8 years of experience developing and scali
   - Contributed to multilingual stack (Golang, Ruby, TypeScript)
 
 ### Independent Contractor - Rezinaus
+
 - **Duration:** Feb 2024 - Oct 2024
 - **Location:** Brisbane, Australia
 - **Key Technologies:** Serverless, AWS, Azure, Vercel, Supabase, Slack API, MS Teams API
@@ -45,6 +49,7 @@ Versatile Software Engineer with over 8 years of experience developing and scali
   - Rapid delivery with transparent communication
 
 ### Lead Engineer - StaffLink
+
 - **Duration:** 2022 - Feb 2024
 - **Location:** Brisbane, Australia
 - **Company Type:** PropTech Startup
@@ -62,6 +67,7 @@ Versatile Software Engineer with over 8 years of experience developing and scali
   - Managed DevOps and CI/CD pipelines
 
 ### Fullstack Engineer - Littles Lawyers
+
 - **Duration:** 2018 - 2022
 - **Location:** Brisbane, Australia
 - **Company Type:** LegalTech startup
@@ -79,6 +85,7 @@ Versatile Software Engineer with over 8 years of experience developing and scali
   - Optimized GraphQL and database performance
 
 ### Software Developer/Consultant - Phoenix Consulting
+
 - **Duration:** 2017 - 2018
 - **Location:** Bangalore, India
 - **Key Technologies:** Python, JavaScript, HTML, CSS, XML, Azure, Selenium
@@ -94,45 +101,58 @@ Versatile Software Engineer with over 8 years of experience developing and scali
 ## Education
 
 ### Bachelor of Information Technology
+
 - **Institution:** Griffith University, Brisbane, Australia
 - **Major:** Computer Science, Software Engineering
 
 ### Diploma of Information Technology
+
 - **Institution:** Queensland Institute of Business and Technology, Brisbane, Australia
 
 ## Technical Skills
 
 ### Front-end
+
 React, Svelte, TypeScript, JavaScript, HTML5, CSS3
 
 ### Back-end
+
 Node.js, Python, Golang, Rust
 
 ### Databases
+
 PostgreSQL, MySQL/MariaDB, MSSQL/TSQL, NoSQL
 
 ### API Development
+
 RESTful APIs, GraphQL, gRPC
 
 ### Cloud Platforms
+
 AWS, Azure, GCP, Vercel, Supabase, Render, Heroku, Hybrid Cloud
 
 ### Containerization
+
 Docker, Docker Compose, Kubernetes
 
 ### Testing
+
 Jest, Playwright, Cypress, Unit Testing, Integration Testing, E2E Testing
 
 ### CI/CD
+
 Github Actions, AWS CodeBuild & CodePipelines, Bitbucket Pipelines
 
 ### Architectures
+
 Microservices (Advanced), Serverless (Advanced), Monolith, Hybrid
 
 ### Monitoring & Logging
+
 SEQ, OpenTelemetry (ELK, Grafana), AWS CloudWatch
 
 ## Cross-Functional Skills
+
 - Troubleshooting & Performance Optimization
 - System Architecture Design & Root Cause Analysis
 - Capacity Planning & Disaster Recovery Planning
