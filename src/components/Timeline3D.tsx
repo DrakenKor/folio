@@ -94,9 +94,10 @@ export const Timeline3D: React.FC<Timeline3DProps> = ({
           onExperienceSelect={onExperienceSelect}
         />
          <OrbitControls
-          enablePan={true}
-          enableZoom={true}
-          enableRotate={true}
+          enabled={!autoNavigate}
+          enablePan={!autoNavigate}
+          enableZoom={!autoNavigate}
+          enableRotate={!autoNavigate}
           minDistance={10}
           maxDistance={100}
           minPolarAngle={0}

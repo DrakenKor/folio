@@ -135,22 +135,19 @@ export class TimelinePositionCalculator {
   }
 
   /**
-   * Calculate card rotation to face the center with slight variation
+   * Calculate card rotation to face directly toward helix center (no variation)
    */
   private calculateCardRotation(index: number, totalCount: number): Vector3 {
     const t = index / Math.max(1, totalCount - 1)
     const angle = t * Math.PI * 2 * this.config.helixTurns
 
-    // Face the center of the helix
-    const rotationY = angle + Math.PI
-
-    // Add slight random variation for visual interest
-    const variation = (Math.sin(index * 2.5) * 0.1)
+    // All cards face directly toward the center - no variation at all
+    const rotationY = index % 2 === 0 ? angle + Math.PI : angle
 
     return new Vector3(
-      variation, // Small X rotation variation
-      rotationY, // Face center
-      variation * 0.5 // Small Z rotation variation
+      0, // No X rotation variation
+      rotationY, // Direct face-center rotation
+      0 // No Z rotation variation
     )
   }
 

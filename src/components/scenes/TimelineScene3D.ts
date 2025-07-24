@@ -29,7 +29,7 @@ export class TimelineScene3D extends BaseScene3D {
   private raycaster: THREE.Raycaster = new THREE.Raycaster()
   private hoveredCard: THREE.Group | null = null
 
-  // Enhanced auto-navigation
+  // Enhanced auto-navigation with smooth helix following
   private currentExperienceIndex = 0
   private isPausedAtExperience = false
   private pauseStartTime = 0
@@ -38,6 +38,13 @@ export class TimelineScene3D extends BaseScene3D {
   private isTransitioningToNext = false
   private transitionStartTime = 0
   private onExperienceSelectCallback: ((experience: TimelineExperience) => void) | null = null
+
+  // Smooth helix navigation
+  private helixNavigationProgress = 0 // 0 to 1 along the entire helix
+  private smoothNavigationSpeed = 0.05 // Speed of helix traversal
+  private cameraHeightOffset = 0 // Height offset from helix curve
+  private cameraRadiusOffset = -0.5 // Radius offset from helix curve (inside the helix)
+  private currentDisplayedExperience: TimelineExperience | null = null
 
   // Lighting
   private ambientLight: THREE.AmbientLight | null = null
@@ -273,7 +280,16 @@ export class TimelineScene3D extends BaseScene3D {
 
     // Position and rotate the card
     cardGroup.position.copy(experience.position3D)
-    cardGroup.rotation.setFromVector3(experience.cardRotation)
+
+    // Force all cards to face the same direction (debug)
+    const helixCenter = new THREE.Vector3(0, experience.position3D.y, 0)
+    const directionToCenter = helixCenter.clone().sub(experience.position3D).normalize()
+    const angleToCenter = Math.atan2(directionToCenter.x, directionToCenter.z)
+
+    // Set consistent rotation for all cards
+    cardGroup.rotation.set(0, angleToCenter, 0)
+
+    console.log(`Card ${experience.company}: position=${experience.position3D.x.toFixed(2)},${experience.position3D.z.toFixed(2)}, rotation=${angleToCenter.toFixed(2)}`)
 
     // Enhanced user data for interactions
     cardGroup.userData = {
@@ -340,7 +356,7 @@ export class TimelineScene3D extends BaseScene3D {
   }
 
   /**
-   * Update enhanced auto-navigation with card-to-card movement and pauses
+   * Update smooth helix rail navigation
    */
   private updateAutoNavigation(deltaTime: number): void {
     // First check if auto-navigation is still enabled
@@ -348,41 +364,120 @@ export class TimelineScene3D extends BaseScene3D {
       return
     }
 
-    if (!this.timelineData || this.timelineData.experiences.length === 0) {
+    if (!this.timelineData || this.timelineData.experiences.length === 0 || !this.helixCurve) {
       console.log('No timeline data available for auto-navigation')
       return
     }
 
-    const currentTime = Date.now()
+    // Smooth continuous movement along helix
+    this.helixNavigationProgress += deltaTime * this.smoothNavigationSpeed
 
-    // Check if we're paused at an experience
-    if (this.isPausedAtExperience) {
-      const pauseElapsed = currentTime - this.pauseStartTime
-
-      if (pauseElapsed >= this.pauseDuration) {
-        console.log(`Pause complete, transitioning from experience ${this.currentExperienceIndex}`)
-        // Start transition to next experience
-        this.startTransitionToNext()
-      }
-      return
+    // Loop back to start when reaching the end
+    if (this.helixNavigationProgress > 1) {
+      this.helixNavigationProgress = 0
     }
 
-    // Check if we're transitioning to next experience
-    if (this.isTransitioningToNext) {
-      const transitionElapsed = currentTime - this.transitionStartTime
-      const transitionProgress = Math.min(transitionElapsed / this.transitionDuration, 1)
+    // Get current position along helix curve
+    const helixPosition = this.helixCurve.getPoint(this.helixNavigationProgress)
+    const helixTangent = this.helixCurve.getTangent(this.helixNavigationProgress)
 
-      if (transitionProgress >= 1) {
-        console.log(`Transition complete, pausing at experience ${this.currentExperienceIndex}`)
-        // Transition complete, pause at next experience
-        this.pauseAtCurrentExperience()
+    // Calculate camera position on the inner rail of the helix
+    const cameraPosition = this.calculateHelixRailCameraPosition(helixPosition, helixTangent)
+    const cameraTarget = this.calculateHelixRailCameraTarget(helixPosition, helixTangent)
+
+    // Update camera
+    this.cameraPosition = cameraPosition
+    this.cameraTarget = cameraTarget
+
+    // Check if we're near any experience and show tooltip
+    this.checkNearbyExperiences()
+  }
+
+  /**
+   * Calculate camera position on the inner rail of the helix
+   */
+  private calculateHelixRailCameraPosition(helixPosition: THREE.Vector3, helixTangent: THREE.Vector3): THREE.Vector3 {
+    // Create a position inside the helix spiral
+    const helixCenter = new THREE.Vector3(0, helixPosition.y, 0)
+    const toCenter = helixCenter.clone().sub(helixPosition).normalize()
+
+    // Position camera closer to center (inside the helix)
+    const cameraPosition = helixPosition.clone().add(toCenter.multiplyScalar(this.cameraRadiusOffset))
+
+    // Add height offset for better viewing angle
+    cameraPosition.y += this.cameraHeightOffset
+
+    return cameraPosition
+  }
+
+  /**
+   * Calculate camera target for smooth helix navigation
+   */
+  private calculateHelixRailCameraTarget(helixPosition: THREE.Vector3, helixTangent: THREE.Vector3): THREE.Vector3 {
+    // Look ahead along the helix curve
+    const lookAheadDistance = 5
+    const lookAheadTarget = helixPosition.clone().add(helixTangent.multiplyScalar(lookAheadDistance))
+
+    return lookAheadTarget
+  }
+
+  /**
+   * Check for nearby experiences and show tooltips
+   */
+  private checkNearbyExperiences(): void {
+    if (!this.timelineData || !this.tooltipSystem) return
+
+    const currentHelixPosition = this.helixCurve!.getPoint(this.helixNavigationProgress)
+    const proximityThreshold = 4 // Distance threshold for showing tooltips
+
+    // Find closest experience to current position
+    let closestExperience: TimelineExperience | null = null
+    let closestDistance = Infinity
+
+    this.timelineData.experiences.forEach(experience => {
+      const distance = currentHelixPosition.distanceTo(experience.position3D)
+      if (distance < proximityThreshold && distance < closestDistance) {
+        closestDistance = distance
+        closestExperience = experience
       }
-      return
-    }
+    })
 
-    // If neither paused nor transitioning, start the cycle
-    console.log('Starting auto-navigation cycle')
-    this.pauseAtCurrentExperience()
+    // Show tooltip for closest experience if within threshold
+    if (closestExperience && closestExperience !== this.currentDisplayedExperience) {
+      this.currentDisplayedExperience = closestExperience
+      const experience = closestExperience as TimelineExperience
+      this.tooltipSystem.showTooltip(experience, experience.position3D.clone())
+
+      // Trigger callback
+      if (this.onExperienceSelectCallback) {
+        this.onExperienceSelectCallback(experience)
+      }
+
+      // Highlight the experience card
+      this.highlightExperienceCard(experience.id)
+
+      console.log(`Now viewing: ${experience.company}`)
+    } else if (!closestExperience && this.currentDisplayedExperience) {
+      // Hide tooltip when moving away from experiences
+      this.tooltipSystem.hideTooltip()
+      this.currentDisplayedExperience = null
+      this.clearAllCardHighlights()
+    }
+  }
+
+  /**
+   * Clear all card highlights
+   */
+  private clearAllCardHighlights(): void {
+    this.experienceCards.forEach(card => {
+      card.userData.isSelected = false
+      card.userData.isHovered = false
+    })
+
+    // Reset particle trails
+    if (this.particleTrailManager) {
+      this.particleTrailManager.setAllTrailsInteraction('idle')
+    }
   }
 
   /**
@@ -629,17 +724,28 @@ export class TimelineScene3D extends BaseScene3D {
     }
 
     this.isAutoNavigating = true
+
+    // Initialize smooth helix navigation
+    this.helixNavigationProgress = 0
+    this.currentDisplayedExperience = null
+
+    // Reset old card-based navigation states
     this.currentExperienceIndex = 0
     this.isPausedAtExperience = false
     this.isTransitioningToNext = false
 
-    // Don't immediately navigate, let the update loop handle it
-    console.log('Auto-navigation started')
+    console.log('Smooth helix auto-navigation started')
   }
 
   public stopAutoNavigation(): void {
-    console.log('Stopping auto-navigation...')
+    console.log('Stopping smooth helix auto-navigation...')
     this.isAutoNavigating = false
+
+    // Reset smooth navigation state
+    this.helixNavigationProgress = 0
+    this.currentDisplayedExperience = null
+
+    // Reset old card-based navigation states
     this.isPausedAtExperience = false
     this.isTransitioningToNext = false
 
@@ -659,7 +765,7 @@ export class TimelineScene3D extends BaseScene3D {
       this.tooltipSystem.hideTooltip()
     }
 
-    console.log('Auto-navigation stopped')
+    console.log('Smooth helix auto-navigation stopped')
   }
 
   public setExperienceSelectCallback(callback: (experience: TimelineExperience) => void): void {
@@ -668,8 +774,9 @@ export class TimelineScene3D extends BaseScene3D {
 
   public setNavigationSpeed(speed: number): void {
     this.autoNavigationSpeed = Math.max(0.01, Math.min(1, speed))
-    // Update pause duration based on speed (inverse relationship)
-    this.pauseDuration = Math.max(1000, 5000 / speed) // 1-5 seconds
+    // Update smooth helix navigation speed
+    this.smoothNavigationSpeed = Math.max(0.01, Math.min(0.2, speed * 0.2)) // Scale for smooth movement
+    console.log(`Helix navigation speed set to: ${this.smoothNavigationSpeed}`)
   }
 
   public setPauseDuration(duration: number): void {
@@ -706,27 +813,20 @@ export class TimelineScene3D extends BaseScene3D {
 
     console.log(`Setting camera for experience: ${experience.company}`)
 
-    // Calculate optimal camera position based on card rotation
+    // Cards face inward toward helix center, so camera should be positioned inside looking out
     const cardPosition = experience.position3D.clone()
     const cardRotation = experience.cardRotation
 
-    // Get the card's forward direction (the direction the card is facing)
-    const cardForward = new THREE.Vector3(0, 0, 1) // Default forward direction
-    cardForward.applyEuler(new THREE.Euler(cardRotation.x, cardRotation.y, cardRotation.z))
+    // Calculate the direction the card is facing (toward helix center)
+    const helixCenter = new THREE.Vector3(0, cardPosition.y, 0)
+    const cardFaceDirection = helixCenter.clone().sub(cardPosition).normalize()
 
-    // Position camera opposite to where the card is facing (so camera looks at front of card)
-    const cameraDistance = 8
-    const cameraOffset = cardForward.clone().multiplyScalar(-cameraDistance)
+    // Position camera in front of the card (between card and helix center)
+    const cameraDistance = 6
+    const cameraPosition = cardPosition.clone().add(cardFaceDirection.multiplyScalar(cameraDistance))
 
     // Add slight upward offset for better viewing angle
-    const upwardOffset = new THREE.Vector3(0, 3, 0)
-    const cameraPosition = cardPosition.clone().add(cameraOffset).add(upwardOffset)
-
-    // Also add a slight inward offset to account for helix curvature
-    const helixCenter = new THREE.Vector3(0, cardPosition.y, 0)
-    const toCenter = helixCenter.clone().sub(cardPosition).normalize()
-    const inwardOffset = toCenter.multiplyScalar(2)
-    cameraPosition.add(inwardOffset)
+    cameraPosition.y += 2
 
     // Make sure we have valid positions
     if (!cameraPosition || !experience.position3D) {
@@ -736,10 +836,6 @@ export class TimelineScene3D extends BaseScene3D {
 
     this.cameraPosition = cameraPosition
     this.cameraTarget = cardPosition
-
-    console.log('Camera position set:', this.cameraPosition)
-    console.log('Camera target set:', this.cameraTarget)
-    console.log('Card rotation:', cardRotation)
   }
 
 
