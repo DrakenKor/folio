@@ -55,6 +55,7 @@ export class TimelineScene3D extends BaseScene3D {
   private cameraEndPosition: THREE.Vector3 = new THREE.Vector3()
   private cameraEndTarget: THREE.Vector3 = new THREE.Vector3()
   private currentCamera: THREE.Camera | null = null
+  private orbitControlsRef: any = null // Reference to OrbitControls
 
   // Lighting
   private ambientLight: THREE.AmbientLight | null = null
@@ -775,7 +776,28 @@ export class TimelineScene3D extends BaseScene3D {
     // Complete transition
     if (progress >= 1) {
       this.isCameraTransitioning = false
-      console.log('Camera transition completed')
+
+      // Ensure the final camera position is preserved by updating scene properties
+      this.cameraPosition = this.cameraEndPosition.clone()
+      this.cameraTarget = this.cameraEndTarget.clone()
+
+      // Also update the camera directly one final time
+      if (this.currentCamera) {
+        this.currentCamera.position.copy(this.cameraEndPosition)
+        this.currentCamera.lookAt(this.cameraEndTarget)
+        this.currentCamera.updateMatrixWorld()
+      }
+
+      // Re-enable OrbitControls after transition
+      if (this.orbitControlsRef) {
+        this.orbitControlsRef.enabled = true
+        // Update OrbitControls target to match our final target
+        this.orbitControlsRef.target.copy(this.cameraEndTarget)
+        this.orbitControlsRef.update()
+        console.log('OrbitControls re-enabled and updated')
+      }
+
+      console.log('Camera transition completed. Final position:', this.cameraPosition, 'Target:', this.cameraTarget)
     }
   }
 
@@ -790,6 +812,12 @@ export class TimelineScene3D extends BaseScene3D {
    * Start smooth camera transition
    */
   private startCameraTransition(targetPosition: THREE.Vector3, targetTarget: THREE.Vector3): void {
+    // Disable OrbitControls during transition to prevent interference
+    if (this.orbitControlsRef) {
+      this.orbitControlsRef.enabled = false
+      console.log('OrbitControls disabled for camera transition')
+    }
+
     // Get current camera position from actual camera if available
     if (this.currentCamera) {
       this.cameraStartPosition.copy(this.currentCamera.position)
@@ -899,6 +927,10 @@ export class TimelineScene3D extends BaseScene3D {
 
   public getIsAutoNavigating(): boolean {
     return this.isAutoNavigating
+  }
+
+  public getIsCameraTransitioning(): boolean {
+    return this.isCameraTransitioning
   }
 
   public navigateToExperience(experienceId: string): void {

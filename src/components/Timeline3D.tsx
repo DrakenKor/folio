@@ -37,6 +37,7 @@ export const Timeline3D: React.FC<Timeline3DProps> = ({
 
   // Reference to access the timeline scene for camera control
   const timelineSceneRef = useRef<any>(null)
+  const orbitControlsRef = useRef<any>(null)
 
   // Wrapper function to update timeline controls, animate camera, and call parent callback
   const handleExperienceSelection = useCallback((experience: TimelineExperience) => {
@@ -82,6 +83,13 @@ export const Timeline3D: React.FC<Timeline3DProps> = ({
     loadTimelineData()
   }, [])
 
+  // Pass OrbitControls ref to scene when available
+  useEffect(() => {
+    if (timelineSceneRef.current && orbitControlsRef.current) {
+      (timelineSceneRef.current as any).setOrbitControlsRef(orbitControlsRef.current)
+    }
+  }, [timelineSceneRef.current, orbitControlsRef.current])
+
   if (isLoading) {
     return (
       <div className={`flex items-center justify-center h-full ${className}`}>
@@ -123,6 +131,7 @@ export const Timeline3D: React.FC<Timeline3DProps> = ({
           parentTimelineSceneRef={timelineSceneRef}
         />
          <OrbitControls
+          ref={orbitControlsRef}
           enabled={!autoNavigate}
           enablePan={!autoNavigate}
           enableZoom={!autoNavigate}
@@ -165,6 +174,7 @@ const TimelineScene = React.forwardRef<any, TimelineSceneProps>(({
   const { gl, camera, scene } = useThree()
   const sceneManagerRef = useRef<SceneManager | null>(null)
   const timelineSceneRef = useRef<TimelineScene3D | null>(null)
+  const orbitControlsRef = useRef<any>(null)
   const [isInitialized, setIsInitialized] = useState(false)
 
 
@@ -194,6 +204,11 @@ const TimelineScene = React.forwardRef<any, TimelineSceneProps>(({
         // Register and activate scene
         sceneManagerRef.current.registerScene(timelineSceneRef.current)
         await sceneManagerRef.current.transitionTo(SectionType.RESUME)
+
+        // Pass OrbitControls reference to the scene
+        if (orbitControlsRef.current) {
+          (timelineSceneRef.current as any).setOrbitControlsRef(orbitControlsRef.current)
+        }
 
         setIsInitialized(true)
       } catch (error) {

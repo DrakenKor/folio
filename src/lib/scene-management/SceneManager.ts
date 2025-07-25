@@ -177,9 +177,12 @@ export class SceneManager {
     if (this._currentScene) {
       this._currentScene.update(deltaTime)
 
-      // Apply scene camera position and target only if auto-navigation is active
+      // Apply scene camera position and target only if auto-navigation is active and no manual transitions
       const scene = this._currentScene as any
-      if (scene.getIsAutoNavigating && scene.getIsAutoNavigating() &&
+      const isAutoNavigating = scene.getIsAutoNavigating && scene.getIsAutoNavigating()
+      const isCameraTransitioning = scene.getIsCameraTransitioning && scene.getIsCameraTransitioning()
+
+      if (isAutoNavigating && !isCameraTransitioning &&
           this._currentScene.cameraPosition && this._currentScene.cameraTarget &&
           !this.cameraController.isTransitioning) {
         this.cameraController.setPosition(this._currentScene.cameraPosition, this._currentScene.cameraTarget)
