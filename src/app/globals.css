@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom slider styles */
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: 2px solid #1e293b;
+}
+
+.slider::-moz-range-thumb {
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: 2px solid #1e293b;
+}
+
 body {
   font-family: 'roboto', sans-serif;
   font-variant: small-caps;

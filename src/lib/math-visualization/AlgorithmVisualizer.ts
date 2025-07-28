@@ -1,0 +1,546 @@
+import { BaseMathVisualization } from './BaseMathVisualization'
+import { InteractionEvent, VisualizationControl } from '../../types/math-visualization'
+
+interface Particle {
+  value: number
+  x: number
+  y: number
+  targetX: number
+  targetY: number
+  color: string
+  isComparing: boolean
+  isSwapping: boolean
+  isActive: boolean
+}
+
+interface SortingAlgorithm {
+  name: string
+  id: string
+  description: string
+  timeComplexity: string
+}
+
+export class AlgorithmVisualizer extends BaseMathVisualization {
+  private particles: Particle[] = []
+  private isRunning = false
+  private isPaused = false
+  private currentStep = 0
+  private animationSpeed = 50 // ms between steps
+  private lastStepTime = 0
+  private sortingSteps: any[] = []
+  private currentAlgorithm = 'bubble'
+
+  private algorithms: SortingAlgorithm[] = [
+    {
+      name: 'Bubble Sort',
+      id: 'bubble',
+      description: 'Compares adjacent elements and swaps them if they are in wrong order',
+      timeComplexity: 'O(n²)'
+    },
+    {
+      name: 'Selection Sort',
+      id: 'selection',
+      description: 'Finds minimum element and places it at the beginning',
+      timeComplexity: 'O(n²)'
+    },
+    {
+      name: 'Insertion Sort',
+      id: 'insertion',
+      description: 'Builds sorted array one element at a time',
+      timeComplexity: 'O(n²)'
+    },
+    {
+      name: 'Quick Sort',
+      id: 'quick',
+      description: 'Divides array around pivot and recursively sorts',
+      timeComplexity: 'O(n log n)'
+    },
+    {
+      name: 'Merge Sort',
+      id: 'merge',
+      description: 'Divides array and merges sorted halves',
+      timeComplexity: 'O(n log n)'
+    }
+  ]
+
+  constructor() {
+    super(
+      'algorithm-visualizer',
+      'Algorithm Visualization',
+      'Watch sorting algorithms in action with interactive particle systems',
+      'algorithm'
+    )
+  }
+
+  protected setupDefaultParameters(): void {
+    this.parameters = {
+      algorithm: 'bubble',
+      arraySize: 30,
+      animationSpeed: 50,
+      particleSize: 8,
+      showComparisons: true,
+      showSwaps: true,
+      colorScheme: 'rainbow'
+    }
+  }
+
+  protected async initializeVisualization(): Promise<void> {
+    this.generateRandomArray()
+  }
+
+  private generateRandomArray(): void {
+    const size = this.parameters.arraySize
+    const { width, height } = this.getCanvasSize()
+
+    this.particles = []
+    const particleWidth = Math.max(4, (width - 40) / size)
+    const maxHeight = height - 100
+
+    for (let i = 0; i < size; i++) {
+      const value = Math.floor(Math.random() * 100) + 1
+      const x = 20 + i * particleWidth + particleWidth / 2
+      const y = height - 20 - (value / 100) * maxHeight
+
+      this.particles.push({
+        value,
+        x,
+        y,
+        targetX: x,
+        targetY: y,
+        color: this.getParticleColor(value, i),
+        isComparing: false,
+        isSwapping: false,
+        isActive: false
+      })
+    }
+
+    this.resetAnimation()
+  }
+
+  private getParticleColor(value: number, index: number): string {
+    switch (this.parameters.colorScheme) {
+      case 'rainbow':
+        const hue = (value / 100) * 360
+        return `hsl(${hue}, 70%, 60%)`
+      case 'gradient':
+        const intensity = Math.floor((value / 100) * 255)
+        return `rgb(${intensity}, ${100}, ${255 - intensity})`
+      case 'monochrome':
+        const gray = Math.floor((value / 100) * 200) + 55
+        return `rgb(${gray}, ${gray}, ${gray})`
+      default:
+        return '#3b82f6'
+    }
+  }
+
+  private resetAnimation(): void {
+    this.isRunning = false
+    this.isPaused = false
+    this.currentStep = 0
+    this.sortingSteps = []
+    this.generateSortingSteps()
+  }
+
+  private generateSortingSteps(): void {
+    const values = this.particles.map(p => p.value)
+    this.sortingSteps = []
+
+    switch (this.parameters.algorithm) {
+      case 'bubble':
+        this.generateBubbleSortSteps(values)
+        break
+      case 'selection':
+        this.generateSelectionSortSteps(values)
+        break
+      case 'insertion':
+        this.generateInsertionSortSteps(values)
+        break
+      case 'quick':
+        this.generateQuickSortSteps(values, 0, values.length - 1)
+        break
+      case 'merge':
+        this.generateMergeSortSteps(values)
+        break
+    }
+  }
+
+  private generateBubbleSortSteps(arr: number[]): void {
+    const n = arr.length
+    for (let i = 0; i < n - 1; i++) {
+      for (let j = 0; j < n - i - 1; j++) {
+        this.sortingSteps.push({ type: 'compare', indices: [j, j + 1] })
+        if (arr[j] > arr[j + 1]) {
+          this.sortingSteps.push({ type: 'swap', indices: [j, j + 1] })
+          ;[arr[j], arr[j + 1]] = [arr[j + 1], arr[j]]
+        }
+      }
+      this.sortingSteps.push({ type: 'sorted', index: n - i - 1 })
+    }
+    this.sortingSteps.push({ type: 'complete' })
+  }
+
+  private generateSelectionSortSteps(arr: number[]): void {
+    const n = arr.length
+    for (let i = 0; i < n - 1; i++) {
+      let minIdx = i
+      this.sortingSteps.push({ type: 'active', index: i })
+
+      for (let j = i + 1; j < n; j++) {
+        this.sortingSteps.push({ type: 'compare', indices: [minIdx, j] })
+        if (arr[j] < arr[minIdx]) {
+          minIdx = j
+        }
+      }
+
+      if (minIdx !== i) {
+        this.sortingSteps.push({ type: 'swap', indices: [i, minIdx] })
+        ;[arr[i], arr[minIdx]] = [arr[minIdx], arr[i]]
+      }
+      this.sortingSteps.push({ type: 'sorted', index: i })
+    }
+    this.sortingSteps.push({ type: 'complete' })
+  }
+
+  private generateInsertionSortSteps(arr: number[]): void {
+    for (let i = 1; i < arr.length; i++) {
+      const key = arr[i]
+      let j = i - 1
+      this.sortingSteps.push({ type: 'active', index: i })
+
+      while (j >= 0 && arr[j] > key) {
+        this.sortingSteps.push({ type: 'compare', indices: [j, j + 1] })
+        this.sortingSteps.push({ type: 'swap', indices: [j, j + 1] })
+        arr[j + 1] = arr[j]
+        j--
+      }
+      arr[j + 1] = key
+    }
+    this.sortingSteps.push({ type: 'complete' })
+  }
+
+  private generateQuickSortSteps(arr: number[], low: number, high: number): void {
+    if (low < high) {
+      const pi = this.partition(arr, low, high)
+      this.generateQuickSortSteps(arr, low, pi - 1)
+      this.generateQuickSortSteps(arr, pi + 1, high)
+    }
+  }
+
+  private partition(arr: number[], low: number, high: number): number {
+    const pivot = arr[high]
+    let i = low - 1
+
+    this.sortingSteps.push({ type: 'pivot', index: high })
+
+    for (let j = low; j < high; j++) {
+      this.sortingSteps.push({ type: 'compare', indices: [j, high] })
+      if (arr[j] < pivot) {
+        i++
+        if (i !== j) {
+          this.sortingSteps.push({ type: 'swap', indices: [i, j] })
+          ;[arr[i], arr[j]] = [arr[j], arr[i]]
+        }
+      }
+    }
+
+    this.sortingSteps.push({ type: 'swap', indices: [i + 1, high] })
+    ;[arr[i + 1], arr[high]] = [arr[high], arr[i + 1]]
+    return i + 1
+  }
+
+  private generateMergeSortSteps(arr: number[]): void {
+    this.mergeSortRecursive(arr, 0, arr.length - 1)
+    this.sortingSteps.push({ type: 'complete' })
+  }
+
+  private mergeSortRecursive(arr: number[], left: number, right: number): void {
+    if (left < right) {
+      const mid = Math.floor((left + right) / 2)
+      this.mergeSortRecursive(arr, left, mid)
+      this.mergeSortRecursive(arr, mid + 1, right)
+      this.merge(arr, left, mid, right)
+    }
+  }
+
+  private merge(arr: number[], left: number, mid: number, right: number): void {
+    const leftArr = arr.slice(left, mid + 1)
+    const rightArr = arr.slice(mid + 1, right + 1)
+
+    let i = 0, j = 0, k = left
+
+    while (i < leftArr.length && j < rightArr.length) {
+      this.sortingSteps.push({ type: 'compare', indices: [left + i, mid + 1 + j] })
+      if (leftArr[i] <= rightArr[j]) {
+        arr[k] = leftArr[i]
+        i++
+      } else {
+        arr[k] = rightArr[j]
+        j++
+      }
+      this.sortingSteps.push({ type: 'place', index: k, value: arr[k] })
+      k++
+    }
+
+    while (i < leftArr.length) {
+      arr[k] = leftArr[i]
+      this.sortingSteps.push({ type: 'place', index: k, value: arr[k] })
+      i++
+      k++
+    }
+
+    while (j < rightArr.length) {
+      arr[k] = rightArr[j]
+      this.sortingSteps.push({ type: 'place', index: k, value: arr[k] })
+      j++
+      k++
+    }
+  }
+
+  update(deltaTime: number): void {
+    if (!this.ctx || !this.canvas) return
+
+    this.clearCanvas()
+    this.updateParticlePositions(deltaTime)
+    this.drawParticles()
+    this.drawInfo()
+
+    // Process sorting steps
+    if (this.isRunning && !this.isPaused) {
+      this.lastStepTime += deltaTime
+      if (this.lastStepTime >= this.parameters.animationSpeed) {
+        this.processNextStep()
+        this.lastStepTime = 0
+      }
+    }
+  }
+
+  private updateParticlePositions(deltaTime: number): void {
+    this.particles.forEach(particle => {
+      const speed = 0.01 * deltaTime
+      particle.x += (particle.targetX - particle.x) * speed
+      particle.y += (particle.targetY - particle.y) * speed
+    })
+  }
+
+  private drawParticles(): void {
+    if (!this.ctx) return
+
+    this.particles.forEach((particle, index) => {
+      // Draw particle
+      this.ctx!.fillStyle = particle.color
+
+      if (particle.isComparing) {
+        this.ctx!.fillStyle = '#ff6b6b'
+      } else if (particle.isSwapping) {
+        this.ctx!.fillStyle = '#4ecdc4'
+      } else if (particle.isActive) {
+        this.ctx!.fillStyle = '#45b7d1'
+      }
+
+      const size = this.parameters.particleSize
+      this.ctx!.fillRect(
+        particle.x - size / 2,
+        particle.y - particle.value * 2,
+        size,
+        particle.value * 2
+      )
+
+      // Draw value
+      this.ctx!.fillStyle = '#ffffff'
+      this.ctx!.font = '10px Arial'
+      this.ctx!.textAlign = 'center'
+      this.ctx!.fillText(
+        particle.value.toString(),
+        particle.x,
+        particle.y - particle.value * 2 - 5
+      )
+    })
+  }
+
+  private drawInfo(): void {
+    if (!this.ctx) return
+
+    const algorithm = this.algorithms.find(a => a.id === this.parameters.algorithm)
+    if (!algorithm) return
+
+    this.ctx.fillStyle = '#ffffff'
+    this.ctx.font = '16px Arial'
+    this.ctx.textAlign = 'left'
+    this.ctx.fillText(`Algorithm: ${algorithm.name}`, 20, 30)
+    this.ctx.fillText(`Time Complexity: ${algorithm.timeComplexity}`, 20, 50)
+    this.ctx.fillText(`Step: ${this.currentStep}/${this.sortingSteps.length}`, 20, 70)
+
+    if (this.isRunning) {
+      this.ctx.fillText('Status: Running', 300, 30)
+    } else if (this.isPaused) {
+      this.ctx.fillText('Status: Paused', 300, 30)
+    } else {
+      this.ctx.fillText('Status: Stopped', 300, 30)
+    }
+  }
+
+  private processNextStep(): void {
+    if (this.currentStep >= this.sortingSteps.length) {
+      this.isRunning = false
+      return
+    }
+
+    const step = this.sortingSteps[this.currentStep]
+    this.resetParticleStates()
+
+    switch (step.type) {
+      case 'compare':
+        step.indices.forEach((index: number) => {
+          this.particles[index].isComparing = true
+        })
+        break
+      case 'swap':
+        this.swapParticles(step.indices[0], step.indices[1])
+        break
+      case 'active':
+        this.particles[step.index].isActive = true
+        break
+      case 'sorted':
+        // Mark as sorted (could add visual indicator)
+        break
+      case 'complete':
+        this.isRunning = false
+        break
+    }
+
+    this.currentStep++
+  }
+
+  private resetParticleStates(): void {
+    this.particles.forEach(particle => {
+      particle.isComparing = false
+      particle.isSwapping = false
+      particle.isActive = false
+    })
+  }
+
+  private swapParticles(i: number, j: number): void {
+    const particle1 = this.particles[i]
+    const particle2 = this.particles[j]
+
+    particle1.isSwapping = true
+    particle2.isSwapping = true
+
+    // Swap target positions
+    const tempX = particle1.targetX
+    particle1.targetX = particle2.targetX
+    particle2.targetX = tempX
+
+    // Swap particles in array
+    ;[this.particles[i], this.particles[j]] = [this.particles[j], this.particles[i]]
+  }
+
+  handleInteraction(event: InteractionEvent): void {
+    // Click to start/pause animation
+    if (event.type === 'mouse' && event.position && !event.delta) {
+      if (this.isRunning) {
+        this.isPaused = !this.isPaused
+      } else {
+        this.startAnimation()
+      }
+    }
+  }
+
+  private startAnimation(): void {
+    this.isRunning = true
+    this.isPaused = false
+    this.lastStepTime = 0
+  }
+
+  private stopAnimation(): void {
+    this.isRunning = false
+    this.isPaused = false
+    this.currentStep = 0
+    this.resetParticleStates()
+  }
+
+  getControls(): VisualizationControl[] {
+    return [
+      {
+        id: 'algorithm',
+        label: 'Algorithm',
+        type: 'select',
+        value: this.parameters.algorithm,
+        options: this.algorithms.map(a => ({ label: a.name, value: a.id })),
+        onChange: (value) => {
+          this.setParameter('algorithm', value)
+          this.resetAnimation()
+        }
+      },
+      {
+        id: 'arraySize',
+        label: 'Array Size',
+        type: 'slider',
+        value: this.parameters.arraySize,
+        min: 10,
+        max: 100,
+        step: 5,
+        onChange: (value) => {
+          this.setParameter('arraySize', value)
+          this.generateRandomArray()
+        }
+      },
+      {
+        id: 'animationSpeed',
+        label: 'Animation Speed (ms)',
+        type: 'slider',
+        value: this.parameters.animationSpeed,
+        min: 10,
+        max: 200,
+        step: 10,
+        onChange: (value) => this.setParameter('animationSpeed', value)
+      },
+      {
+        id: 'colorScheme',
+        label: 'Color Scheme',
+        type: 'select',
+        value: this.parameters.colorScheme,
+        options: [
+          { label: 'Rainbow', value: 'rainbow' },
+          { label: 'Gradient', value: 'gradient' },
+          { label: 'Monochrome', value: 'monochrome' }
+        ],
+        onChange: (value) => {
+          this.setParameter('colorScheme', value)
+          this.generateRandomArray()
+        }
+      },
+      {
+        id: 'start',
+        label: this.isRunning ? (this.isPaused ? 'Resume' : 'Pause') : 'Start',
+        type: 'button',
+        value: null,
+        onChange: () => {
+          if (this.isRunning) {
+            this.isPaused = !this.isPaused
+          } else {
+            this.startAnimation()
+          }
+        }
+      },
+      {
+        id: 'stop',
+        label: 'Stop',
+        type: 'button',
+        value: null,
+        onChange: () => this.stopAnimation()
+      },
+      {
+        id: 'shuffle',
+        label: 'Shuffle Array',
+        type: 'button',
+        value: null,
+        onChange: () => this.generateRandomArray()
+      }
+    ]
+  }
+
+  protected onReset(): void {
+    this.generateRandomArray()
+  }
+}
