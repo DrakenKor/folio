@@ -429,7 +429,6 @@ export class NeuralNetworkPlayground extends BaseMathVisualization {
         ],
         onChange: (value) => {
           this.setParameter('networkStructure', value)
-          this.generateNetwork()
         }
       },
       {
@@ -468,7 +467,6 @@ export class NeuralNetworkPlayground extends BaseMathVisualization {
         ],
         onChange: (value) => {
           this.setParameter('datasetType', value)
-          this.generateTrainingData()
         }
       },
       {
@@ -513,6 +511,21 @@ export class NeuralNetworkPlayground extends BaseMathVisualization {
         onChange: () => this.resetNetwork()
       }
     ]
+  }
+
+  protected onParameterChange(key: string, value: any): void {
+    // Handle parameter changes immediately
+    if (key === 'networkStructure') {
+      // Regenerate network with new structure
+      this.generateNetwork()
+    } else if (key === 'datasetType') {
+      // Generate new training data
+      this.generateTrainingData()
+    } else if (key === 'learningRate') {
+      // Learning rate changes take effect immediately during training
+      this.learningRate = value
+    }
+    // Other parameters like activation function take effect during next training step
   }
 
   protected onReset(): void {

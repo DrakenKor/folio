@@ -94,12 +94,14 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
 
     this.particles = []
     const particleWidth = Math.max(4, (width - 40) / size)
-    const maxHeight = height - 100
+    const topMargin = 60
+    const bottomMargin = 40
+    const maxHeight = height - topMargin - bottomMargin
 
     for (let i = 0; i < size; i++) {
       const value = Math.floor(Math.random() * 100) + 1
       const x = 20 + i * particleWidth + particleWidth / 2
-      const y = height - 20 - (value / 100) * maxHeight
+      const y = height - bottomMargin - (value / 100) * maxHeight
 
       this.particles.push({
         value,
@@ -268,29 +270,38 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
 
     let i = 0, j = 0, k = left
 
+    // Highlight the range being merged
+    this.sortingSteps.push({ type: 'active', index: left })
+    this.sortingSteps.push({ type: 'active', index: right })
+
     while (i < leftArr.length && j < rightArr.length) {
+      // Compare elements from left and right subarrays
       this.sortingSteps.push({ type: 'compare', indices: [left + i, mid + 1 + j] })
+
       if (leftArr[i] <= rightArr[j]) {
         arr[k] = leftArr[i]
+        this.sortingSteps.push({ type: 'place', index: k, value: leftArr[i] })
         i++
       } else {
         arr[k] = rightArr[j]
+        this.sortingSteps.push({ type: 'place', index: k, value: rightArr[j] })
         j++
       }
-      this.sortingSteps.push({ type: 'place', index: k, value: arr[k] })
       k++
     }
 
+    // Copy remaining elements from left subarray
     while (i < leftArr.length) {
       arr[k] = leftArr[i]
-      this.sortingSteps.push({ type: 'place', index: k, value: arr[k] })
+      this.sortingSteps.push({ type: 'place', index: k, value: leftArr[i] })
       i++
       k++
     }
 
+    // Copy remaining elements from right subarray
     while (j < rightArr.length) {
       arr[k] = rightArr[j]
-      this.sortingSteps.push({ type: 'place', index: k, value: arr[k] })
+      this.sortingSteps.push({ type: 'place', index: k, value: rightArr[j] })
       j++
       k++
     }
@@ -324,6 +335,11 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
 
   private drawParticles(): void {
     if (!this.ctx) return
+    const { height } = this.getCanvasSize()
+    const maxBarHeight = height - 140 // Available space for bars
+    const scaleFactor = maxBarHeight / 100 // Scale factor for values 1-100
+
+    const bottomMargin = 40
 
     this.particles.forEach((particle, index) => {
       // Draw particle
@@ -338,21 +354,24 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
       }
 
       const size = this.parameters.particleSize
+      const barHeight = (height - bottomMargin) - particle.y
+
+      // Draw bar from particle position to bottom
       this.ctx!.fillRect(
         particle.x - size / 2,
-        particle.y - particle.value * 2,
+        particle.y,
         size,
-        particle.value * 2
+        barHeight
       )
 
-      // Draw value
+      // Draw value above the bar
       this.ctx!.fillStyle = '#ffffff'
       this.ctx!.font = '10px Arial'
       this.ctx!.textAlign = 'center'
       this.ctx!.fillText(
         particle.value.toString(),
         particle.x,
-        particle.y - particle.value * 2 - 5
+        particle.y - 5
       )
     })
   }
@@ -399,6 +418,26 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
         break
       case 'active':
         this.particles[step.index].isActive = true
+        break
+      case 'pivot':
+        // Highlight pivot element for quick sort
+        this.particles[step.index].isActive = true
+        break
+      case 'place':
+        // For merge sort - update particle value at specific position
+        if (step.index !== undefined && step.value !== undefined) {
+          const particle = this.particles[step.index]
+          particle.value = step.value
+          particle.color = this.getParticleColor(step.value, step.index)
+          particle.isActive = true
+
+          // Update the particle's target Y position based on new value
+          const { height } = this.getCanvasSize()
+          const topMargin = 60
+          const bottomMargin = 40
+          const maxHeight = height - topMargin - bottomMargin
+          particle.targetY = height - bottomMargin - (step.value / 100) * maxHeight
+        }
         break
       case 'sorted':
         // Mark as sorted (could add visual indicator)
@@ -469,7 +508,6 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
         options: this.algorithms.map(a => ({ label: a.name, value: a.id })),
         onChange: (value) => {
           this.setParameter('algorithm', value)
-          this.resetAnimation()
         }
       },
       {
@@ -482,7 +520,6 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
         step: 5,
         onChange: (value) => {
           this.setParameter('arraySize', value)
-          this.generateRandomArray()
         }
       },
       {
@@ -507,7 +544,6 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
         ],
         onChange: (value) => {
           this.setParameter('colorScheme', value)
-          this.generateRandomArray()
         }
       },
       {
@@ -538,6 +574,23 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
         onChange: () => this.generateRandomArray()
       }
     ]
+  }
+
+  protected onParameterChange(key: string, value: any): void {
+    // Handle parameter changes immediately
+    if (key === 'arraySize') {
+      // Regenerate array with new size
+      this.generateRandomArray()
+    } else if (key === 'colorScheme') {
+      // Update particle colors
+      this.particles.forEach((particle, index) => {
+        particle.color = this.getParticleColor(particle.value, index)
+      })
+    } else if (key === 'algorithm') {
+      // Reset animation when algorithm changes
+      this.resetAnimation()
+    }
+    // For other parameters like animationSpeed, no immediate visual change needed
   }
 
   protected onReset(): void {

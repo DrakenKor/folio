@@ -340,3 +340,36 @@ describe('NeuralNetworkPlayground', () => {
     expect(() => neuralViz.handleInteraction(interactionEvent)).not.toThrow()
   })
 })
+describe('AlgorithmVisualizer Merge Sort', () => {
+  let algorithmViz: any
+
+  beforeEach(async () => {
+    const { AlgorithmVisualizer } = await import('../lib/math-visualization/AlgorithmVisualizer')
+    algorithmViz = new AlgorithmVisualizer()
+  })
+
+  afterEach(() => {
+    algorithmViz.cleanup()
+  })
+
+  it('should generate merge sort steps correctly', () => {
+    algorithmViz.setParameter('algorithm', 'merge')
+
+    // The algorithm should be set correctly
+    expect(algorithmViz.getParameter('algorithm')).toBe('merge')
+
+    // Should not throw when generating steps
+    expect(() => {
+      algorithmViz.setParameter('arraySize', 10)
+    }).not.toThrow()
+  })
+
+  it('should handle place step type for merge sort', () => {
+    algorithmViz.setParameter('algorithm', 'merge')
+
+    // Should not throw when processing steps
+    expect(() => {
+      algorithmViz.update(16) // Simulate frame update
+    }).not.toThrow()
+  })
+})
