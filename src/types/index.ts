@@ -114,3 +114,6 @@ export interface TransitionOptions {
   easing: string
   direction?: 'forward' | 'backward'
 }
+
+// Re-export code architecture types
+export * from './code-architecture'
