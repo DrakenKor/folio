@@ -32,15 +32,24 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
   // Initialize visualization
   useEffect(() => {
     const initializeVisualization = async () => {
-      if (!canvasRef.current) return
+      if (!canvasRef.current || !containerRef.current) return
 
       onStateUpdate({ isLoading: true, error: undefined })
 
       try {
-        // Set initial canvas size
         const canvas = canvasRef.current
-        canvas.width = width
-        canvas.height = height
+        const container = containerRef.current
+
+        // Wait for container to be properly rendered
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        // Set canvas size based on container dimensions
+        const rect = container.getBoundingClientRect()
+        const canvasWidth = Math.max(400, rect.width - 8)
+        const canvasHeight = Math.max(300, rect.height - 60)
+
+        canvas.width = canvasWidth
+        canvas.height = canvasHeight
 
         await visualization.initialize(canvas)
         onStateUpdate({ isActive: true, isLoading: false })
@@ -69,14 +78,14 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
     }
   }, [visualization, width, height])
 
-  // Handle canvas resize
+  // Handle window resize (after initialization)
   useEffect(() => {
     const handleResize = () => {
       if (canvasRef.current && containerRef.current) {
         const container = containerRef.current
         const rect = container.getBoundingClientRect()
-        const newWidth = Math.max(400, rect.width - 8) // Account for padding
-        const newHeight = Math.max(300, rect.height - 60) // Account for header
+        const newWidth = Math.max(400, rect.width - 8)
+        const newHeight = Math.max(300, rect.height - 60)
 
         canvasRef.current.width = newWidth
         canvasRef.current.height = newHeight
@@ -85,14 +94,8 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
       }
     }
 
-    // Use setTimeout to ensure container is rendered
-    const timeoutId = setTimeout(handleResize, 100)
-
     window.addEventListener('resize', handleResize)
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      clearTimeout(timeoutId)
-    }
+    return () => window.removeEventListener('resize', handleResize)
   }, [visualization])
 
   const startAnimationLoop = () => {

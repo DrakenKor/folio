@@ -79,7 +79,8 @@ export const MathGallery: React.FC<MathGalleryProps> = ({
           Mathematical Art Gallery
         </h1>
         <p className="text-gray-300 mb-6">
-          Discover the hidden beauty of mathematics through interactive visualizations. Explore fractals, Fourier transforms, algorithms, and neural networks - where complex mathematics becomes captivating art.
+          Mathematics through interactive visualizations. Explore fractals,
+          Fourier transforms, algorithms, and neural networks.
         </p>
       </div>
 

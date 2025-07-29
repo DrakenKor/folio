@@ -22,6 +22,7 @@ interface SortingAlgorithm {
 
 export class AlgorithmVisualizer extends BaseMathVisualization {
   private particles: Particle[] = []
+  private originalValues: number[] = [] // Store original unsorted values
   private isRunning = false
   private isPaused = false
   private currentStep = 0
@@ -93,12 +94,14 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
     const { width, height } = this.getCanvasSize()
 
     this.particles = []
+    this.originalValues = []
     const particleWidth = Math.max(4, (width - 40) / size)
 
     for (let i = 0; i < size; i++) {
       const value = Math.floor(Math.random() * 200) - 100 // Values from -100 to 99
       const x = 20 + i * particleWidth + particleWidth / 2
 
+      this.originalValues.push(value) // Store original value
       this.particles.push({
         value,
         x,
@@ -173,19 +176,19 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
 
     switch (this.parameters.algorithm) {
       case 'bubble':
-        this.generateBubbleSortSteps(values)
+        this.generateBubbleSortSteps([...values]) // Create copy
         break
       case 'selection':
-        this.generateSelectionSortSteps(values)
+        this.generateSelectionSortSteps([...values]) // Create copy
         break
       case 'insertion':
-        this.generateInsertionSortSteps(values)
+        this.generateInsertionSortSteps([...values]) // Create copy
         break
       case 'quick':
-        this.generateQuickSortSteps(values, 0, values.length - 1)
+        this.generateQuickSortSteps([...values], 0, values.length - 1) // Create copy
         break
       case 'merge':
-        this.generateMergeSortSteps(values)
+        this.generateMergeSortSteps([...values]) // Create copy
         break
     }
   }
@@ -539,11 +542,24 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
     }
   }
 
+  private restoreOriginalArray(): void {
+    // Restore particles to their original unsorted state
+    this.particles.forEach((particle, index) => {
+      if (index < this.originalValues.length) {
+        particle.value = this.originalValues[index]
+        particle.color = this.getParticleColor(particle.value, index)
+      }
+    })
+    this.calculateParticlePositions()
+    this.resetParticleStates()
+  }
+
   private startAnimation(): void {
-    // Generate sorting steps only when starting animation
-    if (this.sortingSteps.length === 0) {
-      this.generateSortingSteps()
-    }
+    // Restore original array state before generating steps
+    this.restoreOriginalArray()
+
+    // Generate sorting steps based on the original unsorted array
+    this.generateSortingSteps()
     this.isRunning = true
     this.isPaused = false
     this.lastStepTime = 0
