@@ -94,21 +94,17 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
 
     this.particles = []
     const particleWidth = Math.max(4, (width - 40) / size)
-    const topMargin = 60
-    const bottomMargin = 40
-    const maxHeight = height - topMargin - bottomMargin
 
     for (let i = 0; i < size; i++) {
-      const value = Math.floor(Math.random() * 100) + 1
+      const value = Math.floor(Math.random() * 200) - 100 // Values from -100 to 99
       const x = 20 + i * particleWidth + particleWidth / 2
-      const y = height - bottomMargin - (value / 100) * maxHeight
 
       this.particles.push({
         value,
         x,
-        y,
+        y: 0, // Will be calculated dynamically
         targetX: x,
-        targetY: y,
+        targetY: 0, // Will be calculated dynamically
         color: this.getParticleColor(value, i),
         isComparing: false,
         isSwapping: false,
@@ -116,19 +112,47 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
       })
     }
 
+    this.calculateParticlePositions()
     this.resetAnimation()
+  }
+
+  private calculateParticlePositions(): void {
+    if (this.particles.length === 0) return
+
+    const { height } = this.getCanvasSize()
+    const topMargin = 100
+    const bottomMargin = 60
+    const availableHeight = height - topMargin - bottomMargin
+
+    // Find min and max values for dynamic scaling
+    const values = this.particles.map(p => p.value)
+    const minValue = Math.min(...values)
+    const maxValue = Math.max(...values)
+    const valueRange = maxValue - minValue
+
+    // Avoid division by zero
+    const safeRange = valueRange === 0 ? 1 : valueRange
+
+    this.particles.forEach(particle => {
+      // Calculate Y position based on value relative to range
+      const normalizedValue = (particle.value - minValue) / safeRange
+      const y = height - bottomMargin - normalizedValue * availableHeight
+
+      particle.y = y
+      particle.targetY = y
+    })
   }
 
   private getParticleColor(value: number, index: number): string {
     switch (this.parameters.colorScheme) {
       case 'rainbow':
-        const hue = (value / 100) * 360
+        const hue = ((value + 100) / 200) * 360
         return `hsl(${hue}, 70%, 60%)`
       case 'gradient':
-        const intensity = Math.floor((value / 100) * 255)
+        const intensity = Math.floor(((value + 100) / 200) * 255)
         return `rgb(${intensity}, ${100}, ${255 - intensity})`
       case 'monochrome':
-        const gray = Math.floor((value / 100) * 200) + 55
+        const gray = Math.floor(((value + 100) / 200) * 200) + 55
         return `rgb(${gray}, ${gray}, ${gray})`
       default:
         return '#3b82f6'
@@ -336,12 +360,33 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
   private drawParticles(): void {
     if (!this.ctx) return
     const { height } = this.getCanvasSize()
-    const maxBarHeight = height - 140 // Available space for bars
-    const scaleFactor = maxBarHeight / 100 // Scale factor for values 1-100
+    const topMargin = 100
+    const bottomMargin = 60
+    const availableHeight = height - topMargin - bottomMargin
 
-    const bottomMargin = 40
+    // Find min and max values for dynamic scaling
+    const values = this.particles.map(p => p.value)
+    const minValue = Math.min(...values)
+    const maxValue = Math.max(...values)
+    const valueRange = maxValue - minValue
+    const safeRange = valueRange === 0 ? 1 : valueRange
 
-    this.particles.forEach((particle, index) => {
+    // Calculate baseline (zero line) position
+    const zeroLineY = height - bottomMargin - ((-minValue) / safeRange) * availableHeight
+
+    // Draw zero line if we have negative values
+    if (minValue < 0) {
+      this.ctx.strokeStyle = '#666666'
+      this.ctx.lineWidth = 1
+      this.ctx.setLineDash([5, 5])
+      this.ctx.beginPath()
+      this.ctx.moveTo(10, zeroLineY)
+      this.ctx.lineTo(this.canvas!.width - 10, zeroLineY)
+      this.ctx.stroke()
+      this.ctx.setLineDash([])
+    }
+
+    this.particles.forEach((particle) => {
       // Draw particle
       this.ctx!.fillStyle = particle.color
 
@@ -354,24 +399,37 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
       }
 
       const size = this.parameters.particleSize
-      const barHeight = (height - bottomMargin) - particle.y
 
-      // Draw bar from particle position to bottom
+      // Calculate bar height and position based on value
+      let barY, barHeight
+      if (particle.value >= 0) {
+        // Positive values: draw from zero line upward
+        barHeight = zeroLineY - particle.y
+        barY = particle.y
+      } else {
+        // Negative values: draw from zero line downward
+        barHeight = particle.y - zeroLineY
+        barY = zeroLineY
+      }
+
       this.ctx!.fillRect(
         particle.x - size / 2,
-        particle.y,
+        barY,
         size,
         barHeight
       )
 
-      // Draw value above the bar
+      // Draw value
       this.ctx!.fillStyle = '#ffffff'
       this.ctx!.font = '10px Arial'
       this.ctx!.textAlign = 'center'
+
+      // Position text above positive bars, below negative bars
+      const textY = particle.value >= 0 ? particle.y - 5 : particle.y + 15
       this.ctx!.fillText(
         particle.value.toString(),
         particle.x,
-        particle.y - 5
+        textY
       )
     })
   }
@@ -431,12 +489,8 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
           particle.color = this.getParticleColor(step.value, step.index)
           particle.isActive = true
 
-          // Update the particle's target Y position based on new value
-          const { height } = this.getCanvasSize()
-          const topMargin = 60
-          const bottomMargin = 40
-          const maxHeight = height - topMargin - bottomMargin
-          particle.targetY = height - bottomMargin - (step.value / 100) * maxHeight
+          // Update all particle positions with new dynamic scaling
+          this.calculateParticlePositions()
         }
         break
       case 'sorted':
