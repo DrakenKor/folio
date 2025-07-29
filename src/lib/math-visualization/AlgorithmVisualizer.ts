@@ -140,7 +140,7 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
     this.isPaused = false
     this.currentStep = 0
     this.sortingSteps = []
-    this.generateSortingSteps()
+    this.resetParticleStates()
   }
 
   private generateSortingSteps(): void {
@@ -486,9 +486,14 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
   }
 
   private startAnimation(): void {
+    // Generate sorting steps only when starting animation
+    if (this.sortingSteps.length === 0) {
+      this.generateSortingSteps()
+    }
     this.isRunning = true
     this.isPaused = false
     this.lastStepTime = 0
+    this.currentStep = 0
   }
 
   private stopAnimation(): void {
@@ -508,6 +513,7 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
         options: this.algorithms.map(a => ({ label: a.name, value: a.id })),
         onChange: (value) => {
           this.setParameter('algorithm', value)
+          this.resetAnimation()
         }
       },
       {
@@ -520,6 +526,7 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
         step: 5,
         onChange: (value) => {
           this.setParameter('arraySize', value)
+          this.generateRandomArray()
         }
       },
       {
@@ -544,6 +551,7 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
         ],
         onChange: (value) => {
           this.setParameter('colorScheme', value)
+          this.generateRandomArray()
         }
       },
       {
