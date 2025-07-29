@@ -13,29 +13,29 @@ export class GalleryManager {
       {
         id: 'fourier',
         title: 'Fourier Analysis',
-        description: 'Interactive Fourier transform visualizations',
-        icon: '〜',
+        description: 'Decompose signals into beautiful wave patterns',
+        icon: 'fourier',
         visualizations: []
       },
       {
         id: 'fractal',
         title: 'Fractal Explorer',
-        description: 'Explore mathematical fractals',
-        icon: '❋',
+        description: 'Journey through infinite mathematical landscapes',
+        icon: 'fractal',
         visualizations: []
       },
       {
         id: 'algorithm',
         title: 'Algorithm Visualization',
-        description: 'See algorithms in action',
-        icon: '⚡',
+        description: 'Watch computational thinking come alive',
+        icon: 'algorithm',
         visualizations: []
       },
       {
         id: 'neural',
         title: 'Neural Networks',
-        description: 'Interactive neural network playground',
-        icon: '🧠',
+        description: 'Explore the building blocks of AI',
+        icon: 'neural',
         visualizations: []
       }
     ]

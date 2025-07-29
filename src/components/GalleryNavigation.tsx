@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { GallerySection } from '@/types/math-visualization'
+import { mathGalleryIcons, MathGalleryIconType } from './icons/MathGalleryIcons'
 
 interface GalleryNavigationProps {
   sections: GallerySection[]
@@ -34,7 +35,19 @@ export const GalleryNavigation: React.FC<GalleryNavigationProps> = ({
               }`}
             >
               <div className="flex items-center space-x-3">
-                <span className="text-xl">{section.icon}</span>
+                <div className="flex-shrink-0">
+                  {(() => {
+                    const IconComponent = mathGalleryIcons[section.icon as MathGalleryIconType]
+                    return IconComponent ? (
+                      <IconComponent
+                        size={20}
+                        className={activeSection === section.id ? 'text-white' : 'text-gray-400'}
+                      />
+                    ) : (
+                      <span className="text-xl">{section.icon}</span>
+                    )
+                  })()}
+                </div>
                 <div>
                   <div className="font-medium">{section.title}</div>
                   <div className="text-sm opacity-75">{section.description}</div>

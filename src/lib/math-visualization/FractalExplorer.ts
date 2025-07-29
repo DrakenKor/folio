@@ -44,7 +44,7 @@ export class FractalExplorer extends BaseMathVisualization {
     super(
       'fractal-explorer',
       'Fractal Explorer',
-      'Explore the infinite beauty of Mandelbrot and Julia sets with real-time zoom and pan',
+      'Dive into the infinite complexity of mathematical fractals - explore Mandelbrot, Julia, Burning Ship, and Newton\'s Method fractals with real-time interaction',
       'fractal'
     )
   }
@@ -57,7 +57,9 @@ export class FractalExplorer extends BaseMathVisualization {
       juliaReal: -0.7,
       juliaImaginary: 0.27015,
       smoothColoring: true,
-      escapeRadius: 2
+      escapeRadius: 2,
+      newtonRelaxation: 1.0,
+      newtonTolerance: 0.01
     }
   }
 
@@ -102,10 +104,21 @@ export class FractalExplorer extends BaseMathVisualization {
         const imaginary = this.centerY + (y - height / 2) / (height / 4) / this.zoom
 
         let iterations: number
-        if (this.parameters.fractalType === 'mandelbrot') {
-          iterations = this.mandelbrotIterations(real, imaginary)
-        } else {
-          iterations = this.juliaIterations(real, imaginary)
+        switch (this.parameters.fractalType) {
+          case 'mandelbrot':
+            iterations = this.mandelbrotIterations(real, imaginary)
+            break
+          case 'julia':
+            iterations = this.juliaIterations(real, imaginary)
+            break
+          case 'burning-ship':
+            iterations = this.burningShipIterations(real, imaginary)
+            break
+          case 'newton':
+            iterations = this.newtonIterations(real, imaginary)
+            break
+          default:
+            iterations = this.mandelbrotIterations(real, imaginary)
         }
 
         // Color based on iterations
@@ -167,6 +180,85 @@ export class FractalExplorer extends BaseMathVisualization {
     }
 
     return iterations
+  }
+
+  private burningShipIterations(cReal: number, cImaginary: number): number {
+    let zReal = 0
+    let zImaginary = 0
+    let iterations = 0
+    const maxIter = this.parameters.maxIterations
+    const escapeRadius = this.parameters.escapeRadius
+
+    while (iterations < maxIter && (zReal * zReal + zImaginary * zImaginary) < escapeRadius * escapeRadius) {
+      // Burning Ship: z = (|Re(z)| + i|Im(z)|)² + c
+      const absReal = Math.abs(zReal)
+      const absImaginary = Math.abs(zImaginary)
+      const tempReal = absReal * absReal - absImaginary * absImaginary + cReal
+      zImaginary = 2 * absReal * absImaginary + cImaginary
+      zReal = tempReal
+      iterations++
+    }
+
+    // Smooth coloring
+    if (this.parameters.smoothColoring && iterations < maxIter) {
+      const magnitude = Math.sqrt(zReal * zReal + zImaginary * zImaginary)
+      iterations += 1 - Math.log2(Math.log2(magnitude))
+    }
+
+    return iterations
+  }
+
+  private newtonIterations(zReal: number, zImaginary: number): number {
+    let iterations = 0
+    const maxIter = this.parameters.maxIterations
+    const tolerance = this.parameters.newtonTolerance
+    const relaxation = this.parameters.newtonRelaxation
+
+    // Newton's method for z³ - 1 = 0
+    // The three roots are: 1, -1/2 + i√3/2, -1/2 - i√3/2
+    const roots = [
+      { real: 1, imaginary: 0 },
+      { real: -0.5, imaginary: Math.sqrt(3) / 2 },
+      { real: -0.5, imaginary: -Math.sqrt(3) / 2 }
+    ]
+
+    while (iterations < maxIter) {
+      // f(z) = z³ - 1
+      const z3Real = zReal * zReal * zReal - 3 * zReal * zImaginary * zImaginary - 1
+      const z3Imaginary = 3 * zReal * zReal * zImaginary - zImaginary * zImaginary * zImaginary
+
+      // f'(z) = 3z²
+      const derivReal = 3 * (zReal * zReal - zImaginary * zImaginary)
+      const derivImaginary = 6 * zReal * zImaginary
+
+      // Avoid division by zero
+      const derivMagnitudeSquared = derivReal * derivReal + derivImaginary * derivImaginary
+      if (derivMagnitudeSquared < 1e-10) break
+
+      // Newton step: z = z - relaxation * f(z) / f'(z)
+      const stepReal = (z3Real * derivReal + z3Imaginary * derivImaginary) / derivMagnitudeSquared
+      const stepImaginary = (z3Imaginary * derivReal - z3Real * derivImaginary) / derivMagnitudeSquared
+
+      zReal -= relaxation * stepReal
+      zImaginary -= relaxation * stepImaginary
+
+      // Check convergence to any root
+      let converged = false
+      for (let i = 0; i < roots.length; i++) {
+        const diffReal = zReal - roots[i].real
+        const diffImaginary = zImaginary - roots[i].imaginary
+        const distance = Math.sqrt(diffReal * diffReal + diffImaginary * diffImaginary)
+
+        if (distance < tolerance) {
+          // Color based on which root we converged to
+          return iterations + i * (maxIter / 3)
+        }
+      }
+
+      iterations++
+    }
+
+    return maxIter // Didn't converge
   }
 
   private getColorPalette(paletteName: string): string[] {
@@ -258,9 +350,32 @@ export class FractalExplorer extends BaseMathVisualization {
   }
 
   private resetView(): void {
-    this.centerX = this.parameters.fractalType === 'mandelbrot' ? -0.5 : 0
-    this.centerY = 0
-    this.zoom = 1
+    switch (this.parameters.fractalType) {
+      case 'mandelbrot':
+        this.centerX = -0.5
+        this.centerY = 0
+        this.zoom = 1
+        break
+      case 'julia':
+        this.centerX = 0
+        this.centerY = 0
+        this.zoom = 1
+        break
+      case 'burning-ship':
+        this.centerX = -0.5
+        this.centerY = -0.5
+        this.zoom = 0.8
+        break
+      case 'newton':
+        this.centerX = 0
+        this.centerY = 0
+        this.zoom = 1.5
+        break
+      default:
+        this.centerX = -0.5
+        this.centerY = 0
+        this.zoom = 1
+    }
 
     this.renderFractal()
   }
@@ -274,7 +389,9 @@ export class FractalExplorer extends BaseMathVisualization {
         value: this.parameters.fractalType,
         options: [
           { label: 'Mandelbrot Set', value: 'mandelbrot' },
-          { label: 'Julia Set', value: 'julia' }
+          { label: 'Julia Set', value: 'julia' },
+          { label: 'Burning Ship', value: 'burning-ship' },
+          { label: 'Newton\'s Method', value: 'newton' }
         ],
         onChange: (value) => {
           this.setParameter('fractalType', value)
@@ -325,6 +442,32 @@ export class FractalExplorer extends BaseMathVisualization {
           step: 0.01,
           onChange: (value: number) => {
             this.setParameter('juliaImaginary', value)
+          }
+        }
+      ] : []),
+      ...(this.parameters.fractalType === 'newton' ? [
+        {
+          id: 'newtonRelaxation',
+          label: 'Relaxation Factor',
+          type: 'slider' as const,
+          value: this.parameters.newtonRelaxation,
+          min: 0.5,
+          max: 2.0,
+          step: 0.1,
+          onChange: (value: number) => {
+            this.setParameter('newtonRelaxation', value)
+          }
+        },
+        {
+          id: 'newtonTolerance',
+          label: 'Convergence Tolerance',
+          type: 'slider' as const,
+          value: this.parameters.newtonTolerance,
+          min: 0.001,
+          max: 0.1,
+          step: 0.001,
+          onChange: (value: number) => {
+            this.setParameter('newtonTolerance', value)
           }
         }
       ] : []),
