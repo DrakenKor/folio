@@ -45,7 +45,7 @@
     - Add keyboard navigation support for accessibility
     - _Requirements: 6.3, 9.4_
 
-- [-] 4. 3D Interactive Resume Timeline1
+- [x] 4. 3D Interactive Resume Timeline1
 
   - [x] 4.1 Create timeline data structure and management
 
@@ -74,7 +74,7 @@
     - Add technology visualization with animated icons and proficiency indicators
     - _Requirements: 1.4, 1.5_
 
-- [ ] 5. Mathematical Art Gallery
+- [x] 5. Mathematical Art Gallery
 
   - [x] 5.1 Create gallery framework and base visualization system
 

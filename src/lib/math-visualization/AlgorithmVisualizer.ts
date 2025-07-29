@@ -81,7 +81,9 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
       particleSize: 8,
       showComparisons: true,
       showSwaps: true,
-      colorScheme: 'rainbow'
+      colorScheme: 'rainbow',
+      isRunning: false,
+      isPaused: false
     }
   }
 
@@ -168,6 +170,10 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
     this.currentStep = 0
     this.sortingSteps = []
     this.resetParticleStates()
+
+    // Update parameters to reflect state change
+    this.parameters.isRunning = false
+    this.parameters.isPaused = false
   }
 
   private generateSortingSteps(): void {
@@ -462,6 +468,8 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
   private processNextStep(): void {
     if (this.currentStep >= this.sortingSteps.length) {
       this.isRunning = false
+      this.parameters.isRunning = false
+      this.parameters.isPaused = false
       return
     }
 
@@ -501,6 +509,8 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
         break
       case 'complete':
         this.isRunning = false
+        this.parameters.isRunning = false
+        this.parameters.isPaused = false
         break
     }
 
@@ -564,6 +574,12 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
     this.isPaused = false
     this.lastStepTime = 0
     this.currentStep = 0
+
+    // Update parameters to reflect state change
+    this.parameters.isRunning = true
+    this.parameters.isPaused = false
+    this.onParameterChange('isRunning', true)
+    this.onParameterChange('isPaused', false)
   }
 
   private stopAnimation(): void {
@@ -571,6 +587,10 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
     this.isPaused = false
     this.currentStep = 0
     this.resetParticleStates()
+
+    // Update parameters to reflect state change
+    this.parameters.isRunning = false
+    this.parameters.isPaused = false
   }
 
   getControls(): VisualizationControl[] {
@@ -626,12 +646,14 @@ export class AlgorithmVisualizer extends BaseMathVisualization {
       },
       {
         id: 'start',
-        label: this.isRunning ? (this.isPaused ? 'Resume' : 'Pause') : 'Start',
+        label: this.parameters.isRunning ? (this.parameters.isPaused ? 'Resume' : 'Pause') : 'Start',
         type: 'button',
         value: null,
         onChange: () => {
           if (this.isRunning) {
             this.isPaused = !this.isPaused
+            this.parameters.isPaused = this.isPaused
+            this.onParameterChange('isPaused', this.isPaused)
           } else {
             this.startAnimation()
           }
