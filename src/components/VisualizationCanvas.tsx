@@ -1,7 +1,11 @@
 'use client'
 
 import React, { useRef, useEffect, useState } from 'react'
-import { MathVisualization, InteractionEvent, VisualizationState } from '@/types/math-visualization'
+import {
+  MathVisualization,
+  InteractionEvent,
+  VisualizationState
+} from '@/types/math-visualization'
 
 interface VisualizationCanvasProps {
   visualization: MathVisualization
@@ -92,13 +96,15 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
   }, [visualization])
 
   const startAnimationLoop = () => {
+    // Reset the time reference to avoid huge deltaTime on first frame
+    lastTimeRef.current = performance.now()
+
     const animate = (currentTime: number) => {
       const deltaTime = currentTime - lastTimeRef.current
       lastTimeRef.current = currentTime
 
-      if (state.isActive) {
-        visualization.update(deltaTime)
-      }
+      // Always update the visualization once it's initialized, don't wait for state
+      visualization.update(deltaTime)
 
       animationRef.current = requestAnimationFrame(animate)
     }
@@ -106,7 +112,9 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
     animationRef.current = requestAnimationFrame(animate)
   }
 
-  const getMousePosition = (event: React.MouseEvent): { x: number; y: number } => {
+  const getMousePosition = (
+    event: React.MouseEvent
+  ): { x: number; y: number } => {
     if (!canvasRef.current) return { x: 0, y: 0 }
 
     const rect = canvasRef.current.getBoundingClientRect()
@@ -136,10 +144,12 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
     const interactionEvent: InteractionEvent = {
       type: 'mouse',
       position: pos,
-      delta: isMouseDown ? {
-        x: pos.x - lastMousePos.x,
-        y: pos.y - lastMousePos.y
-      } : undefined,
+      delta: isMouseDown
+        ? {
+            x: pos.x - lastMousePos.x,
+            y: pos.y - lastMousePos.y
+          }
+        : undefined,
       key: event.ctrlKey ? 'Control' : event.metaKey ? 'Meta' : undefined
     }
 
@@ -211,8 +221,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
         <p className="text-red-200">{state.error}</p>
         <button
           onClick={() => window.location.reload()}
-          className="mt-4 px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
-        >
+          className="mt-4 px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded transition-colors">
           Reload
         </button>
       </div>
@@ -223,8 +232,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
     <div
       ref={containerRef}
       className="visualization-canvas-container bg-gray-900 rounded-lg overflow-hidden relative"
-      style={{ height: '600px', width: '100%' }}
-    >
+      style={{ height: '600px', width: '100%' }}>
       {state.isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75 z-10">
           <div className="text-white text-center">
