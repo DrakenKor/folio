@@ -61,6 +61,11 @@ export class NeuralNetworkPlayground extends BaseMathVisualization {
   protected async initializeVisualization(): Promise<void> {
     this.generateNetwork()
     this.generateTrainingData()
+
+    // Perform initial forward pass to set activations
+    if (this.trainingData.length > 0) {
+      this.forwardPass(this.trainingData[0].inputs)
+    }
   }
 
   private generateNetwork(): void {
@@ -287,6 +292,11 @@ export class NeuralNetworkPlayground extends BaseMathVisualization {
     if (!this.ctx || !this.canvas) return
 
     this.clearCanvas()
+
+    // Set background
+    this.ctx.fillStyle = '#0f172a'
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
+
     this.drawNetwork()
     this.drawInfo()
 
@@ -298,6 +308,14 @@ export class NeuralNetworkPlayground extends BaseMathVisualization {
 
   private drawNetwork(): void {
     if (!this.ctx) return
+
+    // Ensure we have neurons to draw
+    if (this.neurons.length === 0) {
+      this.generateNetwork()
+      if (this.trainingData.length > 0) {
+        this.forwardPass(this.trainingData[0].inputs)
+      }
+    }
 
     // Draw connections
     this.connections.forEach(connection => {
@@ -334,10 +352,14 @@ export class NeuralNetworkPlayground extends BaseMathVisualization {
       const radius = 15
 
       // Neuron circle
-      this.ctx!.fillStyle = neuron.isActive ? '#fbbf24' : '#3b82f6'
       if (this.parameters.showActivations) {
-        const intensity = Math.max(0, Math.min(1, neuron.activation))
-        this.ctx!.fillStyle = `rgba(59, 130, 246, ${0.3 + intensity * 0.7})`
+        const intensity = Math.max(0, Math.min(1, Math.abs(neuron.activation)))
+        const r = neuron.activation > 0 ? 59 : 239
+        const g = neuron.activation > 0 ? 130 : 68
+        const b = neuron.activation > 0 ? 246 : 68
+        this.ctx!.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.5 + intensity * 0.5})`
+      } else {
+        this.ctx!.fillStyle = neuron.isActive ? '#fbbf24' : '#3b82f6'
       }
 
       this.ctx!.beginPath()
@@ -429,6 +451,11 @@ export class NeuralNetworkPlayground extends BaseMathVisualization {
         ],
         onChange: (value) => {
           this.setParameter('networkStructure', value)
+          this.generateNetwork()
+          this.generateTrainingData()
+          if (this.trainingData.length > 0) {
+            this.forwardPass(this.trainingData[0].inputs)
+          }
         }
       },
       {
@@ -467,6 +494,10 @@ export class NeuralNetworkPlayground extends BaseMathVisualization {
         ],
         onChange: (value) => {
           this.setParameter('datasetType', value)
+          this.generateTrainingData()
+          if (this.trainingData.length > 0) {
+            this.forwardPass(this.trainingData[0].inputs)
+          }
         }
       },
       {
