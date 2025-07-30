@@ -531,9 +531,11 @@ export default function ImageProcessingDemo() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-2xl font-bold mb-4">WASM Image Processing Demo</h2>
-        <p className="text-gray-600 mb-6">
+      <div className="bg-gray-800 rounded-lg shadow-lg p-6">
+        <h2 className="text-2xl font-bold mb-4 text-white">
+          WASM Image Processing Demo
+        </h2>
+        <p className="text-gray-300 mb-6">
           Real-time image processing powered by WebAssembly. Upload an image or
           use the default test pattern to see WASM performance compared to
           JavaScript implementations.
@@ -564,16 +566,10 @@ export default function ImageProcessingDemo() {
           />
         </div>
 
-        {/* Debug Info */}
-        <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm">
-          <strong>Debug:</strong> Selected filter:{' '}
-          {selectedFilter?.name || 'none'} ({selectedFilter?.label || 'none'})
-        </div>
-
         {/* Filter Controls */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-200 mb-2">
               Select Filter
             </label>
             <select
@@ -585,7 +581,7 @@ export default function ImageProcessingDemo() {
                   setFilterParameter(filter.parameterDefault || 1)
                 }
               }}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              className="w-full p-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
               {FILTERS.map((filter) => (
                 <option key={filter.name} value={filter.name}>
                   {filter.label}
@@ -596,7 +592,7 @@ export default function ImageProcessingDemo() {
 
           {selectedFilter.hasParameter && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-200 mb-2">
                 {selectedFilter.parameterLabel} ({filterParameter})
               </label>
               <input
@@ -615,7 +611,7 @@ export default function ImageProcessingDemo() {
         {/* Action Buttons */}
         <div className="flex gap-4 mb-6">
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-300">
               {isProcessing ? 'Processing...' : 'Filters apply automatically'}
               {wasmModule ? ' (WASM)' : ' (JS Fallback)'}
             </span>
@@ -636,30 +632,32 @@ export default function ImageProcessingDemo() {
 
         {/* Performance Metrics */}
         {performanceMetrics && (
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="font-semibold mb-3">Performance Comparison</h3>
+          <div className="bg-gray-700 rounded-lg p-4">
+            <h3 className="font-semibold mb-3 text-white">
+              Performance Comparison
+            </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
-                <div className="text-gray-600">WASM Time</div>
-                <div className="font-mono">
+                <div className="text-gray-300">WASM Time</div>
+                <div className="font-mono text-white">
                   {performanceMetrics.wasmTime.toFixed(2)}ms
                 </div>
               </div>
               <div>
-                <div className="text-gray-600">JS Time</div>
-                <div className="font-mono">
+                <div className="text-gray-300">JS Time</div>
+                <div className="font-mono text-white">
                   {performanceMetrics.jsTime.toFixed(2)}ms
                 </div>
               </div>
               <div>
-                <div className="text-gray-600">Speedup</div>
-                <div className="font-mono text-green-600">
+                <div className="text-gray-300">Speedup</div>
+                <div className="font-mono text-green-400">
                   {performanceMetrics.speedup.toFixed(1)}x
                 </div>
               </div>
               <div>
-                <div className="text-gray-600">Memory</div>
-                <div className="font-mono">
+                <div className="text-gray-300">Memory</div>
+                <div className="font-mono text-white">
                   {(performanceMetrics.memoryUsage / 1024).toFixed(1)}KB
                 </div>
               </div>
