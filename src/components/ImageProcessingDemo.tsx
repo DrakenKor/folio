@@ -368,19 +368,22 @@ export default function ImageProcessingDemo() {
       // Simple JavaScript implementations for comparison
       switch (filter.type) {
         case 'blur':
-          // Simple box blur (much less efficient than Gaussian)
-          for (let y = 1; y < imageData.height - 1; y++) {
-            for (let x = 1; x < imageData.width - 1; x++) {
+          // Simple box blur with parameter support
+          const radius = Math.max(1, Math.floor(parameter))
+          for (let y = radius; y < imageData.height - radius; y++) {
+            for (let x = radius; x < imageData.width - radius; x++) {
               for (let c = 0; c < 3; c++) {
                 let sum = 0
-                for (let dy = -1; dy <= 1; dy++) {
-                  for (let dx = -1; dx <= 1; dx++) {
+                let count = 0
+                for (let dy = -radius; dy <= radius; dy++) {
+                  for (let dx = -radius; dx <= radius; dx++) {
                     const idx = ((y + dy) * imageData.width + (x + dx)) * 4 + c
                     sum += data[idx]
+                    count++
                   }
                 }
                 const idx = (y * imageData.width + x) * 4 + c
-                data[idx] = sum / 9
+                data[idx] = sum / count
               }
             }
           }
@@ -408,6 +411,22 @@ export default function ImageProcessingDemo() {
               data[i] = 255 - data[i]
               data[i + 1] = 255 - data[i + 1]
               data[i + 2] = 255 - data[i + 2]
+            } else if (filter.name === 'sepia') {
+              const r = data[i]
+              const g = data[i + 1]
+              const b = data[i + 2]
+              data[i] = Math.min(255, r * 0.393 + g * 0.769 + b * 0.189)
+              data[i + 1] = Math.min(255, r * 0.349 + g * 0.686 + b * 0.168)
+              data[i + 2] = Math.min(255, r * 0.272 + g * 0.534 + b * 0.131)
+            } else if (filter.name === 'red') {
+              data[i + 1] = 0 // Remove green
+              data[i + 2] = 0 // Remove blue
+            } else if (filter.name === 'green') {
+              data[i] = 0 // Remove red
+              data[i + 2] = 0 // Remove blue
+            } else if (filter.name === 'blue') {
+              data[i] = 0 // Remove red
+              data[i + 1] = 0 // Remove green
             }
           }
           break
@@ -416,6 +435,41 @@ export default function ImageProcessingDemo() {
             data[i] = Math.min(255, Math.max(0, data[i] * parameter))
             data[i + 1] = Math.min(255, Math.max(0, data[i + 1] * parameter))
             data[i + 2] = Math.min(255, Math.max(0, data[i + 2] * parameter))
+          }
+          break
+        case 'contrast':
+          // Contrast adjustment: factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
+          const factor = (259 * (parameter + 255)) / (255 * (259 - parameter))
+          for (let i = 0; i < data.length; i += 4) {
+            data[i] = Math.min(255, Math.max(0, factor * (data[i] - 128) + 128))
+            data[i + 1] = Math.min(255, Math.max(0, factor * (data[i + 1] - 128) + 128))
+            data[i + 2] = Math.min(255, Math.max(0, factor * (data[i + 2] - 128) + 128))
+          }
+          break
+        case 'sharpen':
+          // Simple unsharp mask approximation
+          const strength = parameter
+          const tempData = new Uint8ClampedArray(data)
+          for (let y = 1; y < imageData.height - 1; y++) {
+            for (let x = 1; x < imageData.width - 1; x++) {
+              for (let c = 0; c < 3; c++) {
+                const idx = (y * imageData.width + x) * 4 + c
+                const original = tempData[idx]
+
+                // Calculate blur value (simple 3x3 average)
+                let blur = 0
+                for (let dy = -1; dy <= 1; dy++) {
+                  for (let dx = -1; dx <= 1; dx++) {
+                    blur += tempData[((y + dy) * imageData.width + (x + dx)) * 4 + c]
+                  }
+                }
+                blur /= 9
+
+                // Apply unsharp mask: original + strength * (original - blur)
+                const sharpened = original + strength * (original - blur)
+                data[idx] = Math.min(255, Math.max(0, sharpened))
+              }
+            }
           }
           break
       }
