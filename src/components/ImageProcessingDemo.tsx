@@ -116,7 +116,8 @@ interface PerformanceMetrics {
 }
 
 export default function ImageProcessingDemo() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const wasmCanvasRef = useRef<HTMLCanvasElement>(null)
+  const jsCanvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [wasmModule, setWasmModule] = useState<WASMImageProcessor | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -124,9 +125,8 @@ export default function ImageProcessingDemo() {
   const [originalImageData, setOriginalImageData] = useState<ImageData | null>(
     null
   )
-  const [currentImageData, setCurrentImageData] = useState<ImageData | null>(
-    null
-  )
+  const [wasmImageData, setWasmImageData] = useState<ImageData | null>(null)
+  const [jsImageData, setJsImageData] = useState<ImageData | null>(null)
   const [selectedFilter, setSelectedFilter] = useState<FilterConfig>(FILTERS[0])
 
   const [filterParameter, setFilterParameter] = useState<number>(
@@ -135,7 +135,6 @@ export default function ImageProcessingDemo() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [performanceMetrics, setPerformanceMetrics] =
     useState<PerformanceMetrics | null>(null)
-  const [showComparison, setShowComparison] = useState(false)
 
   // Initialize WASM module
   useEffect(() => {
@@ -161,47 +160,58 @@ export default function ImageProcessingDemo() {
   // Load default image
   useEffect(() => {
     const loadDefaultImage = () => {
-      const canvas = canvasRef.current
-      if (!canvas) return
+      const wasmCanvas = wasmCanvasRef.current
+      const jsCanvas = jsCanvasRef.current
+      if (!wasmCanvas || !jsCanvas) return
 
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
+      const wasmCtx = wasmCanvas.getContext('2d')
+      const jsCtx = jsCanvas.getContext('2d')
+      if (!wasmCtx || !jsCtx) return
 
       // Create a simple test pattern
-      canvas.width = 400
-      canvas.height = 300
+      const width = 400
+      const height = 300
+      wasmCanvas.width = width
+      wasmCanvas.height = height
+      jsCanvas.width = width
+      jsCanvas.height = height
 
       // Create gradient background
-      const gradient = ctx.createLinearGradient(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      )
+      const gradient = wasmCtx.createLinearGradient(0, 0, width, height)
       gradient.addColorStop(0, '#ff6b6b')
       gradient.addColorStop(0.5, '#4ecdc4')
       gradient.addColorStop(1, '#45b7d1')
 
-      ctx.fillStyle = gradient
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      wasmCtx.fillStyle = gradient
+      wasmCtx.fillRect(0, 0, width, height)
 
       // Add some geometric shapes
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(50, 50, 100, 100)
+      wasmCtx.fillStyle = '#ffffff'
+      wasmCtx.fillRect(50, 50, 100, 100)
 
-      ctx.fillStyle = '#000000'
-      ctx.beginPath()
-      ctx.arc(300, 150, 50, 0, Math.PI * 2)
-      ctx.fill()
+      wasmCtx.fillStyle = '#000000'
+      wasmCtx.beginPath()
+      wasmCtx.arc(300, 150, 50, 0, Math.PI * 2)
+      wasmCtx.fill()
 
       // Add text
-      ctx.fillStyle = '#333333'
-      ctx.font = '24px Arial'
-      ctx.fillText('WASM Demo', 150, 200)
+      wasmCtx.fillStyle = '#333333'
+      wasmCtx.font = '24px Arial'
+      wasmCtx.fillText('WASM Demo', 150, 200)
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      // Copy to JS canvas
+      jsCtx.drawImage(wasmCanvas, 0, 0)
+
+      const imageData = wasmCtx.getImageData(0, 0, width, height)
       setOriginalImageData(imageData)
-      setCurrentImageData(
+      setWasmImageData(
+        new ImageData(
+          new Uint8ClampedArray(imageData.data),
+          imageData.width,
+          imageData.height
+        )
+      )
+      setJsImageData(
         new ImageData(
           new Uint8ClampedArray(imageData.data),
           imageData.width,
@@ -222,15 +232,17 @@ export default function ImageProcessingDemo() {
       reader.onload = (e) => {
         const img = new Image()
         img.onload = () => {
-          const canvas = canvasRef.current
-          if (!canvas) return
+          const wasmCanvas = wasmCanvasRef.current
+          const jsCanvas = jsCanvasRef.current
+          if (!wasmCanvas || !jsCanvas) return
 
-          const ctx = canvas.getContext('2d')
-          if (!ctx) return
+          const wasmCtx = wasmCanvas.getContext('2d')
+          const jsCtx = jsCanvas.getContext('2d')
+          if (!wasmCtx || !jsCtx) return
 
-          // Resize canvas to fit image (max 800x600)
-          const maxWidth = 800
-          const maxHeight = 600
+          // Resize canvas to fit image (max 400x300 for side-by-side display)
+          const maxWidth = 400
+          const maxHeight = 300
           let { width, height } = img
 
           if (width > maxWidth || height > maxHeight) {
@@ -239,13 +251,24 @@ export default function ImageProcessingDemo() {
             height *= ratio
           }
 
-          canvas.width = width
-          canvas.height = height
-          ctx.drawImage(img, 0, 0, width, height)
+          wasmCanvas.width = width
+          wasmCanvas.height = height
+          jsCanvas.width = width
+          jsCanvas.height = height
 
-          const imageData = ctx.getImageData(0, 0, width, height)
+          wasmCtx.drawImage(img, 0, 0, width, height)
+          jsCtx.drawImage(img, 0, 0, width, height)
+
+          const imageData = wasmCtx.getImageData(0, 0, width, height)
           setOriginalImageData(imageData)
-          setCurrentImageData(
+          setWasmImageData(
+            new ImageData(
+              new Uint8ClampedArray(imageData.data),
+              imageData.width,
+              imageData.height
+            )
+          )
+          setJsImageData(
             new ImageData(
               new Uint8ClampedArray(imageData.data),
               imageData.width,
@@ -429,16 +452,20 @@ export default function ImageProcessingDemo() {
         filterParameter
       )
 
-      // Update canvas with WASM result
-      const canvas = canvasRef.current
-      if (canvas) {
-        const ctx = canvas.getContext('2d')
-        if (ctx) {
-          ctx.putImageData(wasmResult.processedData, 0, 0)
+      // Update canvases with both results
+      const wasmCanvas = wasmCanvasRef.current
+      const jsCanvas = jsCanvasRef.current
+      if (wasmCanvas && jsCanvas) {
+        const wasmCtx = wasmCanvas.getContext('2d')
+        const jsCtx = jsCanvas.getContext('2d')
+        if (wasmCtx && jsCtx) {
+          wasmCtx.putImageData(wasmResult.processedData, 0, 0)
+          jsCtx.putImageData(jsResult.processedData, 0, 0)
         }
       }
 
-      setCurrentImageData(wasmResult.processedData)
+      setWasmImageData(wasmResult.processedData)
+      setJsImageData(jsResult.processedData)
 
       // Calculate performance metrics
       const speedup = jsResult.processingTime / wasmResult.processingTime
@@ -489,15 +516,25 @@ export default function ImageProcessingDemo() {
   const resetImage = useCallback(() => {
     if (!originalImageData) return
 
-    const canvas = canvasRef.current
-    if (canvas) {
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        ctx.putImageData(originalImageData, 0, 0)
+    const wasmCanvas = wasmCanvasRef.current
+    const jsCanvas = jsCanvasRef.current
+    if (wasmCanvas && jsCanvas) {
+      const wasmCtx = wasmCanvas.getContext('2d')
+      const jsCtx = jsCanvas.getContext('2d')
+      if (wasmCtx && jsCtx) {
+        wasmCtx.putImageData(originalImageData, 0, 0)
+        jsCtx.putImageData(originalImageData, 0, 0)
       }
     }
 
-    setCurrentImageData(
+    setWasmImageData(
+      new ImageData(
+        new Uint8ClampedArray(originalImageData.data),
+        originalImageData.width,
+        originalImageData.height
+      )
+    )
+    setJsImageData(
       new ImageData(
         new Uint8ClampedArray(originalImageData.data),
         originalImageData.width,
@@ -557,13 +594,36 @@ export default function ImageProcessingDemo() {
           </button>
         </div>
 
-        {/* Canvas */}
-        <div className="mb-6 flex justify-center">
-          <canvas
-            ref={canvasRef}
-            className="border border-gray-300 rounded-lg shadow-sm max-w-full"
-            style={{ maxHeight: '400px' }}
-          />
+        {/* Side-by-side Canvas Comparison */}
+        <div className="mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-white mb-3">
+                Rust WASM
+              </h3>
+              <canvas
+                ref={wasmCanvasRef}
+                className="border border-gray-300 rounded-lg shadow-sm max-w-full mx-auto"
+                style={{ maxHeight: '300px' }}
+              />
+              <p className="text-sm text-gray-400 mt-2">
+                High-performance Rust implementation compiled to WebAssembly
+              </p>
+            </div>
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-white mb-3">
+                JavaScript
+              </h3>
+              <canvas
+                ref={jsCanvasRef}
+                className="border border-gray-300 rounded-lg shadow-sm max-w-full mx-auto"
+                style={{ maxHeight: '300px' }}
+              />
+              <p className="text-sm text-gray-400 mt-2">
+                Native JavaScript implementation for comparison
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Filter Controls */}

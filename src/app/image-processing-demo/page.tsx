@@ -13,9 +13,7 @@ export default function ImageProcessingDemoPage() {
               WASM Image Processing Demo
             </h1>
             <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-              Experience real-time image processing powered by WebAssembly.
-              This demo showcases optimized Rust implementations compiled to WASM
-              for high-performance image manipulation in the browser.
+              This page showcases image processing using Rust based web assembly (WASM). Smaller images typically show a JS performance win, whereas larger images tend to show WASM performance wins.
             </p>
           </div>
 
@@ -41,7 +39,6 @@ export default function ImageProcessingDemoPage() {
                   <li>Compiled with aggressive size optimization flags</li>
                   <li>Efficient memory management with minimal allocations</li>
                   <li>Separable filter implementations for better cache performance</li>
-                  <li>Direct pixel buffer manipulation without intermediate copies</li>
                 </ul>
               </div>
 
@@ -59,9 +56,7 @@ export default function ImageProcessingDemoPage() {
             <h3 className="text-blue-100 font-semibold mb-2">Try These Features</h3>
             <ul className="text-blue-200 space-y-1">
               <li>• Upload your own images to see real-world performance</li>
-              <li>• Compare WASM vs JavaScript processing times</li>
               <li>• Adjust filter parameters in real-time</li>
-              <li>• Monitor memory usage and performance metrics</li>
             </ul>
           </div>
         </div>
