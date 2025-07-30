@@ -5,6 +5,7 @@
 export interface WASMCoreModule {
   // Core module management
   WASMModule: new () => WASMModuleInstance
+  ImageProcessor: new (width: number, height: number) => ImageProcessorInstance
   greet(name: string): string
   performance_test(iterations: number): number
 
@@ -29,6 +30,14 @@ export interface WASMCoreModule {
   reverse_string(s: string): string
   count_words(s: string): number
 
+  // Image processing functions
+  apply_blur(data: Uint8ClampedArray, width: number, height: number, radius: number): void
+  apply_edge_detection(data: Uint8ClampedArray, width: number, height: number): void
+  apply_color_filter(data: Uint8ClampedArray, width: number, height: number, filter: string): void
+  adjust_brightness(data: Uint8ClampedArray, width: number, height: number, factor: number): void
+  adjust_contrast(data: Uint8ClampedArray, width: number, height: number, factor: number): void
+  apply_sharpen(data: Uint8ClampedArray, width: number, height: number, strength: number): void
+
   // Utility functions
   get_memory_usage(): number
   force_gc(): void
@@ -44,6 +53,12 @@ export interface WASMModuleInstance {
   get_version?(): string
   get_uptime?(): number
   is_initialized?(): boolean
+}
+
+export interface ImageProcessorInstance {
+  get_width(): number
+  get_height(): number
+  set_dimensions(width: number, height: number): void
 }
 
 export interface WASMImageProcessingModule {

@@ -75,6 +75,11 @@ class WASMLoader {
 
   private async loadModuleInternal(config: WASMModuleConfig): Promise<any> {
     try {
+      // For client-side only
+      if (typeof window === 'undefined') {
+        throw new Error('WASM modules can only be loaded on the client side')
+      }
+
       // Check file size if limit is specified
       if (config.sizeLimit) {
         const response = await fetch(config.path, { method: 'HEAD' })
@@ -84,8 +89,21 @@ class WASMLoader {
         }
       }
 
-      // Load the WASM module
-      const wasmModule = await import(config.path)
+      // Load the WASM module using fetch and eval (client-side only)
+      const response = await fetch(config.path)
+      const jsCode = await response.text()
+
+      // Create a module scope and evaluate the JS code
+      const moduleScope: any = { exports: {} }
+      const wrappedCode = `
+        (function(exports, module) {
+          ${jsCode}
+          return exports;
+        })
+      `
+
+      const moduleFactory = eval(wrappedCode)
+      const wasmModule = moduleFactory(moduleScope.exports, moduleScope)
 
       // Initialize if it has an init function
       if (typeof wasmModule.default === 'function') {

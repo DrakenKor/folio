@@ -1,0 +1,71 @@
+'use client'
+
+import React from 'react'
+import ImageProcessingDemo from '@/components/ImageProcessingDemo'
+
+export default function ImageProcessingDemoPage() {
+  return (
+    <div className="min-h-screen bg-gray-100 py-8">
+      <div className="container mx-auto px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">
+              WASM Image Processing Demo
+            </h1>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Experience real-time image processing powered by WebAssembly.
+              This demo showcases optimized Rust implementations compiled to WASM
+              for high-performance image manipulation in the browser.
+            </p>
+          </div>
+
+          <ImageProcessingDemo />
+
+          <div className="mt-12 bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-2xl font-bold mb-4">Technical Implementation</h2>
+            <div className="space-y-4 text-gray-700">
+              <div>
+                <h3 className="font-semibold text-lg mb-2">WASM Module Features</h3>
+                <ul className="list-disc list-inside space-y-1 ml-4">
+                  <li>Gaussian blur with configurable radius</li>
+                  <li>Sobel edge detection algorithm</li>
+                  <li>Color filters (sepia, grayscale, invert, channel isolation)</li>
+                  <li>Brightness and contrast adjustments</li>
+                  <li>Unsharp mask sharpening filter</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Performance Optimizations</h3>
+                <ul className="list-disc list-inside space-y-1 ml-4">
+                  <li>Compiled with aggressive size optimization flags</li>
+                  <li>Efficient memory management with minimal allocations</li>
+                  <li>Separable filter implementations for better cache performance</li>
+                  <li>Direct pixel buffer manipulation without intermediate copies</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Size Constraints</h3>
+                <p className="ml-4">
+                  The entire WASM module is optimized to stay within GitHub Pages hosting limits,
+                  with the compiled binary under 100KB while maintaining full functionality.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <h3 className="text-blue-800 font-semibold mb-2">Try These Features</h3>
+            <ul className="text-blue-700 space-y-1">
+              <li>• Upload your own images to see real-world performance</li>
+              <li>• Compare WASM vs JavaScript processing times</li>
+              <li>• Adjust filter parameters in real-time</li>
+              <li>• Monitor memory usage and performance metrics</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
