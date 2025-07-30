@@ -38,6 +38,11 @@ export interface WASMCoreModule {
   adjust_contrast(data: Uint8ClampedArray, width: number, height: number, factor: number): void
   apply_sharpen(data: Uint8ClampedArray, width: number, height: number, strength: number): void
 
+  // Physics simulation functions
+  ParticleSystem: new (width: number, height: number) => ParticleSystemInstance
+  Particle: new (x: number, y: number, vx: number, vy: number, radius: number, mass: number) => ParticleInstance
+  physics_performance_test(particle_count: number, iterations: number): number
+
   // Utility functions
   get_memory_usage(): number
   force_gc(): void
@@ -71,22 +76,41 @@ export interface WASMImageProcessingModule {
 }
 
 export interface WASMPhysicsModule {
-  // Physics simulation functions (to be implemented in subtask 7.3)
-  ParticleSystem: new (particle_count: number) => ParticleSystemInstance
-  simulate_step(dt: number): void
-  get_particle_positions(): Float32Array
-  get_particle_velocities(): Float32Array
-  set_gravity(x: number, y: number): void
-  add_force(particle_id: number, fx: number, fy: number): void
+  // Physics simulation functions
+  ParticleSystem: new (width: number, height: number) => ParticleSystemInstance
+  Particle: new (x: number, y: number, vx: number, vy: number, radius: number, mass: number) => ParticleInstance
+  physics_performance_test(particle_count: number, iterations: number): number
 }
 
 export interface ParticleSystemInstance {
+  add_particle(x: number, y: number, vx: number, vy: number, radius: number, mass: number): number
+  get_particle_count(): number
+  set_gravity(x: number, y: number): void
+  set_damping(damping: number): void
+  set_restitution(restitution: number): void
+  set_time_step(dt: number): void
   update(dt: number): void
   get_positions(): Float32Array
   get_velocities(): Float32Array
-  set_position(index: number, x: number, y: number): void
-  set_velocity(index: number, vx: number, vy: number): void
-  get_particle_count(): number
+  get_particle_data(): Float32Array
+  get_colors(): Uint32Array
+  set_particle_position(index: number, x: number, y: number): void
+  set_particle_velocity(index: number, vx: number, vy: number): void
+  add_force_to_particle(index: number, fx: number, fy: number): void
+  clear_particles(): void
+  get_kinetic_energy(): number
+  get_bounds(): Float32Array
+  set_bounds(width: number, height: number): void
+}
+
+export interface ParticleInstance {
+  readonly x: number
+  readonly y: number
+  readonly vx: number
+  readonly vy: number
+  readonly radius: number
+  readonly mass: number
+  color: number
 }
 
 export interface WASMCryptoModule {

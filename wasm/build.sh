@@ -83,8 +83,8 @@ optimize_wasm_files
 # Compress with gzip if available
 if command -v gzip &> /dev/null; then
     echo "📦 Creating gzipped versions for better compression..."
-    gzip -9 -k ../public/wasm/*.wasm 2>/dev/null || true
-    gzip -9 -k ../public/wasm/*.js 2>/dev/null || true
+    gzip -9 -k -f ../public/wasm/*.wasm 2>/dev/null || true
+    gzip -9 -k -f ../public/wasm/*.js 2>/dev/null || true
 fi
 
 # Generate build report

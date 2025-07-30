@@ -101,8 +101,38 @@ class WASMCoreLoader {
   }
 
   private async dynamicImport(path: string): Promise<any> {
-    // This function isolates the dynamic import to avoid Vite static analysis
-    return import(/* @vite-ignore */ path)
+    // Use fetch for WASM loading in Next.js environment
+    if (typeof window !== 'undefined') {
+      // Client-side: fetch the JS file and evaluate it
+      try {
+        const response = await fetch(path)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch WASM module: ${response.status}`)
+        }
+
+        const jsCode = await response.text()
+
+        // Create a module scope and evaluate the JS code
+        const moduleScope: any = { exports: {} }
+        const wrappedCode = `
+          (function(exports, moduleObj) {
+            ${jsCode}
+            return exports;
+          })
+        `
+
+        const moduleFactory = new Function('return ' + wrappedCode)()
+        const wasmModule = moduleFactory(moduleScope.exports, moduleScope)
+
+        return wasmModule
+      } catch (error) {
+        console.error('Failed to load WASM module via fetch:', error)
+        throw error
+      }
+    } else {
+      // Server-side: return null (WASM not available)
+      throw new Error('WASM modules can only be loaded on the client side')
+    }
   }
 
   getInterface(): WASMCoreInterface | null {
