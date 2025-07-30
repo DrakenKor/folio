@@ -128,6 +128,7 @@ export default function ImageProcessingDemo() {
     null
   )
   const [selectedFilter, setSelectedFilter] = useState<FilterConfig>(FILTERS[0])
+
   const [filterParameter, setFilterParameter] = useState<number>(
     FILTERS[0].parameterDefault || 1
   )
@@ -576,7 +577,6 @@ export default function ImageProcessingDemo() {
               Select Filter
             </label>
             <select
-              key="filter-select"
               value={selectedFilter.name}
               onChange={(e) => {
                 const filter = FILTERS.find((f) => f.name === e.target.value)

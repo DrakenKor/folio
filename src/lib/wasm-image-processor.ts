@@ -39,41 +39,59 @@ class WASMImageProcessorLoader {
     return new Promise((resolve, reject) => {
       // Create script element to load the WASM JS file
       const script = document.createElement('script')
-      script.src = '/wasm/portfolio_wasm.js'
+      script.type = 'module'
+      script.textContent = `
+        import init, * as wasmModule from '/wasm/portfolio_wasm.js';
 
-      script.onload = async () => {
-        try {
-          // Access the global wasm_bindgen function
-          const wasmBindgen = (window as any).wasm_bindgen
+        (async () => {
+          try {
+            // Initialize the WASM module
+            await init('/wasm/portfolio_wasm_bg.wasm');
 
-          if (!wasmBindgen) {
-            throw new Error('wasm_bindgen not found in global scope')
+            // Store the module functions on window for access
+            window.__wasmImageProcessor = {
+              apply_blur: wasmModule.apply_blur,
+              apply_edge_detection: wasmModule.apply_edge_detection,
+              apply_color_filter: wasmModule.apply_color_filter,
+              adjust_brightness: wasmModule.adjust_brightness,
+              adjust_contrast: wasmModule.adjust_contrast,
+              apply_sharpen: wasmModule.apply_sharpen,
+              get_memory_usage: wasmModule.get_memory_usage || (() => 0)
+            };
+
+            // Dispatch custom event to signal completion
+            window.dispatchEvent(new CustomEvent('wasmLoaded'));
+          } catch (error) {
+            window.dispatchEvent(new CustomEvent('wasmError', { detail: error }));
           }
+        })();
+      `
 
-          // Initialize the WASM module
-          await wasmBindgen('/wasm/portfolio_wasm_bg.wasm')
-
-          // Create the processor interface
-          const processor: WASMImageProcessor = {
-            apply_blur: wasmBindgen.apply_blur,
-            apply_edge_detection: wasmBindgen.apply_edge_detection,
-            apply_color_filter: wasmBindgen.apply_color_filter,
-            adjust_brightness: wasmBindgen.adjust_brightness,
-            adjust_contrast: wasmBindgen.adjust_contrast,
-            apply_sharpen: wasmBindgen.apply_sharpen,
-            get_memory_usage: wasmBindgen.get_memory_usage || (() => 0)
-          }
-
-          this.module = processor
-          resolve(processor)
-        } catch (error) {
-          reject(error)
+      // Listen for completion events
+      const handleWasmLoaded = () => {
+        const wasmProcessor = (window as any).__wasmImageProcessor
+        if (wasmProcessor) {
+          this.module = wasmProcessor
+          resolve(wasmProcessor)
+        } else {
+          reject(new Error('WASM module loaded but functions not available'))
         }
+        cleanup()
       }
 
-      script.onerror = () => {
-        reject(new Error('Failed to load WASM script'))
+      const handleWasmError = (event: CustomEvent) => {
+        reject(new Error(`WASM loading failed: ${event.detail}`))
+        cleanup()
       }
+
+      const cleanup = () => {
+        window.removeEventListener('wasmLoaded', handleWasmLoaded)
+        window.removeEventListener('wasmError', handleWasmError as EventListener)
+        document.head.removeChild(script)
+      }
+
+      window.addEventListener('wasmLoaded', handleWasmLoaded)
+      window.addEventListener('wasmError', handleWasmError as EventListener)
 
       // Add script to document
       document.head.appendChild(script)
