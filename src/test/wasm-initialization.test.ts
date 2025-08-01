@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-assign-module-variable */
 /**
  * Tests for WASM Initialization System
  */

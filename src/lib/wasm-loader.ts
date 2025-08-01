@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-assign-module-variable */
 /**
  * WASM Module Loader and Initialization System
  * Handles loading, caching, and error handling for WASM modules

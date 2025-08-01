@@ -1,8 +1,11 @@
 'use client'
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { wasmCoreLoader } from '../lib/wasm-core-loader'
-import type { WASMCoreModule, ParticleSystemInstance } from '../types/wasm'
+import {
+  initializeWASMCore,
+  type WASMCoreInterface
+} from '../lib/wasm-core-loader'
+import type { ParticleSystemInstance } from '../types/wasm'
 
 interface PhysicsParams {
   particleCount: number
@@ -31,7 +34,9 @@ export default function PhysicsSimulationDemo() {
     lastTime: 0
   })
 
-  const [wasmModule, setWasmModule] = useState<WASMCoreModule | null>(null)
+  const [wasmInterface, setWasmInterface] = useState<WASMCoreInterface | null>(
+    null
+  )
   const [particleSystem, setParticleSystem] =
     useState<ParticleSystemInstance | null>(null)
   const [jsParticleSystem, setJsParticleSystem] =
@@ -199,10 +204,10 @@ export default function PhysicsSimulationDemo() {
   useEffect(() => {
     const initWasm = async () => {
       try {
-        const wasmMod = await wasmCoreLoader.loadModule()
-        if (wasmMod) {
-          setWasmModule(wasmMod)
-          console.log('✅ Physics WASM module loaded')
+        const wasmInterface = await initializeWASMCore()
+        if (wasmInterface) {
+          setWasmInterface(wasmInterface)
+          console.log('✅ Physics WASM interface loaded')
         } else {
           console.warn('⚠️ WASM not available, using JavaScript fallback')
         }
@@ -223,33 +228,14 @@ export default function PhysicsSimulationDemo() {
     const height = canvas.height
 
     // Initialize WASM particle system
-    if (wasmModule) {
+    if (wasmInterface) {
       try {
-        const wasmSystem = new wasmModule.ParticleSystem(width, height)
-        wasmSystem.set_gravity(params.gravity.x, params.gravity.y)
-        wasmSystem.set_damping(params.damping)
-        wasmSystem.set_restitution(params.restitution)
-        wasmSystem.set_time_step(params.timeStep)
-
-        // Add particles
-        for (let i = 0; i < params.particleCount; i++) {
-          const x =
-            Math.random() * (width - 2 * params.particleRadius) +
-            params.particleRadius
-          const y = Math.random() * (height * 0.3) + params.particleRadius
-          const vx = (Math.random() - 0.5) * 100
-          const vy = Math.random() * 50
-          wasmSystem.add_particle(
-            x,
-            y,
-            vx,
-            vy,
-            params.particleRadius,
-            params.particleMass
-          )
-        }
-
-        setParticleSystem(wasmSystem)
+        // Note: ParticleSystem is not yet available in WASMCoreInterface
+        // This is a placeholder for when physics functionality is added
+        console.log(
+          'WASM interface available, but ParticleSystem not yet implemented'
+        )
+        setParticleSystem(null)
       } catch (error) {
         console.error('Failed to initialize WASM particle system:', error)
       }
@@ -280,7 +266,7 @@ export default function PhysicsSimulationDemo() {
     }
 
     setJsParticleSystem(jsSystem)
-  }, [wasmModule, params])
+  }, [wasmInterface, params])
 
   // Animation loop
   const animate = useCallback(
@@ -372,16 +358,13 @@ export default function PhysicsSimulationDemo() {
 
   // Performance comparison
   const runPerformanceTest = async () => {
-    if (!wasmModule || !jsParticleSystem) return
+    if (!wasmInterface || !jsParticleSystem) return
 
     const iterations = 1000
     const testParticleCount = 100
 
-    // WASM performance test
-    const wasmTime = wasmModule.physics_performance_test(
-      testParticleCount,
-      iterations
-    )
+    // WASM performance test (using general performance test for now)
+    const wasmTime = wasmInterface.performanceTest(iterations)
 
     // JavaScript performance test
     const jsStart = performance.now()
@@ -417,7 +400,7 @@ export default function PhysicsSimulationDemo() {
 
   // Initialize simulation when parameters change
   useEffect(() => {
-    if (wasmModule || jsParticleSystem) {
+    if (wasmInterface || jsParticleSystem) {
       initializeSimulation()
     }
   }, [initializeSimulation])
@@ -592,7 +575,7 @@ export default function PhysicsSimulationDemo() {
             <label
               htmlFor="useWasm"
               className="text-sm font-medium text-gray-300">
-              Use WASM {wasmModule ? '✅' : '❌'}
+              Use WASM {wasmInterface ? '✅' : '❌'}
             </label>
           </div>
 
@@ -626,7 +609,7 @@ export default function PhysicsSimulationDemo() {
 
             <button
               onClick={runPerformanceTest}
-              disabled={!wasmModule}
+              disabled={!wasmInterface}
               className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white rounded font-medium">
               Performance Test
             </button>

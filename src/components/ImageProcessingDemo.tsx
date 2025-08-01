@@ -442,8 +442,14 @@ export default function ImageProcessingDemo() {
           const factor = (259 * (parameter + 255)) / (255 * (259 - parameter))
           for (let i = 0; i < data.length; i += 4) {
             data[i] = Math.min(255, Math.max(0, factor * (data[i] - 128) + 128))
-            data[i + 1] = Math.min(255, Math.max(0, factor * (data[i + 1] - 128) + 128))
-            data[i + 2] = Math.min(255, Math.max(0, factor * (data[i + 2] - 128) + 128))
+            data[i + 1] = Math.min(
+              255,
+              Math.max(0, factor * (data[i + 1] - 128) + 128)
+            )
+            data[i + 2] = Math.min(
+              255,
+              Math.max(0, factor * (data[i + 2] - 128) + 128)
+            )
           }
           break
         case 'sharpen':
@@ -460,7 +466,8 @@ export default function ImageProcessingDemo() {
                 let blur = 0
                 for (let dy = -1; dy <= 1; dy++) {
                   for (let dx = -1; dx <= 1; dx++) {
-                    blur += tempData[((y + dy) * imageData.width + (x + dx)) * 4 + c]
+                    blur +=
+                      tempData[((y + dy) * imageData.width + (x + dx)) * 4 + c]
                   }
                 }
                 blur /= 9

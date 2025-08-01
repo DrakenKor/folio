@@ -87,13 +87,15 @@ class WASMCoreLoader {
 
         // Test the module
         const testResult = this.module.greet('Portfolio')
-        console.log('🧪 WASM test:', testResult)
+
       } catch (importError) {
-        console.warn('⚠️ WASM module not available, using fallback:', importError)
+        console.warn(
+          '⚠️ WASM module not available, using fallback:',
+          importError
+        )
         this.module = null
         this.initialized = true
       }
-
     } catch (error) {
       console.error('❌ Failed to load WASM core module:', error)
       throw new Error(`WASM core module loading failed: ${error}`)
@@ -142,7 +144,10 @@ class WASMCoreLoader {
     }
 
     // In test environment or when module is not available, return mock interface
-    if (!this.module || (typeof process !== 'undefined' && process.env.NODE_ENV === 'test')) {
+    if (
+      !this.module ||
+      (typeof process !== 'undefined' && process.env.NODE_ENV === 'test')
+    ) {
       return this.getMockInterface()
     }
 
@@ -150,7 +155,8 @@ class WASMCoreLoader {
       // Module management
       createModule: () => new this.module!.WASMModule(),
       greet: (name: string) => this.module!.greet(name),
-      performanceTest: (iterations: number) => this.module!.performance_test(iterations),
+      performanceTest: (iterations: number) =>
+        this.module!.performance_test(iterations),
 
       // Mathematical operations
       fibonacci: (n: number) => this.module!.fibonacci(n),
@@ -185,6 +191,11 @@ class WASMCoreLoader {
     return {
       // Module management
       createModule: () => ({
+        name: 'mock-wasm-module',
+        module: null,
+        initialized: true,
+        memoryUsage: 65536, // 64KB mock
+        dispose: () => {},
         get_version: () => '1.0.0-mock',
         is_initialized: () => true,
         get_uptime: () => 1000
@@ -195,9 +206,10 @@ class WASMCoreLoader {
       // Mathematical operations
       fibonacci: (n: number) => {
         if (n <= 1) return BigInt(n)
-        let a = 0n, b = 1n
+        let a = 0n,
+          b = 1n
         for (let i = 2; i <= n; i++) {
-          [a, b] = [b, a + b]
+          ;[a, b] = [b, a + b]
         }
         return b
       },
@@ -237,7 +249,8 @@ class WASMCoreLoader {
 
       // String operations
       reverseString: (s: string) => s.split('').reverse().join(''),
-      countWords: (s: string) => s.split(/\s+/).filter(word => word.length > 0).length,
+      countWords: (s: string) =>
+        s.split(/\s+/).filter((word) => word.length > 0).length,
 
       // Utility functions
       getMemoryUsage: () => 65536, // 64KB mock

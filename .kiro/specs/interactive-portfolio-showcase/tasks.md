@@ -162,22 +162,22 @@
     - Build performance comparison with JavaScript implementation
     - _Requirements: 4.3_
 
-  - [ ] 7.4 Build cryptographic demonstration module
+  - [x] 7.4 Build cryptographic demonstration module
     - Implement basic hash functions and visualization in Rust/WASM
     - Create interactive hash input and output display
     - Add simple encryption/decryption demonstration
     - _Requirements: 4.4_
 
-- [ ] 8. Shader Art Playground
+- [-] 8. Shader Art Playground
 
-  - [ ] 8.1 Create shader management system
+  - [x] 8.1 Create shader management system
 
     - Implement shader compilation and error handling
     - Create uniform management system for interactive controls
     - Build shader hot-reloading for development
     - _Requirements: 5.5_
 
-  - [ ] 8.2 Implement fluid simulation shader
+  - [x] 8.2 Implement fluid simulation shader
 
     - Create mouse-interactive fluid dynamics fragment shader
     - Implement real-time fluid rendering with smooth animations

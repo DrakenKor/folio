@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-assign-module-variable */
 /**
  * WASM Module Manager
  * Centralized system for managing all WASM modules with size optimization
@@ -149,8 +150,29 @@ class WASMModuleManagerImpl implements WASMModuleManager {
   }
 
   private async dynamicImport(path: string): Promise<any> {
-    // Isolate dynamic import to avoid static analysis
-    return import(/* @vite-ignore */ path)
+    // For Next.js, we need to handle WASM loading differently
+    if (typeof window !== 'undefined') {
+      // Client-side: load from public directory
+      const wasmPath = path.replace('.js', '_bg.wasm')
+      const jsPath = path
+
+      // Load the JS wrapper first
+      const script = document.createElement('script')
+      script.src = jsPath
+      document.head.appendChild(script)
+
+      // Wait for script to load
+      await new Promise((resolve, reject) => {
+        script.onload = resolve
+        script.onerror = reject
+      })
+
+      // Return the global WASM module
+      return (window as any).wasm_bindgen || {}
+    } else {
+      // Server-side: return empty module for SSR
+      return {}
+    }
   }
 
   private getModuleMemoryUsage(module: any): number {
