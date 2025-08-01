@@ -1,10 +1,18 @@
-import { ShaderProgram, ShaderUniforms, ShaderType, ShaderCompilationError } from '../../types/shader'
+import {
+  ShaderProgram,
+  ShaderUniforms,
+  ShaderType,
+  ShaderCompilationError
+} from '../../types/shader'
 
 export class ShaderManager {
   private gl: WebGLRenderingContext | WebGL2RenderingContext
   private programs: Map<string, WebGLProgram> = new Map()
   private shaderCache: Map<string, WebGLShader> = new Map()
-  private uniformLocations: Map<string, Map<string, WebGLUniformLocation | null>> = new Map()
+  private uniformLocations: Map<
+    string,
+    Map<string, WebGLUniformLocation | null>
+  > = new Map()
 
   constructor(gl: WebGLRenderingContext | WebGL2RenderingContext) {
     this.gl = gl
@@ -14,7 +22,9 @@ export class ShaderManager {
    * Compile a shader from source code
    */
   private compileShader(source: string, type: ShaderType): WebGLShader {
-    const shader = this.gl.createShader(type === 'vertex' ? this.gl.VERTEX_SHADER : this.gl.FRAGMENT_SHADER)
+    const shader = this.gl.createShader(
+      type === 'vertex' ? this.gl.VERTEX_SHADER : this.gl.FRAGMENT_SHADER
+    )
     if (!shader) {
       throw new ShaderCompilationError('Failed to create shader')
     }
@@ -34,7 +44,11 @@ export class ShaderManager {
   /**
    * Create and link a shader program
    */
-  createProgram(id: string, vertexSource: string, fragmentSource: string): WebGLProgram {
+  createProgram(
+    id: string,
+    vertexSource: string,
+    fragmentSource: string
+  ): WebGLProgram {
     try {
       // Check cache first
       const cacheKey = `${id}_vertex`
@@ -80,8 +94,14 @@ export class ShaderManager {
   /**
    * Cache uniform locations for efficient access
    */
-  private cacheUniformLocations(programId: string, program: WebGLProgram): void {
-    const uniformCount = this.gl.getProgramParameter(program, this.gl.ACTIVE_UNIFORMS)
+  private cacheUniformLocations(
+    programId: string,
+    program: WebGLProgram
+  ): void {
+    const uniformCount = this.gl.getProgramParameter(
+      program,
+      this.gl.ACTIVE_UNIFORMS
+    )
     const locations = new Map<string, WebGLUniformLocation | null>()
 
     for (let i = 0; i < uniformCount; i++) {
@@ -169,7 +189,11 @@ export class ShaderManager {
   /**
    * Hot reload a shader program
    */
-  async reloadProgram(id: string, vertexSource: string, fragmentSource: string): Promise<void> {
+  async reloadProgram(
+    id: string,
+    vertexSource: string,
+    fragmentSource: string
+  ): Promise<void> {
     try {
       // Remove from cache to force recompilation
       this.shaderCache.delete(`${id}_vertex`)

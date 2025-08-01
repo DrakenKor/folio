@@ -115,6 +115,28 @@ interface PerformanceMetrics {
   memoryUsage: number
 }
 
+interface PerformanceHistoryEntry {
+  id: number
+  timestamp: Date
+  filter: string
+  parameter?: number
+  wasmTime: number
+  jsTime: number
+  speedup: number
+  memoryUsage: number
+}
+
+interface PerformanceSummary {
+  totalOperations: number
+  avgWasmTime: number
+  avgJsTime: number
+  avgSpeedup: number
+  wasmWins: number
+  jsWins: number
+  bestSpeedup: number
+  worstSpeedup: number
+}
+
 export default function ImageProcessingDemo() {
   const wasmCanvasRef = useRef<HTMLCanvasElement>(null)
   const jsCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -135,6 +157,8 @@ export default function ImageProcessingDemo() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [performanceMetrics, setPerformanceMetrics] =
     useState<PerformanceMetrics | null>(null)
+  const [performanceHistory, setPerformanceHistory] = useState<PerformanceHistoryEntry[]>([])
+  const [performanceSummary, setPerformanceSummary] = useState<PerformanceSummary | null>(null)
 
   // Initialize WASM module
   useEffect(() => {
@@ -532,11 +556,44 @@ export default function ImageProcessingDemo() {
       const speedup = jsResult.processingTime / wasmResult.processingTime
       const memoryUsage = wasmModule ? wasmModule.get_memory_usage() : 0
 
-      setPerformanceMetrics({
+      const metrics = {
         wasmTime: wasmResult.processingTime,
         jsTime: jsResult.processingTime,
         speedup,
         memoryUsage
+      }
+
+      setPerformanceMetrics(metrics)
+
+      // Add to performance history
+      const historyEntry: PerformanceHistoryEntry = {
+        id: Date.now(),
+        timestamp: new Date(),
+        filter: selectedFilter.label,
+        parameter: selectedFilter.hasParameter ? filterParameter : undefined,
+        wasmTime: wasmResult.processingTime,
+        jsTime: jsResult.processingTime,
+        speedup,
+        memoryUsage
+      }
+
+      setPerformanceHistory(prev => {
+        const newHistory = [historyEntry, ...prev].slice(0, 50) // Keep last 50 entries
+
+        // Calculate summary statistics
+        const summary: PerformanceSummary = {
+          totalOperations: newHistory.length,
+          avgWasmTime: newHistory.reduce((sum, entry) => sum + entry.wasmTime, 0) / newHistory.length,
+          avgJsTime: newHistory.reduce((sum, entry) => sum + entry.jsTime, 0) / newHistory.length,
+          avgSpeedup: newHistory.reduce((sum, entry) => sum + entry.speedup, 0) / newHistory.length,
+          wasmWins: newHistory.filter(entry => entry.speedup > 1).length,
+          jsWins: newHistory.filter(entry => entry.speedup < 1).length,
+          bestSpeedup: Math.max(...newHistory.map(entry => entry.speedup)),
+          worstSpeedup: Math.min(...newHistory.map(entry => entry.speedup))
+        }
+
+        setPerformanceSummary(summary)
+        return newHistory
       })
     } catch (err) {
       setError(
@@ -603,6 +660,8 @@ export default function ImageProcessingDemo() {
       )
     )
     setPerformanceMetrics(null)
+    setPerformanceHistory([])
+    setPerformanceSummary(null)
   }, [originalImageData])
 
   if (isLoading) {
@@ -753,9 +812,9 @@ export default function ImageProcessingDemo() {
 
         {/* Performance Metrics */}
         {performanceMetrics && (
-          <div className="bg-gray-700 rounded-lg p-4">
+          <div className="bg-gray-700 rounded-lg p-4 mb-6">
             <h3 className="font-semibold mb-3 text-white">
-              Performance Comparison
+              Current Performance
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
@@ -772,7 +831,7 @@ export default function ImageProcessingDemo() {
               </div>
               <div>
                 <div className="text-gray-300">Speedup</div>
-                <div className="font-mono text-green-400">
+                <div className={`font-mono ${performanceMetrics.speedup > 1 ? 'text-green-400' : 'text-red-400'}`}>
                   {performanceMetrics.speedup.toFixed(1)}x
                 </div>
               </div>
@@ -782,6 +841,128 @@ export default function ImageProcessingDemo() {
                   {(performanceMetrics.memoryUsage / 1024).toFixed(1)}KB
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Performance Summary */}
+        {performanceSummary && (
+          <div className="bg-gray-700 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold mb-3 text-white">
+              Performance Summary ({performanceSummary.totalOperations} operations)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Average WASM Time:</span>
+                  <span className="font-mono text-white">{performanceSummary.avgWasmTime.toFixed(2)}ms</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Average JS Time:</span>
+                  <span className="font-mono text-white">{performanceSummary.avgJsTime.toFixed(2)}ms</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Average Speedup:</span>
+                  <span className={`font-mono ${performanceSummary.avgSpeedup > 1 ? 'text-green-400' : 'text-red-400'}`}>
+                    {performanceSummary.avgSpeedup.toFixed(1)}x
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-300">WASM Wins:</span>
+                  <span className="font-mono text-green-400">{performanceSummary.wasmWins}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">JS Wins:</span>
+                  <span className="font-mono text-red-400">{performanceSummary.jsWins}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Best/Worst Speedup:</span>
+                  <span className="font-mono text-white">
+                    {performanceSummary.bestSpeedup.toFixed(1)}x / {performanceSummary.worstSpeedup.toFixed(1)}x
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 p-3 bg-gray-800 rounded">
+              <div className="text-center">
+                {performanceSummary.avgSpeedup > 1 ? (
+                  <div className="text-green-400 font-semibold">
+                    🚀 WASM is {performanceSummary.avgSpeedup.toFixed(1)}x faster on average
+                  </div>
+                ) : (
+                  <div className="text-red-400 font-semibold">
+                    📉 JavaScript is {(1/performanceSummary.avgSpeedup).toFixed(1)}x faster on average
+                  </div>
+                )}
+                <div className="text-gray-400 text-sm mt-1">
+                  WASM wins {((performanceSummary.wasmWins / performanceSummary.totalOperations) * 100).toFixed(0)}% of operations
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Performance History Table */}
+        {performanceHistory.length > 0 && (
+          <div className="bg-gray-700 rounded-lg p-4">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-semibold text-white">Performance History</h3>
+              <button
+                onClick={() => {
+                  setPerformanceHistory([])
+                  setPerformanceSummary(null)
+                }}
+                className="text-sm bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded transition-colors"
+              >
+                Clear History
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-600">
+                    <th className="text-left py-2 px-3 text-gray-300">Time</th>
+                    <th className="text-left py-2 px-3 text-gray-300">Filter</th>
+                    <th className="text-left py-2 px-3 text-gray-300">Parameter</th>
+                    <th className="text-right py-2 px-3 text-gray-300">WASM (ms)</th>
+                    <th className="text-right py-2 px-3 text-gray-300">JS (ms)</th>
+                    <th className="text-right py-2 px-3 text-gray-300">Speedup</th>
+                    <th className="text-right py-2 px-3 text-gray-300">Memory (KB)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {performanceHistory.slice(0, 10).map((entry) => (
+                    <tr key={entry.id} className="border-b border-gray-600 hover:bg-gray-600">
+                      <td className="py-2 px-3 text-gray-300 font-mono text-xs">
+                        {entry.timestamp.toLocaleTimeString()}
+                      </td>
+                      <td className="py-2 px-3 text-white">{entry.filter}</td>
+                      <td className="py-2 px-3 text-gray-300 font-mono">
+                        {entry.parameter !== undefined ? entry.parameter.toFixed(1) : '-'}
+                      </td>
+                      <td className="py-2 px-3 text-right text-white font-mono">
+                        {entry.wasmTime.toFixed(2)}
+                      </td>
+                      <td className="py-2 px-3 text-right text-white font-mono">
+                        {entry.jsTime.toFixed(2)}
+                      </td>
+                      <td className={`py-2 px-3 text-right font-mono ${entry.speedup > 1 ? 'text-green-400' : 'text-red-400'}`}>
+                        {entry.speedup.toFixed(1)}x
+                      </td>
+                      <td className="py-2 px-3 text-right text-gray-300 font-mono">
+                        {(entry.memoryUsage / 1024).toFixed(1)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {performanceHistory.length > 10 && (
+                <div className="text-center py-2 text-gray-400 text-sm">
+                  Showing latest 10 of {performanceHistory.length} operations
+                </div>
+              )}
             </div>
           </div>
         )}
