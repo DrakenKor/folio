@@ -4,7 +4,6 @@ import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { ShaderManager } from '../lib/shader-management/ShaderManager'
 import {
   ShaderPreset,
-  ShaderUniforms,
   ShaderPlaygroundState
 } from '../types/shader'
 
@@ -50,7 +49,7 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
   `
 
   // Basic fragment shader presets
-  const shaderPresets: ShaderPreset[] = [
+  const shaderPresets: ShaderPreset[] = React.useMemo(() => [
     {
       id: 'basic',
       name: 'Basic Colors',
@@ -113,7 +112,7 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
         mouse: [0, 0]
       }
     }
-  ]
+  ], [basicVertexShader, width, height])
 
   // Initialize WebGL and shader manager
   const initializeGL = useCallback(() => {
@@ -152,9 +151,13 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
   const loadPreset = useCallback(
     (presetId: string) => {
       const preset = shaderPresets.find((p) => p.id === presetId)
-      if (!preset || !shaderManagerRef.current) return
+      if (!preset || !shaderManagerRef.current) {
+        console.warn(`Preset ${presetId} not found or shader manager not available`)
+        return
+      }
 
       try {
+        // Create or recreate the shader program
         shaderManagerRef.current.createProgram(
           preset.id,
           preset.vertexShader,
@@ -168,7 +171,9 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
         }))
 
         setError(null)
+        console.log(`Loaded shader preset: ${preset.name}`)
       } catch (err) {
+        console.error(`Failed to load preset ${presetId}:`, err)
         setError(err instanceof Error ? err.message : 'Failed to load shader')
       }
     },
@@ -179,46 +184,62 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
   const render = useCallback(() => {
     const gl = glRef.current
     const shaderManager = shaderManagerRef.current
-    if (!gl || !shaderManager) return
+    if (!gl || !shaderManager) {
+      console.warn('WebGL context or shader manager not available')
+      return
+    }
 
     const currentTime = (Date.now() - startTimeRef.current) / 1000
 
-    // Update uniforms
-    const updatedUniforms = {
-      ...state.uniforms,
-      time: state.isPlaying ? currentTime : state.uniforms.time || 0
-    }
+    setState((prevState) => {
+      // Update uniforms
+      const updatedUniforms = {
+        ...prevState.uniforms,
+        time: prevState.isPlaying ? currentTime : prevState.uniforms.time || 0
+      }
 
-    try {
-      // Clear canvas
-      gl.clearColor(0, 0, 0, 1)
-      gl.clear(gl.COLOR_BUFFER_BIT)
+      try {
+        // Clear canvas
+        gl.clearColor(0, 0, 0, 1)
+        gl.clear(gl.COLOR_BUFFER_BIT)
 
-      // Use shader program
-      shaderManager.useProgram(state.currentPreset)
+        // Use shader program
+        shaderManager.useProgram(prevState.currentPreset)
 
-      // Set uniforms
-      shaderManager.setUniforms(state.currentPreset, updatedUniforms)
+        // Set uniforms
+        shaderManager.setUniforms(prevState.currentPreset, updatedUniforms)
 
-      // Set up attributes
-      const program = shaderManager.useProgram(state.currentPreset)
-      const positionLocation = gl.getAttribLocation(program, 'a_position')
+        // Set up attributes
+        const program = shaderManager.useProgram(prevState.currentPreset)
+        const positionLocation = gl.getAttribLocation(program, 'a_position')
 
-      gl.enableVertexAttribArray(positionLocation)
-      gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
+        if (positionLocation === -1) {
+          console.warn('Position attribute not found in shader')
+          return prevState
+        }
 
-      // Draw
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+        gl.enableVertexAttribArray(positionLocation)
+        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
 
-      setState((prev) => ({ ...prev, uniforms: updatedUniforms }))
-    } catch (err) {
-      console.error('Render error:', err)
-    }
-  }, [state])
+        // Draw
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+        return { ...prevState, uniforms: updatedUniforms }
+      } catch (err) {
+        console.error('Render error:', err)
+        setError(err instanceof Error ? err.message : 'Render failed')
+        return prevState
+      }
+    })
+  }, [])
 
   // Animation loop
   useEffect(() => {
-    if (!state.isPlaying) return
+    if (!state.isPlaying) {
+      // If not playing, still render once to show current state
+      render()
+      return
+    }
 
     const animate = () => {
       render()
@@ -233,6 +254,11 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
       }
     }
   }, [state.isPlaying, render])
+
+  // Force render when preset changes
+  useEffect(() => {
+    render()
+  }, [state.currentPreset, render])
 
   // Handle mouse movement
   const handleMouseMove = useCallback(
@@ -280,7 +306,7 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
           ref={canvasRef}
           width={width}
           height={height}
-          className="border border-gray-300 cursor-crosshair"
+          className="border border-gray-600 cursor-crosshair rounded"
           onMouseMove={handleMouseMove}
         />
 
@@ -296,16 +322,16 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
           <div className="flex items-center gap-4">
             <button
               onClick={togglePlayback}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
               {state.isPlaying ? 'Pause' : 'Play'}
             </button>
 
             <select
               value={state.currentPreset}
               onChange={(e) => loadPreset(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded">
+              className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
               {shaderPresets.map((preset) => (
-                <option key={preset.id} value={preset.id}>
+                <option key={preset.id} value={preset.id} className="bg-gray-800 text-white">
                   {preset.name}
                 </option>
               ))}
@@ -318,12 +344,12 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
                   showControls: !prev.showControls
                 }))
               }
-              className="px-3 py-2 border border-gray-300 rounded hover:bg-gray-50">
+              className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
               {state.showControls ? 'Hide' : 'Show'} Controls
             </button>
           </div>
 
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-gray-300">
             <p>
               Current:{' '}
               {
