@@ -31,6 +31,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      
+      # Add Rust toolchain setup
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      
+      # Install wasm-pack
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      
       - name: Detect package manager
         id: detect-package-manager
         run: |
@@ -66,13 +77,37 @@ jobs:
         with:
           path: |
             .next/cache
+            wasm/pkg
+            wasm/target
           # Generate a new cache whenever packages or source files change.
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx', '**/Cargo.toml', '**/Cargo.lock', '**/*.rs') }}
           # If source files changed but packages didn't, rebuild from a prior cache.
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-
       - name: Install dependencies
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
+      
+      # Build WASM modules
+      - name: Build WASM modules
+        run: |
+          if [ -d "wasm" ] && [ -f "wasm/Cargo.toml" ]; then
+            echo "Building WASM modules..."
+            cd wasm
+            chmod +x build.sh
+            ./build.sh
+            cd ..
+            
+            # Verify WASM files were created
+            if [ -d "public/wasm" ]; then
+              echo "WASM files built successfully:"
+              ls -la public/wasm/
+            else
+              echo "Warning: No WASM files found in public/wasm/"
+            fi
+          else
+            echo "No WASM directory or Cargo.toml found, skipping WASM build"
+          fi
+      
       - name: Build with Next.js
         run: ${{ steps.detect-package-manager.outputs.runner }} next build
       - name: Upload artifact
