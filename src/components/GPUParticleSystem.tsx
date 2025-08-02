@@ -70,72 +70,75 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
   const [error, setError] = useState<string | null>(null)
 
   // Particle system presets
-  const particlePresets: ParticlePreset[] = React.useMemo(() => [
-    {
-      id: 'basic',
-      name: 'Basic Particles',
-      description: 'Simple floating particles',
-      particleCount: 1000,
-      parameters: {
-        speed: 1.0,
-        size: 5.0,
-        gravity: 0.1,
-        attraction: 0.5,
-        damping: 0.99,
-        colorMode: 0,
-        turbulence: 0.1,
-        lifespan: 5.0
+  const particlePresets: ParticlePreset[] = React.useMemo(
+    () => [
+      {
+        id: 'basic',
+        name: 'Basic Particles',
+        description: 'Simple floating particles',
+        particleCount: 1000,
+        parameters: {
+          speed: 1.0,
+          size: 5.0,
+          gravity: 0.1,
+          attraction: 0.5,
+          damping: 0.99,
+          colorMode: 0,
+          turbulence: 0.1,
+          lifespan: 5.0
+        }
+      },
+      {
+        id: 'fireworks',
+        name: 'Fireworks',
+        description: 'Explosive particle effects',
+        particleCount: 2000,
+        parameters: {
+          speed: 3.0,
+          size: 5.5,
+          gravity: 0.3,
+          attraction: 0.0,
+          damping: 0.95,
+          colorMode: 1,
+          turbulence: 0.5,
+          lifespan: 3.0
+        }
+      },
+      {
+        id: 'galaxy',
+        name: 'Galaxy Spiral',
+        description: 'Spiral galaxy simulation',
+        particleCount: 1500,
+        parameters: {
+          speed: 0.5,
+          size: 5.0,
+          gravity: 0.0,
+          attraction: 1.0,
+          damping: 1.0,
+          colorMode: 2,
+          turbulence: 0.0,
+          lifespan: 10.0
+        }
+      },
+      {
+        id: 'fluid',
+        name: 'Fluid Dynamics',
+        description: 'Fluid-like particle behavior',
+        particleCount: 800,
+        parameters: {
+          speed: 2.0,
+          size: 5.0,
+          gravity: 0.2,
+          attraction: 0.8,
+          damping: 0.98,
+          colorMode: 3,
+          turbulence: 0.3,
+          lifespan: 8.0
+        }
       }
-    },
-    {
-      id: 'fireworks',
-      name: 'Fireworks',
-      description: 'Explosive particle effects',
-      particleCount: 2000,
-      parameters: {
-        speed: 3.0,
-        size: 5.5,
-        gravity: 0.3,
-        attraction: 0.0,
-        damping: 0.95,
-        colorMode: 1,
-        turbulence: 0.5,
-        lifespan: 3.0
-      }
-    },
-    {
-      id: 'galaxy',
-      name: 'Galaxy Spiral',
-      description: 'Spiral galaxy simulation',
-      particleCount: 1500,
-      parameters: {
-        speed: 0.5,
-        size: 5.0,
-        gravity: 0.0,
-        attraction: 1.0,
-        damping: 1.0,
-        colorMode: 2,
-        turbulence: 0.0,
-        lifespan: 10.0
-      }
-    },
-    {
-      id: 'fluid',
-      name: 'Fluid Dynamics',
-      description: 'Fluid-like particle behavior',
-      particleCount: 800,
-      parameters: {
-        speed: 2.0,
-        size: 5.0,
-        gravity: 0.2,
-        attraction: 0.8,
-        damping: 0.98,
-        colorMode: 3,
-        turbulence: 0.3,
-        lifespan: 8.0
-      }
-    }
-  ], [])
+    ],
+    []
+  )
 
   // Vertex shader for particle rendering
   const particleVertexShader = `
@@ -269,7 +272,8 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
     const canvas = canvasRef.current
     if (!canvas) return false
 
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
+    const gl =
+      canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
     if (!gl) {
       setError('WebGL not supported')
       return false
@@ -284,7 +288,10 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
 
     // Enable blending for particle effects
     webglContext.enable(webglContext.BLEND)
-    webglContext.blendFunc(webglContext.SRC_ALPHA, webglContext.ONE_MINUS_SRC_ALPHA)
+    webglContext.blendFunc(
+      webglContext.SRC_ALPHA,
+      webglContext.ONE_MINUS_SRC_ALPHA
+    )
 
     return true
   }, [])
@@ -310,35 +317,43 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
   }, [])
 
   // Load particle preset
-  const loadPreset = useCallback((presetId: string) => {
-    const preset = particlePresets.find(p => p.id === presetId)
-    if (!preset || !shaderManagerRef.current) return
+  const loadPreset = useCallback(
+    (presetId: string) => {
+      const preset = particlePresets.find((p) => p.id === presetId)
+      if (!preset || !shaderManagerRef.current) return
 
-    try {
-      // Create shader program if it doesn't exist
-      if (!shaderManagerRef.current.hasProgram('particles')) {
-        shaderManagerRef.current.createProgram(
-          'particles',
-          particleVertexShader,
-          particleFragmentShader
-        )
+      try {
+        // Create shader program if it doesn't exist
+        if (!shaderManagerRef.current.hasProgram('particles')) {
+          shaderManagerRef.current.createProgram(
+            'particles',
+            particleVertexShader,
+            particleFragmentShader
+          )
+        }
+
+        // Create particle buffers
+        createParticleBuffers(preset.particleCount)
+
+        setState((prev) => ({
+          ...prev,
+          currentPreset: presetId,
+          parameters: { ...preset.parameters }
+        }))
+
+        setError(null)
+      } catch (err) {
+        console.error(`Failed to load preset ${presetId}:`, err)
+        setError(err instanceof Error ? err.message : 'Failed to load preset')
       }
-
-      // Create particle buffers
-      createParticleBuffers(preset.particleCount)
-
-      setState(prev => ({
-        ...prev,
-        currentPreset: presetId,
-        parameters: { ...preset.parameters }
-      }))
-
-      setError(null)
-    } catch (err) {
-      console.error(`Failed to load preset ${presetId}:`, err)
-      setError(err instanceof Error ? err.message : 'Failed to load preset')
-    }
-  }, [particlePresets, createParticleBuffers, particleVertexShader, particleFragmentShader])
+    },
+    [
+      particlePresets,
+      createParticleBuffers,
+      particleVertexShader,
+      particleFragmentShader
+    ]
+  )
 
   // Render particles
   const render = useCallback(() => {
@@ -383,11 +398,10 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
       }
 
       // Draw particles as points
-      const preset = particlePresets.find(p => p.id === state.currentPreset)
+      const preset = particlePresets.find((p) => p.id === state.currentPreset)
       if (preset) {
         gl.drawArrays(gl.POINTS, 0, preset.particleCount)
       }
-
     } catch (err) {
       console.error('Render error:', err)
       setError(err instanceof Error ? err.message : 'Render failed')
@@ -416,26 +430,29 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
   }, [state.isPlaying, render])
 
   // Handle mouse events
-  const handleMouseMove = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+  const handleMouseMove = useCallback(
+    (event: React.MouseEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current
+      if (!canvas) return
 
-    const rect = canvas.getBoundingClientRect()
-    const x = event.clientX - rect.left
-    const y = event.clientY - rect.top
+      const rect = canvas.getBoundingClientRect()
+      const x = event.clientX - rect.left
+      const y = event.clientY - rect.top
 
-    setState(prev => ({
-      ...prev,
-      mousePosition: [x, y]
-    }))
-  }, [])
+      setState((prev) => ({
+        ...prev,
+        mousePosition: [x, y]
+      }))
+    },
+    []
+  )
 
   const handleMouseDown = useCallback(() => {
-    setState(prev => ({ ...prev, mousePressed: true }))
+    setState((prev) => ({ ...prev, mousePressed: true }))
   }, [])
 
   const handleMouseUp = useCallback(() => {
-    setState(prev => ({ ...prev, mousePressed: false }))
+    setState((prev) => ({ ...prev, mousePressed: false }))
   }, [])
 
   // Initialize on mount
@@ -452,18 +469,21 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
   }, [initializeGL, loadPreset])
 
   // Parameter update handlers
-  const updateParameter = useCallback((key: keyof ParticleParameters, value: number) => {
-    setState(prev => ({
-      ...prev,
-      parameters: {
-        ...prev.parameters,
-        [key]: value
-      }
-    }))
-  }, [])
+  const updateParameter = useCallback(
+    (key: keyof ParticleParameters, value: number) => {
+      setState((prev) => ({
+        ...prev,
+        parameters: {
+          ...prev.parameters,
+          [key]: value
+        }
+      }))
+    },
+    []
+  )
 
   const togglePlayback = () => {
-    setState(prev => ({ ...prev, isPlaying: !prev.isPlaying }))
+    setState((prev) => ({ ...prev, isPlaying: !prev.isPlaying }))
   }
 
   return (
@@ -501,14 +521,22 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
               onChange={(e) => loadPreset(e.target.value)}
               className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
               {particlePresets.map((preset) => (
-                <option key={preset.id} value={preset.id} className="bg-gray-800 text-white">
+                <option
+                  key={preset.id}
+                  value={preset.id}
+                  className="bg-gray-800 text-white">
                   {preset.name}
                 </option>
               ))}
             </select>
 
             <button
-              onClick={() => setState(prev => ({ ...prev, showControls: !prev.showControls }))}
+              onClick={() =>
+                setState((prev) => ({
+                  ...prev,
+                  showControls: !prev.showControls
+                }))
+              }
               className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
               {state.showControls ? 'Hide' : 'Show'} Controls
             </button>
@@ -523,10 +551,14 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
                 max="5"
                 step="0.1"
                 value={state.parameters.speed}
-                onChange={(e) => updateParameter('speed', parseFloat(e.target.value))}
+                onChange={(e) =>
+                  updateParameter('speed', parseFloat(e.target.value))
+                }
                 className="w-full"
               />
-              <span className="text-xs text-gray-400">{state.parameters.speed.toFixed(1)}</span>
+              <span className="text-xs text-gray-400">
+                {state.parameters.speed.toFixed(1)}
+              </span>
             </div>
 
             <div>
@@ -537,87 +569,125 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
                 max="10"
                 step="0.1"
                 value={state.parameters.size}
-                onChange={(e) => updateParameter('size', parseFloat(e.target.value))}
+                onChange={(e) =>
+                  updateParameter('size', parseFloat(e.target.value))
+                }
                 className="w-full"
               />
-              <span className="text-xs text-gray-400">{state.parameters.size.toFixed(1)}</span>
+              <span className="text-xs text-gray-400">
+                {state.parameters.size.toFixed(1)}
+              </span>
             </div>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Gravity</label>
+              <label className="block text-sm text-gray-300 mb-1">
+                Gravity
+              </label>
               <input
                 type="range"
                 min="0"
                 max="1"
                 step="0.01"
                 value={state.parameters.gravity}
-                onChange={(e) => updateParameter('gravity', parseFloat(e.target.value))}
+                onChange={(e) =>
+                  updateParameter('gravity', parseFloat(e.target.value))
+                }
                 className="w-full"
               />
-              <span className="text-xs text-gray-400">{state.parameters.gravity.toFixed(2)}</span>
+              <span className="text-xs text-gray-400">
+                {state.parameters.gravity.toFixed(2)}
+              </span>
             </div>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Attraction</label>
+              <label className="block text-sm text-gray-300 mb-1">
+                Attraction
+              </label>
               <input
                 type="range"
                 min="0"
                 max="2"
                 step="0.1"
                 value={state.parameters.attraction}
-                onChange={(e) => updateParameter('attraction', parseFloat(e.target.value))}
+                onChange={(e) =>
+                  updateParameter('attraction', parseFloat(e.target.value))
+                }
                 className="w-full"
               />
-              <span className="text-xs text-gray-400">{state.parameters.attraction.toFixed(1)}</span>
+              <span className="text-xs text-gray-400">
+                {state.parameters.attraction.toFixed(1)}
+              </span>
             </div>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Damping</label>
+              <label className="block text-sm text-gray-300 mb-1">
+                Damping
+              </label>
               <input
                 type="range"
                 min="0.9"
                 max="1"
                 step="0.001"
                 value={state.parameters.damping}
-                onChange={(e) => updateParameter('damping', parseFloat(e.target.value))}
+                onChange={(e) =>
+                  updateParameter('damping', parseFloat(e.target.value))
+                }
                 className="w-full"
               />
-              <span className="text-xs text-gray-400">{state.parameters.damping.toFixed(3)}</span>
+              <span className="text-xs text-gray-400">
+                {state.parameters.damping.toFixed(3)}
+              </span>
             </div>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Turbulence</label>
+              <label className="block text-sm text-gray-300 mb-1">
+                Turbulence
+              </label>
               <input
                 type="range"
                 min="0"
                 max="1"
                 step="0.01"
                 value={state.parameters.turbulence}
-                onChange={(e) => updateParameter('turbulence', parseFloat(e.target.value))}
+                onChange={(e) =>
+                  updateParameter('turbulence', parseFloat(e.target.value))
+                }
                 className="w-full"
               />
-              <span className="text-xs text-gray-400">{state.parameters.turbulence.toFixed(2)}</span>
+              <span className="text-xs text-gray-400">
+                {state.parameters.turbulence.toFixed(2)}
+              </span>
             </div>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Lifespan</label>
+              <label className="block text-sm text-gray-300 mb-1">
+                Lifespan
+              </label>
               <input
                 type="range"
                 min="1"
                 max="20"
                 step="0.5"
                 value={state.parameters.lifespan}
-                onChange={(e) => updateParameter('lifespan', parseFloat(e.target.value))}
+                onChange={(e) =>
+                  updateParameter('lifespan', parseFloat(e.target.value))
+                }
                 className="w-full"
               />
-              <span className="text-xs text-gray-400">{state.parameters.lifespan.toFixed(1)}s</span>
+              <span className="text-xs text-gray-400">
+                {state.parameters.lifespan.toFixed(1)}s
+              </span>
             </div>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Color Mode</label>
+              <label className="block text-sm text-gray-300 mb-1">
+                Color Mode
+              </label>
               <select
                 value={state.parameters.colorMode}
-                onChange={(e) => updateParameter('colorMode', parseInt(e.target.value))}
+                onChange={(e) =>
+                  updateParameter('colorMode', parseInt(e.target.value))
+                }
                 className="w-full px-2 py-1 bg-gray-800 text-white border border-gray-600 rounded text-sm">
                 <option value={0}>Life-based</option>
                 <option value={1}>Fireworks</option>
@@ -628,9 +698,25 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
           </div>
 
           <div className="text-sm text-gray-300">
-            <p>Current: {particlePresets.find(p => p.id === state.currentPreset)?.description}</p>
-            <p>Particles: {particlePresets.find(p => p.id === state.currentPreset)?.particleCount}</p>
-            <p>Mouse: [{state.mousePosition[0].toFixed(0)}, {state.mousePosition[1].toFixed(0)}] {state.mousePressed ? '(pressed)' : ''}</p>
+            <p>
+              Current:{' '}
+              {
+                particlePresets.find((p) => p.id === state.currentPreset)
+                  ?.description
+              }
+            </p>
+            <p>
+              Particles:{' '}
+              {
+                particlePresets.find((p) => p.id === state.currentPreset)
+                  ?.particleCount
+              }
+            </p>
+            <p>
+              Mouse: [{state.mousePosition[0].toFixed(0)},{' '}
+              {state.mousePosition[1].toFixed(0)}]{' '}
+              {state.mousePressed ? '(pressed)' : ''}
+            </p>
           </div>
         </div>
       )}
