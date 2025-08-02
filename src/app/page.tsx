@@ -74,7 +74,7 @@ export default function Home() {
           density: {
             enable: true
           },
-          value: 160
+          value: 500
         },
         opacity: {
           value: 0.5
@@ -120,6 +120,74 @@ export default function Home() {
           <XkcdIcon className="w-8 h-8" />
         </a>
       </div>
+      <div className="center mt-16 flex flex-col">
+        <p className="text-lg mb-6">Interactive Demos</p>
+        <div className="center flex flex-col space-y-2 max-w-md">
+          <a
+            href="/shader-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">Shader Art Playground</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              GPU-powered visual effects
+            </span>
+          </a>
+          <a
+            href="/math-gallery-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">Mathematical Art Gallery</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              Interactive math visualizations
+            </span>
+          </a>
+          <a
+            href="/timeline-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">3D Timeline Visualization</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              Helical timeline experience
+            </span>
+          </a>
+          <a
+            href="/gpu-particles-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">GPU Particle System</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              Interactive particle effects
+            </span>
+          </a>
+          <a
+            href="/crypto-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">WASM Cryptographic Demo</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              Hash algorithms & encryption
+            </span>
+          </a>
+          <a
+            href="/image-processing-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">WASM Image Processing</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              High-performance image filters
+            </span>
+          </a>
+          <a
+            href="/wasm-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">WASM Core Demo</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              WebAssembly performance tests
+            </span>
+          </a>
+        </div>
+      </div>
       <div className="center mt-10 flex flex-col">
         <p className="text-lg">Profile Stack</p>
         <div className="center flex flex-col">
@@ -145,6 +213,8 @@ export default function Home() {
           </p>
         </div>
       </div>
+
+
       <Particles
         id="particles"
         className="z-0"

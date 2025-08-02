@@ -1,0 +1,56 @@
+[package]
+name = "portfolio-wasm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
+wee_alloc = "0.4"
+# Additional dependencies for upcoming modules
+getrandom = { version = "0.2", features = ["js"] }
+rand = { version = "0.8", features = ["small_rng"] }
+sha2 = "0.10"
+md5 = "0.7"
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+  "console",
+  "ImageData",
+  "CanvasRenderingContext2d",
+  "HtmlCanvasElement",
+  "Window",
+  "Document",
+  "Element",
+  "HtmlElement",
+  "Performance",
+  "PerformanceTiming",
+]
+
+[profile.release]
+# Optimize for size - critical for GitHub Pages constraints
+opt-level = "s"          # Optimize for size
+lto = true               # Link-time optimization
+codegen-units = 1        # Single codegen unit for better optimization
+panic = "abort"          # Smaller panic handler
+strip = true             # Strip debug symbols
+
+[profile.release.package."*"]
+opt-level = "s"
+
+# Additional size optimizations
+[profile.wee]
+inherits = "release"
+opt-level = "z"          # Aggressive size optimization
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
