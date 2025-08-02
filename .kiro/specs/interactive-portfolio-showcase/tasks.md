@@ -191,7 +191,7 @@
     - Add multiple scene presets with different environments
     - _Requirements: 5.3_
 
-  - [ ] 8.4 Create GPU particle system
+  - [x] 8.4 Create GPU particle system
 
     - Implement GPU-accelerated particle effects using compute shaders
     - Build interactive particle parameter controls

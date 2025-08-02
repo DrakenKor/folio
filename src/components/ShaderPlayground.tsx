@@ -6,12 +6,15 @@ import {
   ShaderPreset,
   ShaderPlaygroundState
 } from '../types/shader'
+import GPUParticleSystem from './GPUParticleSystem'
 
 interface ShaderPlaygroundProps {
   width?: number
   height?: number
   className?: string
 }
+
+type ShaderExperience = 'shaders' | 'particles'
 
 export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
   width = 800,
@@ -35,6 +38,7 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
     showControls: true
   })
 
+  const [currentExperience, setCurrentExperience] = useState<ShaderExperience>('shaders')
   const [error, setError] = useState<string | null>(null)
 
   // Basic vertex shader for full-screen quad
@@ -301,69 +305,99 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
 
   return (
     <div className={`shader-playground ${className}`}>
-      <div className="relative">
-        <canvas
-          ref={canvasRef}
-          width={width}
-          height={height}
-          className="border border-gray-600 cursor-crosshair rounded"
-          onMouseMove={handleMouseMove}
-        />
-
-        {error && (
-          <div className="absolute top-2 left-2 bg-red-500 text-white px-3 py-1 rounded text-sm">
-            {error}
-          </div>
-        )}
+      {/* Experience selector */}
+      <div className="mb-4">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setCurrentExperience('shaders')}
+            className={`px-4 py-2 rounded transition-colors ${
+              currentExperience === 'shaders'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}>
+            Fragment Shaders
+          </button>
+          <button
+            onClick={() => setCurrentExperience('particles')}
+            className={`px-4 py-2 rounded transition-colors ${
+              currentExperience === 'particles'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}>
+            GPU Particles
+          </button>
+        </div>
       </div>
 
-      {state.showControls && (
-        <div className="mt-4 space-y-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={togglePlayback}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
-              {state.isPlaying ? 'Pause' : 'Play'}
-            </button>
+      {currentExperience === 'shaders' ? (
+        <>
+          <div className="relative">
+            <canvas
+              ref={canvasRef}
+              width={width}
+              height={height}
+              className="border border-gray-600 cursor-crosshair rounded"
+              onMouseMove={handleMouseMove}
+            />
 
-            <select
-              value={state.currentPreset}
-              onChange={(e) => loadPreset(e.target.value)}
-              className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              {shaderPresets.map((preset) => (
-                <option key={preset.id} value={preset.id} className="bg-gray-800 text-white">
-                  {preset.name}
-                </option>
-              ))}
-            </select>
-
-            <button
-              onClick={() =>
-                setState((prev) => ({
-                  ...prev,
-                  showControls: !prev.showControls
-                }))
-              }
-              className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
-              {state.showControls ? 'Hide' : 'Show'} Controls
-            </button>
+            {error && (
+              <div className="absolute top-2 left-2 bg-red-500 text-white px-3 py-1 rounded text-sm">
+                {error}
+              </div>
+            )}
           </div>
 
-          <div className="text-sm text-gray-300">
-            <p>
-              Current:{' '}
-              {
-                shaderPresets.find((p) => p.id === state.currentPreset)
-                  ?.description
-              }
-            </p>
-            <p>Time: {state.uniforms.time?.toFixed(2)}s</p>
-            <p>
-              Mouse: [{state.uniforms.mouse?.[0]?.toFixed(0)},{' '}
-              {state.uniforms.mouse?.[1]?.toFixed(0)}]
-            </p>
-          </div>
-        </div>
+          {state.showControls && (
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={togglePlayback}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                  {state.isPlaying ? 'Pause' : 'Play'}
+                </button>
+
+                <select
+                  value={state.currentPreset}
+                  onChange={(e) => loadPreset(e.target.value)}
+                  className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {shaderPresets.map((preset) => (
+                    <option key={preset.id} value={preset.id} className="bg-gray-800 text-white">
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={() =>
+                    setState((prev) => ({
+                      ...prev,
+                      showControls: !prev.showControls
+                    }))
+                  }
+                  className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
+                  {state.showControls ? 'Hide' : 'Show'} Controls
+                </button>
+              </div>
+
+              <div className="text-sm text-gray-300">
+                <p>
+                  Current:{' '}
+                  {
+                    shaderPresets.find((p) => p.id === state.currentPreset)
+                      ?.description
+                  }
+                </p>
+                <p>Time: {state.uniforms.time?.toFixed(2)}s</p>
+                <p>
+                  Mouse: [{state.uniforms.mouse?.[0]?.toFixed(0)},{' '}
+                  {state.uniforms.mouse?.[1]?.toFixed(0)}]
+                </p>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <GPUParticleSystem width={width} height={height} className="mt-4" />
       )}
     </div>
   )
