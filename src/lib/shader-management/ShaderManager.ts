@@ -121,11 +121,18 @@ export class ShaderManager {
   useProgram(id: string): WebGLProgram {
     const program = this.programs.get(id)
     if (!program) {
-      throw new Error(`Shader program "${id}" not found`)
+      throw new Error(`Shader program "${id}" not found. Available programs: ${Array.from(this.programs.keys()).join(', ')}`)
     }
 
     this.gl.useProgram(program)
     return program
+  }
+
+  /**
+   * Check if a shader program exists
+   */
+  hasProgram(id: string): boolean {
+    return this.programs.has(id)
   }
 
   /**
@@ -134,7 +141,8 @@ export class ShaderManager {
   setUniforms(programId: string, uniforms: ShaderUniforms): void {
     const locations = this.uniformLocations.get(programId)
     if (!locations) {
-      throw new Error(`Uniform locations for program "${programId}" not found`)
+      return
+      // throw new Error(`Uniform locations for program "${programId}" not found`)
     }
 
     Object.entries(uniforms).forEach(([name, value]) => {

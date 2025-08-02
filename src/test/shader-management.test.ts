@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { ShaderManager } from '../lib/shader-management/ShaderManager'
 import { ShaderCompilationError } from '../types/shader'
 
@@ -228,6 +228,17 @@ describe('ShaderManager', () => {
       expect(() => {
         shaderManager.useProgram('nonexistent')
       }).toThrow('Shader program "nonexistent" not found')
+    })
+  })
+
+  describe('hasProgram', () => {
+    it('should return true for existing program', () => {
+      shaderManager.createProgram('test', validVertexShader, validFragmentShader)
+      expect(shaderManager.hasProgram('test')).toBe(true)
+    })
+
+    it('should return false for non-existent program', () => {
+      expect(shaderManager.hasProgram('nonexistent')).toBe(false)
     })
   })
 

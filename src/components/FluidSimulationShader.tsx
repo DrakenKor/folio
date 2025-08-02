@@ -35,6 +35,7 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
   const [isPlaying, setIsPlaying] = useState(true)
   const [showControls, setShowControls] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
   const [controls, setControls] = useState<FluidControls>({
     viscosity: 0.8,
     density: 1.2,
@@ -207,7 +208,7 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
   `
 
   // Initialize WebGL and shader manager
-  const initializeGL = useCallback(() => {
+  const initializeGL = useCallback(async () => {
     const canvas = canvasRef.current
     if (!canvas) return false
 
@@ -244,9 +245,11 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
         fragmentShader
       )
       setError(null)
+      setIsInitialized(true)
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create shader')
+      setIsInitialized(false)
       return false
     }
   }, [vertexShader, fragmentShader])
@@ -283,6 +286,11 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
     const shaderManager = shaderManagerRef.current
     if (!gl || !shaderManager) return
 
+    // Check if shader program is ready
+    if (!shaderManager.hasProgram('fluid')) {
+      return // Skip rendering if shader isn't ready yet
+    }
+
     const currentTime = (Date.now() - startTimeRef.current) / 1000
 
     // Decay mouse velocity
@@ -309,13 +317,12 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
       gl.clear(gl.COLOR_BUFFER_BIT)
 
       // Use shader program
-      shaderManager.useProgram('fluid')
+      const program = shaderManager.useProgram('fluid')
 
       // Set uniforms
       shaderManager.setUniforms('fluid', uniforms)
 
       // Set up attributes
-      const program = shaderManager.useProgram('fluid')
       const positionLocation = gl.getAttribLocation(program, 'a_position')
 
       gl.enableVertexAttribArray(positionLocation)
@@ -325,12 +332,13 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
     } catch (err) {
       console.error('Render error:', err)
+      setError(err instanceof Error ? err.message : 'Render failed')
     }
   }, [isPlaying, width, height, controls])
 
   // Animation loop
   useEffect(() => {
-    if (!isPlaying) return
+    if (!isPlaying || !isInitialized) return
 
     const animate = () => {
       render()
@@ -344,13 +352,23 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [isPlaying, render])
+  }, [isPlaying, isInitialized, render])
 
   // Initialize on mount
   useEffect(() => {
-    initializeGL()
+    let mounted = true
+
+    const init = async () => {
+      const success = await initializeGL()
+      if (!success && mounted) {
+        console.warn('Failed to initialize WebGL for fluid simulation')
+      }
+    }
+
+    init()
 
     return () => {
+      mounted = false
       if (shaderManagerRef.current) {
         shaderManagerRef.current.dispose()
       }
@@ -372,6 +390,12 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
           className="border border-gray-300 cursor-crosshair"
           onMouseMove={handleMouseMove}
         />
+
+        {!isInitialized && !error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="text-white text-lg">Initializing WebGL...</div>
+          </div>
+        )}
 
         {error && (
           <div className="absolute top-2 left-2 bg-red-500 text-white px-3 py-1 rounded text-sm">
