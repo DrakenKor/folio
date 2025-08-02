@@ -184,7 +184,7 @@
     - Add interactive controls for fluid properties
     - _Requirements: 5.2_
 
-  - [-] 8.3 Build raymarching scene renderer
+  - [x] 8.3 Build raymarching scene renderer
 
     - Create 3D scene rendering using only fragment shaders
     - Implement camera controls and scene navigation

@@ -11,6 +11,9 @@ export interface ShaderUniforms {
   time?: number
   resolution?: [number, number]
   mouse?: [number, number]
+  cameraPos?: [number, number, number]
+  cameraTarget?: [number, number, number]
+  fov?: number
   [key: string]: any
 }
 

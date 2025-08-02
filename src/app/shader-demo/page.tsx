@@ -3,8 +3,9 @@
 import React, { useState } from 'react'
 import ShaderPlayground from '../../components/ShaderPlayground'
 import { FluidSimulationShader } from '../../components/FluidSimulationShader'
+import RaymarchingRenderer from '../../components/RaymarchingRenderer'
 
-type DemoType = 'playground' | 'fluid'
+type DemoType = 'playground' | 'fluid' | 'raymarching'
 
 export default function ShaderDemoPage() {
   const [activeDemo, setActiveDemo] = useState<DemoType>('playground')
@@ -25,7 +26,7 @@ export default function ShaderDemoPage() {
         <div className="max-w-6xl mx-auto">
           {/* Demo Selection */}
           <div className="mb-6">
-            <div className="flex justify-center space-x-4">
+            <div className="flex justify-center space-x-4 flex-wrap gap-2">
               <button
                 onClick={() => setActiveDemo('playground')}
                 className={`px-6 py-3 rounded-lg font-medium transition-colors ${
@@ -46,6 +47,16 @@ export default function ShaderDemoPage() {
               >
                 Fluid Simulation
               </button>
+              <button
+                onClick={() => setActiveDemo('raymarching')}
+                className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                  activeDemo === 'raymarching'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                Raymarching Scenes
+              </button>
             </div>
           </div>
 
@@ -60,6 +71,14 @@ export default function ShaderDemoPage() {
 
             {activeDemo === 'fluid' && (
               <FluidSimulationShader
+                width={800}
+                height={600}
+                className="w-full"
+              />
+            )}
+
+            {activeDemo === 'raymarching' && (
+              <RaymarchingRenderer
                 width={800}
                 height={600}
                 className="w-full"
@@ -106,6 +125,15 @@ export default function ShaderDemoPage() {
                   <li>• Glow and tone mapping</li>
                 </ul>
               </div>
+              <div>
+                <h3 className="text-lg font-medium text-gray-200 mb-2">Raymarching Scenes</h3>
+                <ul className="text-gray-400 space-y-1">
+                  <li>• 3D scene rendering in fragment shaders</li>
+                  <li>• Interactive camera controls</li>
+                  <li>• Multiple scene environments</li>
+                  <li>• Real-time fractal generation</li>
+                </ul>
+              </div>
             </div>
           </div>
 
@@ -114,7 +142,8 @@ export default function ShaderDemoPage() {
             <div className="text-gray-300 space-y-3">
               <p>
                 The Shader Art Playground demonstrates advanced WebGL programming with a
-                comprehensive shader management system and real-time fluid simulation.
+                comprehensive shader management system, real-time fluid simulation, and
+                3D raymarching scene rendering.
               </p>
               <p>
                 Key technical features include:
@@ -128,6 +157,11 @@ export default function ShaderDemoPage() {
                 <li>Advanced fluid dynamics simulation in fragment shaders</li>
                 <li>Mouse velocity tracking and interaction</li>
                 <li>Fractal noise generation for realistic turbulence</li>
+                <li>3D raymarching with signed distance functions</li>
+                <li>Interactive camera controls with orbit and zoom</li>
+                <li>Multiple scene presets with different environments</li>
+                <li>Real-time fractal rendering (Mandelbulb, geometric scenes)</li>
+                <li>Advanced lighting and material systems in shaders</li>
                 <li>Real-time parameter adjustment and visual feedback</li>
               </ul>
             </div>
