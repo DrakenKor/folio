@@ -33,14 +33,17 @@ describe('BlogIndexClient', () => {
 
     const toggleButton = screen.getByRole('button', { name: /search.*filters/i })
     const filterPanel = container.querySelector('.blog-filter-panel')
+    const toggleIcon = container.querySelector('.blog-filter-toggle-icon')
 
     expect(toggleButton).toHaveAttribute('aria-expanded', 'false')
     expect(filterPanel).not.toHaveClass('is-mobile-open')
+    expect(toggleIcon).not.toHaveClass('is-animating')
     expect(screen.getByText('Showing 1 of 1 posts')).toBeInTheDocument()
 
     fireEvent.click(toggleButton)
 
     expect(toggleButton).toHaveAttribute('aria-expanded', 'true')
     expect(filterPanel).toHaveClass('is-mobile-open')
+    expect(container.querySelector('.blog-filter-toggle-icon')).toHaveClass('is-animating')
   })
 })

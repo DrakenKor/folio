@@ -27,6 +27,7 @@ export function BlogIndexClient({ posts, tags }: BlogIndexClientProps) {
   const [selectedYear, setSelectedYear] = useState('all')
   const [selectedMonth, setSelectedMonth] = useState('all')
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
+  const [mobileFilterToggleAnimationKey, setMobileFilterToggleAnimationKey] = useState(0)
 
   const years = [...new Set(posts.map((post) => getBlogYearValue(post.date)))]
   const monthSourcePosts =
@@ -65,6 +66,11 @@ export function BlogIndexClient({ posts, tags }: BlogIndexClientProps) {
     selectedYear !== 'all' ||
     selectedMonth !== 'all'
 
+  function handleMobileFilterToggle() {
+    setMobileFilterToggleAnimationKey((currentValue) => currentValue + 1)
+    setIsMobileFiltersOpen((currentValue) => !currentValue)
+  }
+
   return (
     <div className="blog-index-stack">
       <div className="blog-filter-stack">
@@ -78,12 +84,19 @@ export function BlogIndexClient({ posts, tags }: BlogIndexClientProps) {
             }
             aria-expanded={isMobileFiltersOpen}
             aria-controls={mobileFilterPanelId}
-            onClick={() => setIsMobileFiltersOpen((currentValue) => !currentValue)}>
+            onClick={handleMobileFilterToggle}>
             <span className="blog-filter-toggle-copy">
-              <span className="blog-filter-toggle-icon" aria-hidden="true">
-                <span className="blog-filter-toggle-line" />
-                <span className="blog-filter-toggle-line" />
-                <span className="blog-filter-toggle-line" />
+              <span
+                key={mobileFilterToggleAnimationKey}
+                className={
+                  mobileFilterToggleAnimationKey > 0
+                    ? 'blog-filter-toggle-icon is-animating'
+                    : 'blog-filter-toggle-icon'
+                }
+                aria-hidden="true">
+                <span className="blog-filter-toggle-line blog-filter-toggle-line-top" />
+                <span className="blog-filter-toggle-line blog-filter-toggle-line-middle" />
+                <span className="blog-filter-toggle-line blog-filter-toggle-line-bottom" />
               </span>
               <span>{isMobileFiltersOpen ? 'Hide filters' : 'Search & filters'}</span>
             </span>
