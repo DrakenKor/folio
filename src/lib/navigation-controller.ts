@@ -61,8 +61,12 @@ export class NavigationController {
 
   private constructor() {
     this.currentRoute = navigationRoutes[0]
-    this.initializeRouting()
-    this.initializeKeyboardNavigation()
+
+    // Only initialize on client side
+    if (typeof window !== 'undefined') {
+      this.initializeRouting()
+      this.initializeKeyboardNavigation()
+    }
   }
 
   static getInstance(): NavigationController {
@@ -263,5 +267,7 @@ export class NavigationController {
   }
 }
 
-// Export singleton instance
-export const navigationController = NavigationController.getInstance()
+// Export function to get singleton (lazy initialization for SSR compatibility)
+export function getNavigationController(): NavigationController {
+  return NavigationController.getInstance()
+}

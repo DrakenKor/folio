@@ -45,21 +45,21 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<WebGLRenderingContext | null>(null)
   const shaderManagerRef = useRef<ShaderManager | null>(null)
-  const animationFrameRef = useRef<number>()
+  const animationFrameRef = useRef<number | undefined>(undefined)
   const startTimeRef = useRef<number>(Date.now())
   const particleBufferRef = useRef<WebGLBuffer | null>(null)
 
   const [state, setState] = useState<ParticleSystemState>({
     currentPreset: 'basic',
     parameters: {
-      speed: 1.0,
-      size: 2.0,
-      gravity: 0.1,
-      attraction: 0.5,
-      damping: 0.99,
-      colorMode: 0,
-      turbulence: 0.1,
-      lifespan: 5.0
+      speed: 0.0,
+      size: 10.0,
+      gravity: 0.61,
+      attraction: 2.0,
+      damping: 1.0,
+      colorMode: 3,
+      turbulence: 0.01,
+      lifespan: 18.5
     },
     isPlaying: true,
     showControls: true,
@@ -78,14 +78,14 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
         description: 'Simple floating particles',
         particleCount: 1000,
         parameters: {
-          speed: 1.0,
-          size: 5.0,
-          gravity: 0.1,
-          attraction: 0.5,
-          damping: 0.99,
-          colorMode: 0,
-          turbulence: 0.1,
-          lifespan: 5.0
+          speed: 0.0,
+          size: 10.0,
+          gravity: 0.61,
+          attraction: 2.0,
+          damping: 1.0,
+          colorMode: 3,
+          turbulence: 0.01,
+          lifespan: 18.5
         }
       },
       {

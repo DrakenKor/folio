@@ -24,7 +24,7 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<WebGLRenderingContext | null>(null)
   const shaderManagerRef = useRef<ShaderManager | null>(null)
-  const animationFrameRef = useRef<number>()
+  const animationFrameRef = useRef<number | undefined>(undefined)
   const startTimeRef = useRef<number>(Date.now())
 
   const [state, setState] = useState<ShaderPlaygroundState>({
@@ -62,7 +62,6 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
       fragmentShader: `
         precision mediump float;
         uniform float time;
-        uniform vec2 resolution;
         varying vec2 v_uv;
 
         void main() {
@@ -76,8 +75,7 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
         }
       `,
       defaultUniforms: {
-        time: 0,
-        resolution: [width, height]
+        time: 0
       }
     },
     {
@@ -210,8 +208,19 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
         // Use shader program
         shaderManager.useProgram(prevState.currentPreset)
 
+        // Get current preset to filter uniforms
+        const currentPreset = shaderPresets.find(p => p.id === prevState.currentPreset)
+        const uniformsToSet = currentPreset?.defaultUniforms
+          ? Object.keys(currentPreset.defaultUniforms).reduce((acc, key) => {
+              if (key in updatedUniforms) {
+                acc[key] = (updatedUniforms as Record<string, any>)[key]
+              }
+              return acc
+            }, {} as Record<string, any>)
+          : updatedUniforms
+
         // Set uniforms
-        shaderManager.setUniforms(prevState.currentPreset, updatedUniforms)
+        shaderManager.setUniforms(prevState.currentPreset, uniformsToSet)
 
         // Set up attributes
         const program = shaderManager.useProgram(prevState.currentPreset)

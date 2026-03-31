@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { AppInitializer } from '@/components/AppInitializer'
+import { PageTransitionLoader } from '@/components/PageTransitionLoader'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -43,6 +44,7 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
+        <PageTransitionLoader />
         <AppInitializer>{children}</AppInitializer>
       </body>
     </html>

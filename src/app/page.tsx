@@ -3,6 +3,7 @@ import { IOptions, MoveDirection, RecursivePartial } from '@tsparticles/engine'
 import Particles, { initParticlesEngine } from '@tsparticles/react'
 import { loadSlim } from '@tsparticles/slim' // if you are going to use `loadSlim`, install the "@tsparticles/slim" package too.
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import RubiLoader from './components/Loaders/RubiLoader'
 import ProfilePhoto from './components/Svg/ProfilePhoto'
 import { CiLinkedin } from 'react-icons/ci'
@@ -11,10 +12,55 @@ import XkcdIcon from './components/Svg/XkcdIcon'
 
 export default function Home() {
   const [initialized, setInitialized] = useState(false)
+
   useEffect(() => {
+    let mounted = true
+
+    // Reset initialization state on mount (handles bfcache restoration)
+    setInitialized(false)
+
+    const timeoutId = setTimeout(() => {
+      if (mounted) {
+        setInitialized(true)
+      }
+    }, 2000)
+
     initParticlesEngine(async (engine) => {
       await loadSlim(engine)
-    }).then(() => setInitialized(true))
+    }).then(() => {
+      if (mounted) {
+        clearTimeout(timeoutId)
+        setInitialized(true)
+      }
+    }).catch((err) => {
+      console.error('Particles initialization failed:', err)
+      if (mounted) {
+        clearTimeout(timeoutId)
+        setInitialized(true)
+      }
+    })
+
+    return () => {
+      mounted = false
+      clearTimeout(timeoutId)
+    }
+  }, [])
+
+  // Handle browser back/forward navigation (bfcache restoration)
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        // Page was restored from bfcache, force re-initialization
+        setInitialized(false)
+        // Trigger re-initialization after a brief delay
+        setTimeout(() => {
+          setInitialized(true)
+        }, 100)
+      }
+    }
+
+    window.addEventListener('pageshow', handlePageShow)
+    return () => window.removeEventListener('pageshow', handlePageShow)
   }, [])
   const options: RecursivePartial<IOptions> = useMemo(
     () => ({
@@ -123,52 +169,7 @@ export default function Home() {
       <div className="center mt-16 flex flex-col">
         <p className="text-lg mb-6">Interactive Demos</p>
         <div className="center flex flex-col space-y-2 max-w-md">
-          <a
-            href="/shader-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">Shader Art Playground</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              GPU-powered visual effects
-            </span>
-          </a>
-          <a
-            href="/math-gallery-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">Mathematical Art Gallery</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              Interactive math visualizations
-            </span>
-          </a>
-          <a
-            href="/timeline-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">3D Timeline Visualization</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              Helical timeline experience
-            </span>
-          </a>
-          <a
-            href="/gpu-particles-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">GPU Particle System</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              Interactive particle effects
-            </span>
-          </a>
-          <a
-            href="/crypto-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">WASM Cryptographic Demo</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              Hash algorithms & encryption
-            </span>
-          </a>
-          <a
+          <Link
             href="/image-processing-demo"
             className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
             <span className="underline">WASM Image Processing</span>
@@ -176,8 +177,54 @@ export default function Home() {
             <span className="text-sm text-gray-400">
               High-performance image filters
             </span>
-          </a>
-          <a
+          </Link>
+          <Link
+            href="/shader-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">Shader Art Playground</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              GPU-powered visual effects
+            </span>
+          </Link>
+          <Link
+            href="/math-gallery-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">Mathematical Art Gallery</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              Interactive math visualizations
+            </span>
+          </Link>
+          <Link
+            href="/timeline-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">3D Timeline Visualization</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              Helical timeline experience
+            </span>
+          </Link>
+          <Link
+            href="/gpu-particles-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">GPU Particle System</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              Interactive particle effects
+            </span>
+          </Link>
+          <Link
+            href="/crypto-demo"
+            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+            <span className="underline">WASM Cryptographic Demo</span>
+            &nbsp;
+            <span className="text-sm text-gray-400">
+              Hash algorithms & encryption
+            </span>
+          </Link>
+          
+          <Link
             href="/wasm-demo"
             className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
             <span className="underline">WASM Core Demo</span>
@@ -185,7 +232,7 @@ export default function Home() {
             <span className="text-sm text-gray-400">
               WebAssembly performance tests
             </span>
-          </a>
+          </Link>
         </div>
       </div>
       <div className="center mt-10 flex flex-col">
@@ -223,7 +270,7 @@ export default function Home() {
       />
     </>
   ) : (
-    <div className="center h-screen">
+    <div className="center h-screen bg-black">
       <RubiLoader type="white" height={32} width={32} />
     </div>
   )

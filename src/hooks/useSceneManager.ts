@@ -16,7 +16,7 @@ interface UseSceneManagerResult {
   sceneManager: SceneManager | null
   renderer: THREE.WebGLRenderer | null
   camera: THREE.PerspectiveCamera | null
-  containerRef: React.RefObject<HTMLDivElement>
+  containerRef: React.RefObject<HTMLDivElement | null>
   isInitialized: boolean
   registerScene: (scene: Scene3D) => void
   transitionToScene: (sceneType: SceneType) => Promise<void>

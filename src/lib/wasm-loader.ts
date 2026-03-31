@@ -81,38 +81,51 @@ class WASMLoader {
         throw new Error('WASM modules can only be loaded on the client side')
       }
 
-      // Check file size if limit is specified
-      if (config.sizeLimit) {
-        const response = await fetch(config.path, { method: 'HEAD' })
-        const contentLength = response.headers.get('content-length')
-        if (contentLength && parseInt(contentLength) > config.sizeLimit) {
-          throw new Error(`WASM module ${config.name} exceeds size limit`)
+      // Create abort controller for timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+      try {
+        // Check file size if limit is specified
+        if (config.sizeLimit) {
+          const response = await fetch(config.path, { method: 'HEAD', signal: controller.signal })
+          const contentLength = response.headers.get('content-length')
+          if (contentLength && parseInt(contentLength) > config.sizeLimit) {
+            throw new Error(`WASM module ${config.name} exceeds size limit`)
+          }
         }
+
+        // Load the WASM module using fetch and eval (client-side only)
+        const response = await fetch(config.path, { signal: controller.signal })
+        const jsCode = await response.text()
+
+        // Create a module scope and evaluate the JS code
+        const moduleScope: any = { exports: {} }
+        const wrappedCode = `
+          (function(exports, module) {
+            ${jsCode}
+            return exports;
+          })
+        `
+
+        const moduleFactory = eval(wrappedCode)
+        const wasmModule = moduleFactory(moduleScope.exports, moduleScope)
+
+        // Initialize if it has an init function
+        if (typeof wasmModule.default === 'function') {
+          await wasmModule.default()
+        }
+
+        clearTimeout(timeoutId)
+        console.log(`WASM module ${config.name} loaded successfully`)
+        return wasmModule
+      } catch (fetchError) {
+        clearTimeout(timeoutId)
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          throw new Error(`WASM module ${config.name} loading timed out after 5 seconds`)
+        }
+        throw fetchError
       }
-
-      // Load the WASM module using fetch and eval (client-side only)
-      const response = await fetch(config.path)
-      const jsCode = await response.text()
-
-      // Create a module scope and evaluate the JS code
-      const moduleScope: any = { exports: {} }
-      const wrappedCode = `
-        (function(exports, module) {
-          ${jsCode}
-          return exports;
-        })
-      `
-
-      const moduleFactory = eval(wrappedCode)
-      const wasmModule = moduleFactory(moduleScope.exports, moduleScope)
-
-      // Initialize if it has an init function
-      if (typeof wasmModule.default === 'function') {
-        await wasmModule.default()
-      }
-
-      console.log(`WASM module ${config.name} loaded successfully`)
-      return wasmModule
     } catch (error) {
       console.error(`Failed to load WASM module ${config.name}:`, error)
 

@@ -7,7 +7,7 @@ import * as THREE from 'three'
 import { SectionType } from '@/types'
 import { useNavigation3D } from '@/hooks/useNavigation3D'
 import { useCurrentSection, useAppStore } from '@/stores/app-store'
-import { navigationController } from '@/lib/navigation-controller'
+import { getNavigationController } from '@/lib/navigation-controller'
 import { KeyboardHelpModal } from './KeyboardHelpModal'
 
 interface NavigationItem {
@@ -314,8 +314,7 @@ const NavigationItemComponent: React.FC<NavigationItemProps> = ({
           <bufferGeometry>
             <bufferAttribute
               attach="attributes-position"
-              count={30}
-              array={
+              args={[
                 new Float32Array(
                   Array.from({ length: 90 }, (_, i) => {
                     const t = i / 30
@@ -326,9 +325,9 @@ const NavigationItemComponent: React.FC<NavigationItemProps> = ({
                       Math.sin(t * Math.PI * 2) * 0.2
                     ]
                   }).flat()
-                )
-              }
-              itemSize={3}
+                ),
+                3
+              ]}
             />
           </bufferGeometry>
           <pointsMaterial
@@ -347,8 +346,7 @@ const NavigationItemComponent: React.FC<NavigationItemProps> = ({
           <bufferGeometry>
             <bufferAttribute
               attach="attributes-position"
-              count={2}
-              array={
+              args={[
                 new Float32Array([
                   0,
                   0,
@@ -356,9 +354,9 @@ const NavigationItemComponent: React.FC<NavigationItemProps> = ({
                   -orbitalPosition.x * 0.7,
                   -orbitalPosition.y * 0.7,
                   -orbitalPosition.z * 0.7
-                ])
-              }
-              itemSize={3}
+                ]),
+                3
+              ]}
             />
           </bufferGeometry>
           <lineBasicMaterial
@@ -633,16 +631,15 @@ const Navigation3DScene: React.FC<Navigation3DSceneProps> = ({
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            count={isMobile ? 50 : isCompact ? 75 : 120}
-            array={
+            args={[
               new Float32Array(
                 Array.from(
                   { length: (isMobile ? 50 : isCompact ? 75 : 120) * 3 },
                   () => (Math.random() - 0.5) * 25
                 )
-              )
-            }
-            itemSize={3}
+              ),
+              3
+            ]}
           />
         </bufferGeometry>
         <pointsMaterial
@@ -660,16 +657,15 @@ const Navigation3DScene: React.FC<Navigation3DSceneProps> = ({
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            count={isMobile ? 20 : 40}
-            array={
+            args={[
               new Float32Array(
                 Array.from(
                   { length: (isMobile ? 20 : 40) * 3 },
                   () => (Math.random() - 0.5) * 30
                 )
-              )
-            }
-            itemSize={3}
+              ),
+              3
+            ]}
           />
         </bufferGeometry>
         <pointsMaterial
@@ -687,16 +683,15 @@ const Navigation3DScene: React.FC<Navigation3DSceneProps> = ({
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            count={isMobile ? 15 : 25}
-            array={
+            args={[
               new Float32Array(
                 Array.from(
                   { length: (isMobile ? 15 : 25) * 3 },
                   () => (Math.random() - 0.5) * 20
                 )
-              )
-            }
-            itemSize={3}
+              ),
+              3
+            ]}
           />
         </bufferGeometry>
         <pointsMaterial
@@ -714,16 +709,15 @@ const Navigation3DScene: React.FC<Navigation3DSceneProps> = ({
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            count={isMobile ? 30 : 60}
-            array={
+            args={[
               new Float32Array(
                 Array.from(
                   { length: (isMobile ? 30 : 60) * 3 },
                   () => (Math.random() - 0.5) * 40
                 )
-              )
-            }
-            itemSize={3}
+              ),
+              3
+            ]}
           />
         </bufferGeometry>
         <pointsMaterial

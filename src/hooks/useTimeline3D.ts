@@ -47,7 +47,7 @@ export const useTimeline3D = (): Timeline3DState & Timeline3DActions => {
     cameraTarget: null
   })
 
-  const timelineManagerRef = useRef<TimelineManager>()
+  const timelineManagerRef = useRef<TimelineManager | undefined>(undefined)
   const autoNavigationRef = useRef<number | null>(null)
 
   // Initialize timeline manager

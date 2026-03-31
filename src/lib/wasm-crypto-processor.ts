@@ -79,9 +79,20 @@ class WASMCryptoProcessorLoader {
     }
 
     return new Promise((resolve, reject) => {
+      // Set a timeout to prevent hanging forever
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error('WASM crypto module loading timed out after 5 seconds. Files may be missing.'));
+      }, 5000);
+
       // Create script element to load the WASM JS file
       const script = document.createElement('script');
       script.type = 'module';
+      script.onerror = () => {
+        cleanup();
+        reject(new Error('Failed to load WASM JavaScript file. Check if /wasm/portfolio_wasm.js exists.'));
+      };
+
       script.textContent = `
         import init, * as wasmModule from '/wasm/portfolio_wasm.js';
 
@@ -145,9 +156,12 @@ class WASMCryptoProcessorLoader {
       };
 
       const cleanup = () => {
+        clearTimeout(timeout);
         window.removeEventListener('wasmCryptoLoaded', handleWasmLoaded);
         window.removeEventListener('wasmCryptoError', handleWasmError as EventListener);
-        document.head.removeChild(script);
+        if (script.parentNode) {
+          document.head.removeChild(script);
+        }
       };
 
       window.addEventListener('wasmCryptoLoaded', handleWasmLoaded);

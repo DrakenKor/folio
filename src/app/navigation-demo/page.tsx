@@ -1,9 +1,18 @@
 'use client'
 
-import React from 'react'
-import { Navigation3D } from '@/components/Navigation3D'
+import React, { Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import { useCurrentSection } from '@/stores/app-store'
 import { SectionType } from '@/types'
+
+const Navigation3D = dynamic(() => import('@/components/Navigation3D').then(mod => ({ default: mod.Navigation3D })), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed inset-0 flex items-center justify-center">
+      <div className="text-white">Loading 3D Navigation...</div>
+    </div>
+  )
+})
 
 export default function NavigationDemo() {
   const currentSection = useCurrentSection()

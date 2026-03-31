@@ -27,7 +27,7 @@ interface PerformanceMetrics {
 
 export default function PhysicsSimulationDemo() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animationRef = useRef<number>()
+  const animationRef = useRef<number | undefined>(undefined)
   const lastTimeRef = useRef<number>(0)
   const fpsCounterRef = useRef<{ frames: number; lastTime: number }>({
     frames: 0,

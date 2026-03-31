@@ -36,14 +36,20 @@ const nextConfig = {
 
     return config
   },
+  // Turbopack configuration
+  turbopack: {
+    rules: {
+      '*.wasm': {
+        loaders: ['file-loader'],
+      },
+    },
+  },
   // Enable experimental features for better performance
   experimental: {
     optimizePackageImports: ['three', '@react-three/fiber', '@react-three/drei'],
   },
   // Compress static assets
   compress: true,
-  // Enable SWC minification
-  swcMinify: true,
 }
 
 module.exports = nextConfig

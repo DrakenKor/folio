@@ -62,11 +62,34 @@ export class ResumeDataLoader {
 
     const experiences: Experience[] = [
       {
+        id: 'rezinaus-2025',
+        company: 'Rezinaus',
+        position: 'Independent Contractor',
+        startDate: new Date('2025-01-01'),
+        endDate: null,
+        location: 'Brisbane, Australia',
+        companyType: 'Consulting',
+        description: 'End-to-end software solutions for diverse clients',
+        technologies: ['Serverless', 'AWS', 'Azure', 'Vercel', 'Supabase', 'Slack API', 'MS Teams API', 'React', 'TypeScript'],
+        projects: [
+          {
+            projectId: 'consulting-projects',
+            role: 'Full Stack Developer & Architect',
+            impact: 'Building scalable solutions for multiple clients'
+          }
+        ],
+        achievements: [
+          'Architecting serverless & cloud-native solutions',
+          'Delivering high-quality software on tight timelines',
+          'Providing technical consulting and leadership'
+        ]
+      },
+      {
         id: 'autify-2024',
         company: 'Autify Inc',
         position: 'Software Engineer',
         startDate: new Date('2024-10-01'),
-        endDate: null,
+        endDate: new Date('2025-01-01'),
         location: 'Tokyo, Japan',
         companyType: 'Startup in test automation space',
         description: 'AI-driven automated testing flagship product development',

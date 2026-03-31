@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { SectionType } from '@/types'
 import { useAppStore, useNavigationState } from '@/stores/app-store'
-import { navigationController, NavigationRoute } from '@/lib/navigation-controller'
+import { getNavigationController, NavigationRoute, navigationRoutes } from '@/lib/navigation-controller'
 
 interface UseNavigation3DOptions {
   autoHide?: boolean
@@ -37,7 +37,7 @@ export const useNavigation3D = (options: UseNavigation3DOptions = {}): UseNaviga
   const [isCompact, setIsCompact] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [hideTimer, setHideTimer] = useState<NodeJS.Timeout | null>(null)
-  const [currentRoute, setCurrentRoute] = useState<NavigationRoute>(navigationController.getCurrentRoute())
+  const [currentRoute, setCurrentRoute] = useState<NavigationRoute>(navigationRoutes[0])
 
   const navigationState = useNavigationState()
   const { setCurrentSection, startTransition, completeTransition } = useAppStore()
@@ -117,10 +117,11 @@ export const useNavigation3D = (options: UseNavigation3DOptions = {}): UseNaviga
       startTransition(section)
 
       // Use navigation controller for proper routing
-      navigationController.navigateToSection(section)
+      const controller = getNavigationController()
+      controller.navigateToSection(section)
 
       // Announce navigation for accessibility
-      navigationController.announceNavigation(section)
+      controller.announceNavigation(section)
 
       // Simulate transition delay (this would be replaced with actual scene transition)
       await new Promise(resolve => setTimeout(resolve, 800))
@@ -135,25 +136,29 @@ export const useNavigation3D = (options: UseNavigation3DOptions = {}): UseNaviga
   }, [navigationState.isTransitioning, navigationState.currentSection, startTransition, completeTransition, setCurrentSection])
 
   const navigateNext = useCallback(() => {
-    const nextSection = navigationController.getNextSection()
+    const controller = getNavigationController()
+    const nextSection = controller.getNextSection()
     navigateToSection(nextSection)
   }, [navigateToSection])
 
   const navigatePrevious = useCallback(() => {
-    const prevSection = navigationController.getPreviousSection()
+    const controller = getNavigationController()
+    const prevSection = controller.getPreviousSection()
     navigateToSection(prevSection)
   }, [navigateToSection])
 
   const navigateToIndex = useCallback((index: number) => {
-    const section = navigationController.getSectionByIndex(index)
+    const controller = getNavigationController()
+    const section = controller.getSectionByIndex(index)
     if (section) {
       navigateToSection(section)
     }
   }, [navigateToSection])
 
   const preloadNext = useCallback(() => {
-    const nextSection = navigationController.getNextSection()
-    navigationController.preloadSection(nextSection)
+    const controller = getNavigationController()
+    const nextSection = controller.getNextSection()
+    controller.preloadSection(nextSection)
   }, [])
 
   const toggleVisibility = useCallback(() => {
@@ -170,7 +175,10 @@ export const useNavigation3D = (options: UseNavigation3DOptions = {}): UseNaviga
 
   // Listen to navigation controller changes
   useEffect(() => {
-    const unsubscribe = navigationController.addNavigationListener((route) => {
+    const controller = getNavigationController()
+    setCurrentRoute(controller.getCurrentRoute())
+
+    const unsubscribe = controller.addNavigationListener((route) => {
       setCurrentRoute(route)
       setCurrentSection(route.section)
     })
@@ -243,7 +251,8 @@ export const useNavigation3D = (options: UseNavigation3DOptions = {}): UseNaviga
       }
     }
 
-    const unsubscribe = navigationController.addKeyboardListener(handleKeyboardNavigation)
+    const controller = getNavigationController()
+    const unsubscribe = controller.addKeyboardListener(handleKeyboardNavigation)
     return unsubscribe
   }, [isVisible, navigationState.isTransitioning, isMobile, navigateNext, navigatePrevious, navigateToIndex, navigateToSection, preloadNext, toggleVisibility])
 

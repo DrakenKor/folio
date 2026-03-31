@@ -267,6 +267,7 @@ export class TimelineScene3D extends BaseScene3D {
     if (!this.timelineData) return
 
     this.helixCurve = this.timelineData.helixConfig.curve!
+    if (!this.helixCurve) return
 
     // Create helix line geometry
     const points = this.helixCurve.getPoints(200)

@@ -159,6 +159,7 @@ export default function ImageProcessingDemo() {
     useState<PerformanceMetrics | null>(null)
   const [performanceHistory, setPerformanceHistory] = useState<PerformanceHistoryEntry[]>([])
   const [performanceSummary, setPerformanceSummary] = useState<PerformanceSummary | null>(null)
+  const [isRunningAllTests, setIsRunningAllTests] = useState(false)
 
   // Initialize WASM module
   useEffect(() => {
@@ -664,6 +665,124 @@ export default function ImageProcessingDemo() {
     setPerformanceSummary(null)
   }, [originalImageData])
 
+  const runAllTests = useCallback(async () => {
+    if (!originalImageData || isProcessing || isRunningAllTests) return
+
+    setIsRunningAllTests(true)
+    setError(null)
+
+    try {
+      for (let i = 0; i < FILTERS.length; i++) {
+        const filter = FILTERS[i]
+        const parameter = filter.parameterDefault || 1
+
+        // Update UI to show current filter
+        setSelectedFilter(filter)
+        setFilterParameter(parameter)
+
+        // Process the filter
+        setIsProcessing(true)
+        try {
+          // Apply filter with WASM
+          const wasmResult = await applyFilterWASM(
+            originalImageData,
+            filter,
+            parameter
+          )
+
+          // Apply filter with JavaScript for comparison
+          const jsResult = await applyFilterJS(
+            originalImageData,
+            filter,
+            parameter
+          )
+
+          // Update canvases with both results
+          const wasmCanvas = wasmCanvasRef.current
+          const jsCanvas = jsCanvasRef.current
+          if (wasmCanvas && jsCanvas) {
+            const wasmCtx = wasmCanvas.getContext('2d')
+            const jsCtx = jsCanvas.getContext('2d')
+            if (wasmCtx && jsCtx) {
+              wasmCtx.putImageData(wasmResult.processedData, 0, 0)
+              jsCtx.putImageData(jsResult.processedData, 0, 0)
+            }
+          }
+
+          setWasmImageData(wasmResult.processedData)
+          setJsImageData(jsResult.processedData)
+
+          // Calculate performance metrics
+          const speedup = jsResult.processingTime / wasmResult.processingTime
+          const memoryUsage = wasmModule ? wasmModule.get_memory_usage() : 0
+
+          const metrics = {
+            wasmTime: wasmResult.processingTime,
+            jsTime: jsResult.processingTime,
+            speedup,
+            memoryUsage
+          }
+
+          setPerformanceMetrics(metrics)
+
+          // Add to performance history
+          const historyEntry: PerformanceHistoryEntry = {
+            id: Date.now() + i,
+            timestamp: new Date(),
+            filter: filter.label,
+            parameter: filter.hasParameter ? parameter : undefined,
+            wasmTime: wasmResult.processingTime,
+            jsTime: jsResult.processingTime,
+            speedup,
+            memoryUsage
+          }
+
+          setPerformanceHistory(prev => {
+            const newHistory = [historyEntry, ...prev].slice(0, 50)
+
+            // Calculate summary statistics
+            const summary: PerformanceSummary = {
+              totalOperations: newHistory.length,
+              avgWasmTime: newHistory.reduce((sum, entry) => sum + entry.wasmTime, 0) / newHistory.length,
+              avgJsTime: newHistory.reduce((sum, entry) => sum + entry.jsTime, 0) / newHistory.length,
+              avgSpeedup: newHistory.reduce((sum, entry) => sum + entry.speedup, 0) / newHistory.length,
+              wasmWins: newHistory.filter(entry => entry.speedup > 1).length,
+              jsWins: newHistory.filter(entry => entry.speedup < 1).length,
+              bestSpeedup: Math.max(...newHistory.map(entry => entry.speedup)),
+              worstSpeedup: Math.min(...newHistory.map(entry => entry.speedup))
+            }
+
+            setPerformanceSummary(summary)
+            return newHistory
+          })
+        } finally {
+          setIsProcessing(false)
+        }
+
+        // Pause before next test (except after the last one)
+        if (i < FILTERS.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+    } catch (err) {
+      setError(
+        `Test run failed: ${
+          err instanceof Error ? err.message : 'Unknown error'
+        }`
+      )
+      console.error('Test run error:', err)
+    } finally {
+      setIsRunningAllTests(false)
+    }
+  }, [
+    originalImageData,
+    isProcessing,
+    isRunningAllTests,
+    wasmModule,
+    applyFilterWASM,
+    applyFilterJS
+  ])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -789,22 +908,28 @@ export default function ImageProcessingDemo() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-4 mb-6">
+        <div className="flex flex-wrap gap-4 mb-6">
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-300">
-              {isProcessing ? 'Processing...' : 'Filters apply automatically'}
+              {isRunningAllTests ? 'Running all tests...' : isProcessing ? 'Processing...' : 'Filters apply automatically'}
               {wasmModule ? ' (WASM)' : ' (JS Fallback)'}
             </span>
             <button
               onClick={applyFilter}
-              disabled={isProcessing}
+              disabled={isProcessing || isRunningAllTests}
               className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors text-sm">
               Reapply
             </button>
           </div>
           <button
+            onClick={runAllTests}
+            disabled={isProcessing || isRunningAllTests}
+            className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg transition-colors">
+            Run All Tests
+          </button>
+          <button
             onClick={resetImage}
-            disabled={isProcessing}
+            disabled={isProcessing || isRunningAllTests}
             className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg transition-colors">
             Reset
           </button>

@@ -161,10 +161,22 @@ class WASMModuleManagerImpl implements WASMModuleManager {
       script.src = jsPath
       document.head.appendChild(script)
 
-      // Wait for script to load
+      // Wait for script to load with timeout
       await new Promise((resolve, reject) => {
-        script.onload = resolve
-        script.onerror = reject
+        const timeout = setTimeout(() => {
+          script.remove()
+          reject(new Error(`Script loading timed out after 5 seconds: ${jsPath}`))
+        }, 5000)
+
+        script.onload = () => {
+          clearTimeout(timeout)
+          resolve(undefined)
+        }
+        script.onerror = () => {
+          clearTimeout(timeout)
+          script.remove()
+          reject(new Error(`Failed to load script: ${jsPath}`))
+        }
       })
 
       // Return the global WASM module

@@ -6,9 +6,18 @@ import { ExtendedDeviceCapabilities } from '@/types'
 export const useDeviceCapabilities = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { deviceCapabilities, setDeviceCapabilities } = useAppStore()
+  const deviceCapabilities = useAppStore(state => state.deviceCapabilities)
+  const setDeviceCapabilities = useAppStore(state => state.setDeviceCapabilities)
 
   useEffect(() => {
+    let mounted = true
+    const timeoutId = setTimeout(() => {
+      if (mounted) {
+        console.warn('Device detection timeout')
+        setIsLoading(false)
+      }
+    }, 2000)
+
     const detectCapabilities = async () => {
       try {
         setIsLoading(true)
@@ -17,20 +26,32 @@ export const useDeviceCapabilities = () => {
         const detector = DeviceDetector.getInstance()
         const capabilities = await detector.detectCapabilities()
 
-        setDeviceCapabilities(capabilities)
+        if (mounted) {
+          clearTimeout(timeoutId)
+          setDeviceCapabilities(capabilities)
+          setIsLoading(false)
+        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to detect device capabilities'
-        setError(errorMessage)
-        console.error('Device capability detection failed:', err)
-      } finally {
-        setIsLoading(false)
+        if (mounted) {
+          clearTimeout(timeoutId)
+          setError(errorMessage)
+          console.error('Device capability detection failed:', err)
+          setIsLoading(false)
+        }
       }
     }
 
     if (!deviceCapabilities) {
       detectCapabilities()
     } else {
+      clearTimeout(timeoutId)
       setIsLoading(false)
+    }
+
+    return () => {
+      mounted = false
+      clearTimeout(timeoutId)
     }
   }, [deviceCapabilities, setDeviceCapabilities])
 

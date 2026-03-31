@@ -42,7 +42,7 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<WebGLRenderingContext | null>(null)
   const shaderManagerRef = useRef<ShaderManager | null>(null)
-  const animationFrameRef = useRef<number>()
+  const animationFrameRef = useRef<number | undefined>(undefined)
   const startTimeRef = useRef<number>(Date.now())
 
   const [state, setState] = useState<RaymarchingState>({
