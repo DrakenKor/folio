@@ -3,6 +3,10 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { ShaderManager } from '../lib/shader-management/ShaderManager'
 import {
+  getCanvasPointerPosition,
+  syncCanvasToDisplaySize
+} from '../lib/canvas-layout'
+import {
   ShaderPreset,
   ShaderPlaygroundState
 } from '../types/shader'
@@ -26,6 +30,7 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
   const shaderManagerRef = useRef<ShaderManager | null>(null)
   const animationFrameRef = useRef<number | undefined>(undefined)
   const startTimeRef = useRef<number>(Date.now())
+  const canvasSizeRef = useRef({ width, height })
 
   const [state, setState] = useState<ShaderPlaygroundState>({
     currentPreset: 'basic',
@@ -116,10 +121,49 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
     }
   ], [basicVertexShader, width, height])
 
+  const updateCanvasSize = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const nextSize = syncCanvasToDisplaySize(canvas, glRef.current, {
+      width,
+      height
+    })
+    const nextResolution: [number, number] = [nextSize.width, nextSize.height]
+
+    canvasSizeRef.current = nextSize
+
+    setState((prev) => {
+      const currentResolution = prev.uniforms.resolution as
+        | [number, number]
+        | undefined
+
+      if (
+        currentResolution?.[0] === nextSize.width &&
+        currentResolution?.[1] === nextSize.height
+      ) {
+        return prev
+      }
+
+      return {
+        ...prev,
+        uniforms: {
+          ...prev.uniforms,
+          resolution: nextResolution
+        }
+      }
+    })
+  }, [width, height])
+
   // Initialize WebGL and shader manager
   const initializeGL = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return false
+
+    canvasSizeRef.current = syncCanvasToDisplaySize(canvas, null, {
+      width,
+      height
+    })
 
     const gl =
       canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
@@ -133,7 +177,12 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
     shaderManagerRef.current = new ShaderManager(webglContext)
 
     // Set up viewport
-    webglContext.viewport(0, 0, canvas.width, canvas.height)
+    webglContext.viewport(
+      0,
+      0,
+      canvasSizeRef.current.width,
+      canvasSizeRef.current.height
+    )
 
     // Create full-screen quad
     const positions = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1])
@@ -147,7 +196,7 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
     )
 
     return true
-  }, [])
+  }, [width, height])
 
   // Load shader preset
   const loadPreset = useCallback(
@@ -194,10 +243,14 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
     const currentTime = (Date.now() - startTimeRef.current) / 1000
 
     setState((prevState) => {
+      const { width: canvasWidth, height: canvasHeight } = canvasSizeRef.current
+      const resolution: [number, number] = [canvasWidth, canvasHeight]
+
       // Update uniforms
       const updatedUniforms = {
         ...prevState.uniforms,
-        time: prevState.isPlaying ? currentTime : prevState.uniforms.time || 0
+        time: prevState.isPlaying ? currentTime : prevState.uniforms.time || 0,
+        resolution
       }
 
       try {
@@ -244,7 +297,7 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
         return prevState
       }
     })
-  }, [])
+  }, [shaderPresets])
 
   // Animation loop
   useEffect(() => {
@@ -279,9 +332,12 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
       const canvas = canvasRef.current
       if (!canvas) return
 
-      const rect = canvas.getBoundingClientRect()
-      const x = event.clientX - rect.left
-      const y = rect.height - (event.clientY - rect.top) // Flip Y coordinate
+      const [x, y] = getCanvasPointerPosition(
+        canvas,
+        event.clientX,
+        event.clientY,
+        { flipY: true }
+      )
 
       setState((prev) => ({
         ...prev,
@@ -307,6 +363,34 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
     }
   }, [initializeGL, loadPreset])
 
+  useEffect(() => {
+    if (currentExperience !== 'shaders') return
+
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    updateCanvasSize()
+
+    const handleResize = () => {
+      updateCanvasSize()
+    }
+
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            updateCanvasSize()
+          })
+
+    resizeObserver?.observe(canvas)
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [currentExperience, updateCanvasSize])
+
   // Handle play/pause
   const togglePlayback = () => {
     setState((prev) => ({ ...prev, isPlaying: !prev.isPlaying }))
@@ -316,10 +400,10 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
     <div className={`shader-playground ${className}`}>
       {/* Experience selector */}
       <div className="mb-4">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setCurrentExperience('shaders')}
-            className={`px-4 py-2 rounded transition-colors ${
+            className={`w-full sm:w-auto px-4 py-2 rounded transition-colors ${
               currentExperience === 'shaders'
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -328,7 +412,7 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
           </button>
           <button
             onClick={() => setCurrentExperience('particles')}
-            className={`px-4 py-2 rounded transition-colors ${
+            className={`w-full sm:w-auto px-4 py-2 rounded transition-colors ${
               currentExperience === 'particles'
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -340,12 +424,15 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
 
       {currentExperience === 'shaders' ? (
         <>
-          <div className="relative">
+          <div
+            className="relative w-full overflow-hidden rounded border border-gray-600 bg-black"
+            style={{ aspectRatio: `${width} / ${height}` }}
+          >
             <canvas
               ref={canvasRef}
               width={width}
               height={height}
-              className="border border-gray-600 cursor-crosshair rounded"
+              className="block h-full w-full cursor-crosshair"
               onMouseMove={handleMouseMove}
             />
 
@@ -358,17 +445,17 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
 
           {state.showControls && (
             <div className="mt-4 space-y-4">
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-4">
                 <button
                   onClick={togglePlayback}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
                   {state.isPlaying ? 'Pause' : 'Play'}
                 </button>
 
                 <select
                   value={state.currentPreset}
                   onChange={(e) => loadPreset(e.target.value)}
-                  className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  className="w-full sm:w-auto px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {shaderPresets.map((preset) => (
                     <option key={preset.id} value={preset.id} className="bg-gray-800 text-white">
                       {preset.name}
@@ -383,7 +470,7 @@ export const ShaderPlayground: React.FC<ShaderPlaygroundProps> = ({
                       showControls: !prev.showControls
                     }))
                   }
-                  className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
+                  className="w-full sm:w-auto px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
                   {state.showControls ? 'Hide' : 'Show'} Controls
                 </button>
               </div>

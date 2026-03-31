@@ -1,6 +1,10 @@
 'use client'
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
+import {
+  getCanvasPointerPosition,
+  syncCanvasToDisplaySize
+} from '../lib/canvas-layout'
 import { ShaderManager } from '../lib/shader-management/ShaderManager'
 import { ShaderUniforms } from '../types/shader'
 
@@ -31,6 +35,7 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
   const mousePositionRef = useRef<[number, number]>([0, 0])
   const mouseVelocityRef = useRef<[number, number]>([0, 0])
   const lastMousePositionRef = useRef<[number, number]>([0, 0])
+  const canvasSizeRef = useRef({ width, height })
 
   const [isPlaying, setIsPlaying] = useState(true)
   const [showControls, setShowControls] = useState(true)
@@ -207,10 +212,25 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
     }
   `
 
+  const updateCanvasSize = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    canvasSizeRef.current = syncCanvasToDisplaySize(canvas, glRef.current, {
+      width,
+      height
+    })
+  }, [width, height])
+
   // Initialize WebGL and shader manager
   const initializeGL = useCallback(async () => {
     const canvas = canvasRef.current
     if (!canvas) return false
+
+    canvasSizeRef.current = syncCanvasToDisplaySize(canvas, null, {
+      width,
+      height
+    })
 
     const gl =
       canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
@@ -224,7 +244,12 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
     shaderManagerRef.current = new ShaderManager(webglContext)
 
     // Set up viewport
-    webglContext.viewport(0, 0, canvas.width, canvas.height)
+    webglContext.viewport(
+      0,
+      0,
+      canvasSizeRef.current.width,
+      canvasSizeRef.current.height
+    )
 
     // Create full-screen quad
     const positions = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1])
@@ -260,9 +285,12 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
       const canvas = canvasRef.current
       if (!canvas) return
 
-      const rect = canvas.getBoundingClientRect()
-      const x = event.clientX - rect.left
-      const y = rect.height - (event.clientY - rect.top) // Flip Y coordinate
+      const [x, y] = getCanvasPointerPosition(
+        canvas,
+        event.clientX,
+        event.clientY,
+        { flipY: true }
+      )
 
       const newPosition: [number, number] = [x, y]
       const lastPosition = lastMousePositionRef.current
@@ -301,7 +329,7 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
 
     const uniforms: ShaderUniforms = {
       time: isPlaying ? currentTime : 0,
-      resolution: [width, height],
+      resolution: [canvasSizeRef.current.width, canvasSizeRef.current.height],
       mouse: mousePositionRef.current,
       mouseVelocity: mouseVelocityRef.current,
       viscosity: controls.viscosity,
@@ -334,7 +362,7 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
       console.error('Render error:', err)
       setError(err instanceof Error ? err.message : 'Render failed')
     }
-  }, [isPlaying, width, height, controls])
+  }, [isPlaying, controls])
 
   // Animation loop
   useEffect(() => {
@@ -375,6 +403,32 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
     }
   }, [initializeGL])
 
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    updateCanvasSize()
+
+    const handleResize = () => {
+      updateCanvasSize()
+    }
+
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            updateCanvasSize()
+          })
+
+    resizeObserver?.observe(canvas)
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [updateCanvasSize])
+
   // Control handlers
   const handleControlChange = (key: keyof FluidControls, value: number) => {
     setControls((prev) => ({ ...prev, [key]: value }))
@@ -382,12 +436,15 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
 
   return (
     <div className={`fluid-simulation ${className}`}>
-      <div className="relative">
+      <div
+        className="relative w-full overflow-hidden rounded border border-gray-300 bg-black"
+        style={{ aspectRatio: `${width} / ${height}` }}
+      >
         <canvas
           ref={canvasRef}
           width={width}
           height={height}
-          className="border border-gray-300 cursor-crosshair"
+          className="block h-full w-full cursor-crosshair"
           onMouseMove={handleMouseMove}
         />
 
@@ -406,16 +463,16 @@ export const FluidSimulationShader: React.FC<FluidSimulationProps> = ({
 
       {showControls && (
         <div className="mt-4 space-y-4">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <button
               onClick={() => setIsPlaying(!isPlaying)}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+              className="w-full sm:w-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
               {isPlaying ? 'Pause' : 'Play'}
             </button>
 
             <button
               onClick={() => setShowControls(!showControls)}
-              className="px-3 py-2 border border-gray-300 rounded hover:bg-gray-50">
+              className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded hover:bg-gray-50">
               {showControls ? 'Hide' : 'Show'} Controls
             </button>
           </div>

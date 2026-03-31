@@ -1,6 +1,10 @@
 'use client'
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
+import {
+  getCanvasPointerPosition,
+  syncCanvasToDisplaySize
+} from '../lib/canvas-layout'
 import { ShaderManager } from '../lib/shader-management/ShaderManager'
 
 interface ParticleSystemProps {
@@ -48,6 +52,7 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
   const animationFrameRef = useRef<number | undefined>(undefined)
   const startTimeRef = useRef<number>(Date.now())
   const particleBufferRef = useRef<WebGLBuffer | null>(null)
+  const canvasSizeRef = useRef({ width, height })
 
   const [state, setState] = useState<ParticleSystemState>({
     currentPreset: 'basic',
@@ -267,10 +272,25 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
     }
   `
 
+  const updateCanvasSize = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    canvasSizeRef.current = syncCanvasToDisplaySize(canvas, glRef.current, {
+      width,
+      height
+    })
+  }, [width, height])
+
   // Initialize WebGL and create particle buffers
   const initializeGL = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return false
+
+    canvasSizeRef.current = syncCanvasToDisplaySize(canvas, null, {
+      width,
+      height
+    })
 
     const gl =
       canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
@@ -284,7 +304,12 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
     shaderManagerRef.current = new ShaderManager(webglContext)
 
     // Set up viewport
-    webglContext.viewport(0, 0, canvas.width, canvas.height)
+    webglContext.viewport(
+      0,
+      0,
+      canvasSizeRef.current.width,
+      canvasSizeRef.current.height
+    )
 
     // Enable blending for particle effects
     webglContext.enable(webglContext.BLEND)
@@ -294,7 +319,7 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
     )
 
     return true
-  }, [])
+  }, [width, height])
 
   // Create particle buffers
   const createParticleBuffers = useCallback((particleCount: number) => {
@@ -374,7 +399,7 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
       // Set uniforms
       const uniforms = {
         u_time: state.isPlaying ? currentTime : 0,
-        u_resolution: [width, height],
+        u_resolution: [canvasSizeRef.current.width, canvasSizeRef.current.height],
         u_mouse: state.mousePosition,
         u_mousePressed: state.mousePressed,
         u_speed: state.parameters.speed,
@@ -406,7 +431,7 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
       console.error('Render error:', err)
       setError(err instanceof Error ? err.message : 'Render failed')
     }
-  }, [state, width, height, particlePresets])
+  }, [state, particlePresets])
 
   // Animation loop
   useEffect(() => {
@@ -435,9 +460,11 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
       const canvas = canvasRef.current
       if (!canvas) return
 
-      const rect = canvas.getBoundingClientRect()
-      const x = event.clientX - rect.left
-      const y = event.clientY - rect.top
+      const [x, y] = getCanvasPointerPosition(
+        canvas,
+        event.clientX,
+        event.clientY
+      )
 
       setState((prev) => ({
         ...prev,
@@ -468,6 +495,32 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
     }
   }, [initializeGL, loadPreset])
 
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    updateCanvasSize()
+
+    const handleResize = () => {
+      updateCanvasSize()
+    }
+
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            updateCanvasSize()
+          })
+
+    resizeObserver?.observe(canvas)
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [updateCanvasSize])
+
   // Parameter update handlers
   const updateParameter = useCallback(
     (key: keyof ParticleParameters, value: number) => {
@@ -488,12 +541,15 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
 
   return (
     <div className={`gpu-particle-system ${className}`}>
-      <div className="relative">
+      <div
+        className="relative w-full overflow-hidden rounded border border-gray-600 bg-black"
+        style={{ aspectRatio: `${width} / ${height}` }}
+      >
         <canvas
           ref={canvasRef}
           width={width}
           height={height}
-          className="border border-gray-600 cursor-crosshair rounded bg-black"
+          className="block h-full w-full cursor-crosshair bg-black"
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
@@ -512,14 +568,14 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
           <div className="flex items-center gap-4 flex-wrap">
             <button
               onClick={togglePlayback}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+              className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
               {state.isPlaying ? 'Pause' : 'Play'}
             </button>
 
             <select
               value={state.currentPreset}
               onChange={(e) => loadPreset(e.target.value)}
-              className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              className="w-full sm:w-auto px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
               {particlePresets.map((preset) => (
                 <option
                   key={preset.id}
@@ -537,7 +593,7 @@ export const GPUParticleSystem: React.FC<ParticleSystemProps> = ({
                   showControls: !prev.showControls
                 }))
               }
-              className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
+              className="w-full sm:w-auto px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
               {state.showControls ? 'Hide' : 'Show'} Controls
             </button>
           </div>

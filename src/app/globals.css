@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 /* Custom slider styles */
 .slider::-webkit-slider-thumb {
   appearance: none;
@@ -21,6 +27,7 @@
 }
 
 body {
+  margin: 0;
   font-family: 'roboto', sans-serif;
   font-variant: small-caps;
   color: white;

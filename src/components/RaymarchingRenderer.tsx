@@ -1,6 +1,10 @@
 'use client'
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
+import {
+  getCanvasPointerPosition,
+  syncCanvasToDisplaySize
+} from '../lib/canvas-layout'
 import { ShaderManager } from '../lib/shader-management/ShaderManager'
 import { ShaderUniforms } from '../types/shader'
 
@@ -44,6 +48,7 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
   const shaderManagerRef = useRef<ShaderManager | null>(null)
   const animationFrameRef = useRef<number | undefined>(undefined)
   const startTimeRef = useRef<number>(Date.now())
+  const canvasSizeRef = useRef({ width, height })
 
   const [state, setState] = useState<RaymarchingState>({
     currentScene: 'basic-sphere',
@@ -432,10 +437,49 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
     }
   ], [width, height])
 
+  const updateCanvasSize = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const nextSize = syncCanvasToDisplaySize(canvas, glRef.current, {
+      width,
+      height
+    })
+    const nextResolution: [number, number] = [nextSize.width, nextSize.height]
+
+    canvasSizeRef.current = nextSize
+
+    setState((prev) => {
+      const currentResolution = prev.uniforms.resolution as
+        | [number, number]
+        | undefined
+
+      if (
+        currentResolution?.[0] === nextSize.width &&
+        currentResolution?.[1] === nextSize.height
+      ) {
+        return prev
+      }
+
+      return {
+        ...prev,
+        uniforms: {
+          ...prev.uniforms,
+          resolution: nextResolution
+        }
+      }
+    })
+  }, [width, height])
+
   // Initialize WebGL and shader manager
   const initializeGL = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return false
+
+    canvasSizeRef.current = syncCanvasToDisplaySize(canvas, null, {
+      width,
+      height
+    })
 
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
     if (!gl) {
@@ -448,7 +492,12 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
     shaderManagerRef.current = new ShaderManager(webglContext)
 
     // Set up viewport
-    webglContext.viewport(0, 0, canvas.width, canvas.height)
+    webglContext.viewport(
+      0,
+      0,
+      canvasSizeRef.current.width,
+      canvasSizeRef.current.height
+    )
 
     // Create full-screen quad
     const positions = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1])
@@ -457,7 +506,7 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
     webglContext.bufferData(webglContext.ARRAY_BUFFER, positions, webglContext.STATIC_DRAW)
 
     return true
-  }, [])
+  }, [width, height])
 
   // Load scene preset
   const loadScene = useCallback((sceneId: string) => {
@@ -496,9 +545,12 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const rect = canvas.getBoundingClientRect()
-    const x = event.clientX - rect.left
-    const y = rect.height - (event.clientY - rect.top)
+    const [x, y] = getCanvasPointerPosition(
+      canvas,
+      event.clientX,
+      event.clientY,
+      { flipY: true }
+    )
 
     setState(prev => {
       const newState = {
@@ -592,9 +644,15 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
     const currentTime = (Date.now() - startTimeRef.current) / 1000
 
     setState(prevState => {
+      const resolution: [number, number] = [
+        canvasSizeRef.current.width,
+        canvasSizeRef.current.height
+      ]
+
       const updatedUniforms = {
         ...prevState.uniforms,
-        time: prevState.isPlaying ? currentTime : prevState.uniforms.time || 0
+        time: prevState.isPlaying ? currentTime : prevState.uniforms.time || 0,
+        resolution
       }
 
       try {
@@ -655,6 +713,32 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
     }
   }, [initializeGL, loadScene])
 
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    updateCanvasSize()
+
+    const handleResize = () => {
+      updateCanvasSize()
+    }
+
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            updateCanvasSize()
+          })
+
+    resizeObserver?.observe(canvas)
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [updateCanvasSize])
+
   // Reset camera for current scene
   const resetCamera = useCallback(() => {
     const scene = scenePresets.find(s => s.id === state.currentScene)
@@ -680,12 +764,15 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
 
   return (
     <div className={`raymarching-renderer ${className}`}>
-      <div className="relative">
+      <div
+        className="relative w-full overflow-hidden rounded border border-gray-600 bg-black"
+        style={{ aspectRatio: `${width} / ${height}` }}
+      >
         <canvas
           ref={canvasRef}
           width={width}
           height={height}
-          className="border border-gray-600 cursor-grab active:cursor-grabbing rounded"
+          className="block h-full w-full cursor-grab active:cursor-grabbing"
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
           onMouseMove={handleMouseMove}
@@ -698,7 +785,7 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
           </div>
         )}
 
-        <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-3 py-1 rounded text-sm">
+        <div className="absolute left-2 right-2 top-2 bg-black bg-opacity-50 px-3 py-1 text-center text-xs text-white rounded sm:left-auto sm:right-2 sm:text-left sm:text-sm">
           Drag to rotate • Scroll to zoom
         </div>
       </div>
@@ -708,14 +795,14 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
           <div className="flex items-center gap-4 flex-wrap">
             <button
               onClick={() => setState(prev => ({ ...prev, isPlaying: !prev.isPlaying }))}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+              className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
               {state.isPlaying ? 'Pause' : 'Play'}
             </button>
 
             <select
               value={state.currentScene}
               onChange={(e) => loadScene(e.target.value)}
-              className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              className="w-full sm:w-auto px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
               {scenePresets.map(scene => (
                 <option key={scene.id} value={scene.id} className="bg-gray-800 text-white">
                   {scene.name}
@@ -725,13 +812,13 @@ export const RaymarchingRenderer: React.FC<RaymarchingRendererProps> = ({
 
             <button
               onClick={resetCamera}
-              className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
+              className="w-full sm:w-auto px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
               Reset Camera
             </button>
 
             <button
               onClick={() => setState(prev => ({ ...prev, showControls: !prev.showControls }))}
-              className="px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
+              className="w-full sm:w-auto px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition-colors">
               Hide Controls
             </button>
           </div>

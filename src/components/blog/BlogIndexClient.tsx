@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import {
   formatBlogMonthName,
   getBlogMonthNumber,
@@ -21,10 +21,12 @@ function normalizeSearchValue(value: string) {
 }
 
 export function BlogIndexClient({ posts, tags }: BlogIndexClientProps) {
+  const mobileFilterPanelId = useId()
   const [searchValue, setSearchValue] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState('all')
   const [selectedMonth, setSelectedMonth] = useState('all')
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
 
   const years = [...new Set(posts.map((post) => getBlogYearValue(post.date)))]
   const monthSourcePosts =
@@ -65,75 +67,108 @@ export function BlogIndexClient({ posts, tags }: BlogIndexClientProps) {
 
   return (
     <div className="blog-index-stack">
-      <section className="blog-filter-panel">
-        <div className="blog-filter-grid">
-          <label className="blog-filter-field">
-            <span>Search</span>
-            <input
-              type="search"
-              value={searchValue}
-              onChange={(event) => setSearchValue(event.target.value)}
-              placeholder="Search titles"
-              className="blog-filter-input"
+      <div className="blog-filter-stack">
+        <div className="blog-filter-toolbar">
+          <button
+            type="button"
+            className={
+              isMobileFiltersOpen
+                ? 'blog-filter-toggle is-active'
+                : 'blog-filter-toggle'
+            }
+            aria-expanded={isMobileFiltersOpen}
+            aria-controls={mobileFilterPanelId}
+            onClick={() => setIsMobileFiltersOpen((currentValue) => !currentValue)}>
+            <span className="blog-filter-toggle-copy">
+              <span className="blog-filter-toggle-icon" aria-hidden="true">
+                <span className="blog-filter-toggle-line" />
+                <span className="blog-filter-toggle-line" />
+                <span className="blog-filter-toggle-line" />
+              </span>
+              <span>{isMobileFiltersOpen ? 'Hide filters' : 'Search & filters'}</span>
+            </span>
+            <span className="blog-filter-toggle-status">
+              {isMobileFiltersOpen ? 'Close' : 'Open'}
+            </span>
+          </button>
+
+          <div className="blog-filter-summary">
+            <p>
+              Showing {filteredPosts.length} of {posts.length} posts
+            </p>
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchValue('')
+                  setSelectedTags([])
+                  setSelectedYear('all')
+                  setSelectedMonth('all')
+                }}
+                className="blog-reset-button">
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <section
+          id={mobileFilterPanelId}
+          className={
+            isMobileFiltersOpen
+              ? 'blog-filter-panel is-mobile-open'
+              : 'blog-filter-panel'
+          }>
+          <div className="blog-filter-grid">
+            <label className="blog-filter-field">
+              <span>Search</span>
+              <input
+                type="search"
+                value={searchValue}
+                onChange={(event) => setSearchValue(event.target.value)}
+                placeholder="Search titles"
+                className="blog-filter-input"
+              />
+            </label>
+
+            <TagMultiSelect
+              options={tags}
+              value={selectedTags}
+              onChange={setSelectedTags}
             />
-          </label>
 
-          <TagMultiSelect
-            options={tags}
-            value={selectedTags}
-            onChange={setSelectedTags}
-          />
+            <label className="blog-filter-field">
+              <span>Year</span>
+              <select
+                value={selectedYear}
+                onChange={(event) => setSelectedYear(event.target.value)}
+                className="blog-filter-select">
+                <option value="all">All years</option>
+                {years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="blog-filter-field">
-            <span>Year</span>
-            <select
-              value={selectedYear}
-              onChange={(event) => setSelectedYear(event.target.value)}
-              className="blog-filter-select">
-              <option value="all">All years</option>
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="blog-filter-field">
-            <span>Month</span>
-            <select
-              value={selectedMonth}
-              onChange={(event) => setSelectedMonth(event.target.value)}
-              className="blog-filter-select">
-              <option value="all">All months</option>
-              {months.map((month) => (
-                <option key={month} value={month}>
-                  {formatBlogMonthName(month)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="blog-filter-summary">
-          <p>
-            Showing {filteredPosts.length} of {posts.length} posts
-          </p>
-          {hasActiveFilters ? (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchValue('')
-                setSelectedTags([])
-                setSelectedYear('all')
-                setSelectedMonth('all')
-              }}
-              className="blog-reset-button">
-              Clear filters
-            </button>
-          ) : null}
-        </div>
-      </section>
+            <label className="blog-filter-field">
+              <span>Month</span>
+              <select
+                value={selectedMonth}
+                onChange={(event) => setSelectedMonth(event.target.value)}
+                className="blog-filter-select">
+                <option value="all">All months</option>
+                {months.map((month) => (
+                  <option key={month} value={month}>
+                    {formatBlogMonthName(month)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+      </div>
 
       <PostList
         posts={filteredPosts}
