@@ -1,0 +1,40 @@
+---
+title: "Notes From Tuning a Shader Playground"
+description: "A small rendering checklist for keeping GPU demos responsive without flattening the visual style."
+date: "2026-03-26"
+tags: ["Shaders", "Graphics", "Performance", "Nextjs"]
+---
+
+The shader route in this portfolio is intentionally visual, but the runtime still has to stay disciplined. The easiest wins came from reducing work before a frame starts: simplify asset loading, keep uniforms predictable, and avoid layout churn around the canvas.
+
+![Waveform render study](/blog/shader-pipeline/wave.svg)
+
+## Use the UI to frame the demo
+
+The page surrounding a GPU demo should feel restrained. Strong content hierarchy and subtle hover states make the canvas feel deliberate instead of noisy.
+
+<Callout type="warning" title="Performance budget">
+  Fancy rendering does not excuse sloppy orchestration. If the route hydrates too much UI or pushes unnecessary state through React, the shader is not the only thing paying for it.
+</Callout>
+
+## Keep the control path obvious
+
+One useful pattern is to separate the authoring surface from the runtime surface:
+
+### Touch only the uniforms that actually changed
+
+```ts
+const nextFrame = {
+  resolution: [width, height],
+  time: elapsedSeconds,
+  mouse: [pointerX, pointerY]
+}
+
+shaderMaterial.uniforms.uTime.value = nextFrame.time
+```
+
+That makes it easier to reason about what updates every frame and what should stay static.
+
+<Demo name="shader-playground" />
+
+You can compare this write-up with the live [`/shader-demo`](/shader-demo) route to see how much of the perceived polish comes from pacing and layout instead of raw shader complexity.

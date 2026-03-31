@@ -1,0 +1,9 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="720" fill="#040404"/>
+  <path d="M0 417C67 404 133 278 200 278C267 278 333 513 400 513C467 513 533 216 600 216C667 216 733 480 800 480C867 480 933 345 1000 345C1067 345 1133 429 1200 429" stroke="#F5F5F5" stroke-width="8"/>
+  <path d="M0 467C67 467 133 391 200 391C267 391 333 558 400 558C467 558 533 263 600 263C667 263 733 533 800 533C867 533 933 381 1000 381C1067 381 1133 466 1200 466" stroke="#8D8D8D" stroke-width="4" stroke-dasharray="18 14"/>
+  <rect x="92" y="96" width="310" height="148" rx="18" fill="#0F0F0F" stroke="#6D6D6D"/>
+  <text x="122" y="150" fill="#F5F5F5" font-family="monospace" font-size="32">Uniform pacing</text>
+  <text x="122" y="196" fill="#A3A3A3" font-family="monospace" font-size="24">Less UI churn, steadier frames</text>
+  <text x="92" y="634" fill="#D4D4D4" font-family="monospace" font-size="38">Runtime polish comes from orchestration, not only effects.</text>
+</svg>

@@ -7,6 +7,7 @@ import { PageTransitionLoader } from '@/components/PageTransitionLoader'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://manavda.net'),
   title: 'Manav Dhindsa - Interactive Portfolio',
   description:
     'Interactive portfolio showcasing 8+ years of software engineering experience through cutting-edge 3D visualizations, mathematical art, and WebAssembly demonstrations.',
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
     title: 'Manav Dhindsa - Interactive Portfolio',
     description:
       'Interactive portfolio showcasing advanced web development capabilities',
+    url: 'https://manavda.net',
     type: 'website',
     locale: 'en_US'
   }

@@ -1,0 +1,39 @@
+---
+title: "Shipping WebAssembly in a Static Export"
+description: "How I kept a WASM-heavy demo compatible with Next.js static export and GitHub Pages."
+date: "2026-03-15"
+tags: ["WebAssembly", "Next.js", "GitHub Pages", "Performance"]
+---
+
+The constraint was simple: keep the portfolio deployable with `output: 'export'`, but still ship binary modules and performance-oriented demos. That pushed the implementation toward **build-time discovery**, plain public assets, and server-only filesystem access.
+
+![Static export pipeline diagram](/blog/export-friendly-wasm/pipeline.svg)
+
+## Keep the route surface deterministic
+
+Static export only works cleanly when every route exists at build time. That means post discovery, tag discovery, and metadata generation all need to happen from the filesystem before the app is exported.
+
+<Callout type="info" title="Why this matters">
+  Static export gets fragile as soon as route generation depends on runtime data. Reading MDX during the build keeps `/blog`, `/blog/[slug]`, and `/blog/tag/[tag]` deterministic.
+</Callout>
+
+## Normalize dates and tags early
+
+Dates live in frontmatter as `YYYY-MM-DD` values and are treated as date-only fields. Normalizing them in one place avoids timezone drift between local builds and CI. Tag labels stay human-readable, while URLs use slugified values such as `Next.js` becoming `next-js`.
+
+### Keep presentation separate from routing
+
+```ts
+const normalizedDate = new Date(Date.UTC(year, month - 1, day))
+
+const tagSlug = tag
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+```
+
+## Prefer public assets over post-local imports
+
+For the first pass, blog media lives under `/public/blog/...` rather than being imported inside MDX files. That keeps the content format small and avoids another layer of MDX bundling rules.
+
+If you want the framework details, the [Next.js static export docs](https://nextjs.org/docs/app/building-your-application/deploying/static-exports) are the right baseline.

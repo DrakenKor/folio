@@ -165,7 +165,13 @@ export default function Home() {
         <a href="https://xkcd.com" target="_blank">
           <XkcdIcon className="w-8 h-8" />
         </a>
+        <Link
+          href="/blog"
+          className="inline-flex h-8 items-center opacity-40 hover:opacity-100 fade duration-1000 text-center leading-none hover:underline">
+          <span className="underline">Blog</span>
+        </Link>
       </div>
+      
       <div className="center mt-16 flex flex-col">
         <p className="text-lg mb-6">Interactive Demos</p>
         <div className="center flex flex-col space-y-2 max-w-md">
@@ -223,7 +229,6 @@ export default function Home() {
               Hash algorithms & encryption
             </span>
           </Link>
-          
           <Link
             href="/wasm-demo"
             className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
