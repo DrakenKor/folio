@@ -1,0 +1,181 @@
+---
+title: "Building a Small JSX and Markdown Blog"
+description: "How I added a static MDX blog to this repo without giving up predictable builds or lightweight writing."
+date: "2026-03-31"
+tags: ["MDX", "Next.js", "Blogging", "Security"]
+---
+
+I was thinking of a blog system dynamic enough to accommodate enriched html with embeds, as well as a search function, working within the constraints of github pages (Static hosting). I settled on markdown-first '.mdx' format blog posts 
+where the routes are generated at build time, with interpolated JSX.
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 420"
+      role="img"
+      aria-labelledby="mdx-blog-pattern-title mdx-blog-pattern-desc"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <title id="mdx-blog-pattern-title">Doodle</title>
+      <desc id="mdx-blog-pattern-desc">
+        Doodle.jpg
+      </desc>
+      <defs>
+        <linearGradient id="mdx-blog-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#07111a" />
+          <stop offset="55%" stopColor="#0a1724" />
+          <stop offset="100%" stopColor="#04070d" />
+        </linearGradient>
+        <radialGradient id="mdx-blog-halo" cx="50%" cy="45%" r="62%">
+          <stop offset="0%" stopColor="#67e8f9" stopOpacity="0.16" />
+          <stop offset="55%" stopColor="#7dd3fc" stopOpacity="0.05" />
+          <stop offset="100%" stopColor="#7dd3fc" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="mdx-blog-trace" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#67e8f9" stopOpacity="0.1" />
+          <stop offset="50%" stopColor="#f8fafc" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#93c5fd" stopOpacity="0.18" />
+        </linearGradient>
+        <pattern id="mdx-blog-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#dbeafe" strokeOpacity="0.05" />
+        </pattern>
+        <pattern id="mdx-blog-grid-major" width="96" height="96" patternUnits="userSpaceOnUse">
+          <rect width="96" height="96" fill="url(#mdx-blog-grid-minor)" />
+          <path d="M 96 0 L 0 0 0 96" fill="none" stroke="#dbeafe" strokeOpacity="0.12" />
+        </pattern>
+        <filter id="mdx-blog-soft-blur">
+          <feGaussianBlur stdDeviation="7" />
+        </filter>
+      </defs>
+
+      <rect width="720" height="420" rx="28" fill="url(#mdx-blog-bg)" />
+      <rect width="720" height="420" rx="28" fill="url(#mdx-blog-grid-major)" />
+      <rect width="720" height="420" rx="28" fill="url(#mdx-blog-halo)" />
+
+      <g stroke="#dbeafe" strokeOpacity="0.12">
+        <path d="M 72 210 H 648" />
+        <path d="M 360 56 V 364" />
+      </g>
+
+      <g transform="translate(360 210)">
+        <circle r="154" fill="none" stroke="#dbeafe" strokeOpacity="0.08" />
+        <circle r="118" fill="none" stroke="#dbeafe" strokeOpacity="0.14" strokeDasharray="2 12">
+          <animate attributeName="stroke-dashoffset" values="0;56" dur="16s" repeatCount="indefinite" />
+        </circle>
+        <circle r="84" fill="none" stroke="#7dd3fc" strokeOpacity="0.26" strokeWidth="1.3">
+          <animate attributeName="r" values="82;90;82" dur="9s" repeatCount="indefinite" />
+          <animate attributeName="stroke-opacity" values="0.18;0.34;0.18" dur="9s" repeatCount="indefinite" />
+        </circle>
+
+        <g>
+          <animateTransform
+            attributeName="transform"
+            type="rotate"
+            values="0;360"
+            dur="17s"
+            repeatCount="indefinite"
+          />
+          <circle cx="154" cy="0" r="4.5" fill="#f8fafc">
+            <animate attributeName="opacity" values="0.35;1;0.35" dur="17s" repeatCount="indefinite" />
+          </circle>
+        </g>
+
+        <g>
+          <animateTransform
+            attributeName="transform"
+            type="rotate"
+            values="360;0"
+            dur="13s"
+            repeatCount="indefinite"
+          />
+          <circle cx="0" cy="-118" r="3.5" fill="#67e8f9">
+            <animate attributeName="opacity" values="0.24;0.92;0.24" dur="13s" repeatCount="indefinite" />
+          </circle>
+        </g>
+
+        <g>
+          <animateTransform
+            attributeName="transform"
+            type="rotate"
+            values="0;360"
+            dur="8s"
+            repeatCount="indefinite"
+          />
+          <circle cx="-84" cy="0" r="3" fill="#e0f2fe" />
+        </g>
+      </g>
+
+      <g fill="none">
+        <path
+          d="M 86 236 C 146 122, 220 118, 280 210 S 404 302, 470 186 S 594 100, 646 194"
+          stroke="#67e8f9"
+          strokeOpacity="0.28"
+          strokeWidth="6"
+          filter="url(#mdx-blog-soft-blur)"
+        />
+        <path
+          d="M 86 236 C 146 122, 220 118, 280 210 S 404 302, 470 186 S 594 100, 646 194"
+          stroke="url(#mdx-blog-trace)"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeDasharray="8 10">
+          <animate attributeName="stroke-dashoffset" values="0;72" dur="7s" repeatCount="indefinite" />
+        </path>
+
+        <path
+          d="M 86 188 C 148 292, 226 292, 284 210 S 404 128, 470 236 S 592 322, 646 224"
+          stroke="#f8fafc"
+          strokeOpacity="0.22"
+          strokeWidth="5"
+          filter="url(#mdx-blog-soft-blur)"
+        />
+        <path
+          d="M 86 188 C 148 292, 226 292, 284 210 S 404 128, 470 236 S 592 322, 646 224"
+          stroke="url(#mdx-blog-trace)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeDasharray="5 12">
+          <animate attributeName="stroke-dashoffset" values="48;0" dur="8s" repeatCount="indefinite" />
+        </path>
+      </g>
+
+      <g>
+        <circle cx="192" cy="128" r="28" fill="none" stroke="#dbeafe" strokeOpacity="0.16" />
+        <circle cx="530" cy="292" r="40" fill="none" stroke="#dbeafe" strokeOpacity="0.12" />
+        <circle cx="192" cy="128" r="3.5" fill="#f8fafc">
+          <animate attributeName="r" values="3.5;6;3.5" dur="6s" repeatCount="indefinite" />
+        </circle>
+        <circle cx="530" cy="292" r="4" fill="#67e8f9">
+          <animate attributeName="opacity" values="0.35;1;0.35" dur="5s" repeatCount="indefinite" />
+        </circle>
+      </g>
+    </svg>
+    <figcaption
+      style={{
+        marginTop: '0.75rem',
+        color: '#a3a3a3',
+        fontSize: '0.92rem',
+        lineHeight: 1.6
+      }}>
+      I wanted the writing surface to stay calm, with JSX only carrying the visual edges.
+    </figcaption>
+  </figure>
+</div>
+
+## Keep the route surface static
+
+The blog works because the dynamic parts are decided before deployment. Posts are discovered from `src/content/blog`, frontmatter is validated once, and the blog routes are generated ahead of time so the site still fits `output: 'export'`.
+
+```ts
+const post = getPostBySlug(slug)
+
+<MDXRemote source={post.content} components={mdxComponents} />
+```
+
+## Tight use of JSX
+
+I used MDX for a small, curated component surface instead of turning posts into unrestricted React files. That gave me headings, links, callouts, demos, and room for visual pieces like the doodle SVG, while the writing still feels like markdown instead of application code.
+
+<Callout type="warning" title="March 31, 2026">
+  I finished this at the end of Q1 while the axios supply-chain compromise was unfolding. Public reporting on March 30 and March 31, 2026 identified malicious npm releases `axios@1.14.1` and `axios@0.30.4`. This repo does not install axios, but the incident still made me feel like the defaults in this repo feel correct: exact versions, a lockfile, `min-release-age`, and `ignore-scripts`.
+</Callout>
+
+That was the shape I wanted: markdown for speed, JSX for the rare expressive parts, and a blog system small enough that I can still trust what it is doing.

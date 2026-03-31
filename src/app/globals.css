@@ -49,20 +49,9 @@ body {
 
 svg {
   opacity: 0.4;
+  transition: opacity 180ms ease;
 }
 
 svg:hover {
-  animation: fade 1s;
-}
-
-@keyframes fade {
-  0% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.4;
-  }
+  opacity: 1;
 }
