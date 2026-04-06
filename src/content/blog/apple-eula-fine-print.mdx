@@ -1,0 +1,193 @@
+---
+title: "The Fine Print in Apple's EULA You Probably Didn't Read"
+description: "I read through Apple's end-user license agreement and found a $250 liability cap, silent system updates you can't disable, and an AI disclaimer that shifts all responsibility to you."
+date: "2026-04-07"
+tags: ["Apple", "Privacy", "Legal", "iOS"]
+---
+
+I sat down and actually read Apple's software license agreement — the one you click "Agree" on without reading. There are a few clauses in there worth knowing about, especially if you care about what you're consenting to when you use your own device.
+
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 420"
+      role="img"
+      aria-labelledby="eula-svg-title eula-svg-desc"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <title id="eula-svg-title">EULA fine print visualization</title>
+      <desc id="eula-svg-desc">
+        Animated representation of hidden clauses in a license agreement
+      </desc>
+      <defs>
+        <linearGradient id="eula-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#0a0a0f" />
+          <stop offset="50%" stopColor="#10111a" />
+          <stop offset="100%" stopColor="#07080e" />
+        </linearGradient>
+        <radialGradient id="eula-glow" cx="50%" cy="40%" r="55%">
+          <stop offset="0%" stopColor="#f87171" stopOpacity="0.12" />
+          <stop offset="60%" stopColor="#fb923c" stopOpacity="0.04" />
+          <stop offset="100%" stopColor="#000" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="eula-scan" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#f87171" stopOpacity="0" />
+          <stop offset="45%" stopColor="#f87171" stopOpacity="0.5" />
+          <stop offset="55%" stopColor="#f87171" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="#f87171" stopOpacity="0" />
+        </linearGradient>
+        <filter id="eula-blur">
+          <feGaussianBlur stdDeviation="6" />
+        </filter>
+        <clipPath id="eula-doc-clip">
+          <rect x="210" y="40" width="300" height="340" rx="8" />
+        </clipPath>
+      </defs>
+
+      <rect width="720" height="420" rx="28" fill="url(#eula-bg)" />
+      <rect width="720" height="420" rx="28" fill="url(#eula-glow)" />
+
+      {/* document outline */}
+      <rect x="210" y="40" width="300" height="340" rx="8" fill="none" stroke="#e2e8f0" strokeOpacity="0.1" strokeWidth="1.2" />
+
+      {/* fake text lines */}
+      <g clipPath="url(#eula-doc-clip)" opacity="0.22" stroke="none" fill="#cbd5e1">
+        <rect x="234" y="68"  width="180" height="3" rx="1.5" />
+        <rect x="234" y="82"  width="252" height="3" rx="1.5" />
+        <rect x="234" y="96"  width="210" height="3" rx="1.5" />
+        <rect x="234" y="110" width="240" height="3" rx="1.5" />
+        <rect x="234" y="124" width="196" height="3" rx="1.5" />
+        <rect x="234" y="146" width="252" height="3" rx="1.5" />
+        <rect x="234" y="160" width="220" height="3" rx="1.5" />
+        <rect x="234" y="174" width="248" height="3" rx="1.5" />
+        <rect x="234" y="188" width="190" height="3" rx="1.5" />
+        <rect x="234" y="210" width="244" height="3" rx="1.5" />
+        <rect x="234" y="224" width="200" height="3" rx="1.5" />
+        <rect x="234" y="238" width="256" height="3" rx="1.5" />
+        <rect x="234" y="252" width="212" height="3" rx="1.5" />
+        <rect x="234" y="274" width="236" height="3" rx="1.5" />
+        <rect x="234" y="288" width="252" height="3" rx="1.5" />
+        <rect x="234" y="302" width="180" height="3" rx="1.5" />
+        <rect x="234" y="316" width="248" height="3" rx="1.5" />
+        <rect x="234" y="330" width="220" height="3" rx="1.5" />
+        <rect x="234" y="344" width="196" height="3" rx="1.5" />
+      </g>
+
+      {/* highlighted "dangerous" clauses — pulsing */}
+      <g clipPath="url(#eula-doc-clip)">
+        <rect x="232" y="143" width="256" height="8" rx="2" fill="#f87171" opacity="0.15">
+          <animate attributeName="opacity" values="0.08;0.22;0.08" dur="4s" repeatCount="indefinite" />
+        </rect>
+        <rect x="232" y="207" width="256" height="8" rx="2" fill="#fb923c" opacity="0.15">
+          <animate attributeName="opacity" values="0.08;0.22;0.08" dur="5s" repeatCount="indefinite" />
+        </rect>
+        <rect x="232" y="271" width="256" height="8" rx="2" fill="#f87171" opacity="0.15">
+          <animate attributeName="opacity" values="0.08;0.22;0.08" dur="3.5s" repeatCount="indefinite" />
+        </rect>
+      </g>
+
+      {/* scanning line */}
+      <g clipPath="url(#eula-doc-clip)">
+        <rect x="210" y="0" width="300" height="60" fill="url(#eula-scan)">
+          <animateTransform
+            attributeName="transform"
+            type="translate"
+            values="0 40; 0 340; 0 40"
+            dur="6s"
+            repeatCount="indefinite"
+          />
+        </rect>
+      </g>
+
+      {/* magnifying glass */}
+      <g>
+        <animateTransform
+          attributeName="transform"
+          type="translate"
+          values="0 0; 12 -8; 0 0; -8 6; 0 0"
+          dur="8s"
+          repeatCount="indefinite"
+        />
+        <circle cx="568" cy="148" r="42" fill="none" stroke="#e2e8f0" strokeOpacity="0.18" strokeWidth="2.5" />
+        <circle cx="568" cy="148" r="42" fill="none" stroke="#f87171" strokeOpacity="0.12" strokeWidth="1.5">
+          <animate attributeName="stroke-opacity" values="0.06;0.2;0.06" dur="3s" repeatCount="indefinite" />
+        </circle>
+        <line x1="598" y1="178" x2="626" y2="210" stroke="#e2e8f0" strokeOpacity="0.18" strokeWidth="3" strokeLinecap="round" />
+        {/* magnified text inside lens */}
+        <g opacity="0.45">
+          <rect x="538" y="136" width="60" height="4" rx="2" fill="#f87171">
+            <animate attributeName="opacity" values="0.3;0.7;0.3" dur="3s" repeatCount="indefinite" />
+          </rect>
+          <rect x="538" y="148" width="52" height="4" rx="2" fill="#fca5a5" />
+          <rect x="538" y="160" width="56" height="4" rx="2" fill="#fca5a5" />
+        </g>
+      </g>
+
+      {/* "$250" label floating */}
+      <text x="114" y="180" fontFamily="monospace" fontSize="28" fontWeight="bold" fill="#f87171" opacity="0.35">
+        $250
+        <animate attributeName="opacity" values="0.2;0.5;0.2" dur="5s" repeatCount="indefinite" />
+      </text>
+
+      {/* lock icon bottom-left */}
+      <g transform="translate(108 290)" opacity="0.2">
+        <rect x="-12" y="0" width="24" height="18" rx="3" fill="none" stroke="#fb923c" strokeWidth="1.5" />
+        <path d="M -7 0 V -8 a 7 7 0 0 1 14 0 V 0" fill="none" stroke="#fb923c" strokeWidth="1.5" />
+        <circle cx="0" cy="9" r="2.5" fill="#fb923c">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.5s" repeatCount="indefinite" />
+        </circle>
+      </g>
+    </svg>
+    <figcaption
+      style={{
+        marginTop: '0.75rem',
+        color: '#a3a3a3',
+        fontSize: '0.92rem',
+        lineHeight: 1.6
+      }}>
+      Most of what you agreed to lives in the clauses nobody highlights.
+    </figcaption>
+  </figure>
+</div>
+# Key points about iOS 26.4
+
+Read through the terms of service and found a few things that stand out/
+
+## Silent system updates you can't fully disable
+
+**Section 1c.** Even if you turn off automatic OS updates, Apple reserves the right to silently push "system files" — fonts, language models, voice assets, peripheral firmware — whenever you use certain features. There is no full opt-out. You're told it happens, but the toggle doesn't cover everything.
+
+## Broad data consent baked into feature use
+
+**Section 4.** Using Location Services, Siri, or Dictation implicitly consents to your data being sent to Apple. The consent is somewhat buried — it's framed as "details will be provided when you turn on these features" rather than surfaced upfront. The act of enabling the feature *is* the consent.
+
+## $250 liability cap
+
+**Section 8.** Apple's total liability to you for all damages is capped at $250 USD, regardless of what goes wrong. For a device that costs $1,000+, this is notably lopsided. A bricked phone, lost data, a bad update — the most you can recover is $250.
+
+## Jailbreaking voids Apple Pay
+
+**Apple Pay Section 6.** Modifying your own hardware can get you permanently cut off from Apple Pay and Wallet. This is fairly aggressive given that device modification is legal in many jurisdictions. Your phone, their payment rails.
+
+## HIPAA disclaimer
+
+**Section 10b.** Apple explicitly says: don't use Apple devices or services to handle protected health information. That's a significant carve-out given how many health apps live on iOS and how heavily Apple markets health features.
+
+## California law governs everything
+
+**Section 11.** Unless you're in the UK, California law applies to disputes globally. This can limit your local consumer protections depending on where you live. Japan's jurisdictional supplement does carve out intentional misconduct liability, but most users are governed by Cupertino's home turf.
+
+## The AI outputs disclaimer
+
+**Section 5h.** There's a clause burying responsibility for AI-generated content accuracy onto you. You're told to evaluate AI outputs yourself before relying on them. Broad and self-serving given that Apple Intelligence is now woven into the OS.
+
+---
+
+None of these are unusual for a major tech EULA, but the **$250 liability cap** and the **silent system file update carve-out** are the two most worth knowing about. The AI disclaimer will probably age into relevance as Apple Intelligence takes on more responsibility in the interface.
+
+## Meanwhile, in iOS land
+
+Apple is currently rolling out updates on two fronts. [iOS 26.4.1](https://www.macrumors.com/2026/04/06/ios-26-4-1-coming-soon/) is expected any day now as a minor bug and security fix. More notably, [iOS 26.5 beta 1](https://www.macrumors.com/2026/03/30/apple-seeds-first-ios-26-5-beta/) landed last week with groundwork for end-to-end encrypted RCS in Messages, ads in Apple Maps, and — in the EU — extended iPhone features like notifications and Live Activities for third-party smartwatches and headphones under the Digital Markets Act. For users still on iOS 18, Apple also shipped [iOS 18.7.7](https://tidbits.com/2026/04/01/apple-offers-ios-18-7-7-security-update-as-alternative-to-ios-26-4-upgrade/) as a security-only alternative patching the DarkSword web vulnerability.
+
+<Callout type="info" title="April 7, 2026">
+  I'm not a lawyer and this isn't legal advice. These are observations from reading the publicly available Apple SLA. If any of these clauses affect you materially, consult someone who passed the bar.
+</Callout>
