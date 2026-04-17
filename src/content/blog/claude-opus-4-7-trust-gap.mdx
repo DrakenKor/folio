@@ -1,0 +1,26 @@
+---
+title: "Claude Opus 4.7 Looks Strong(er). Consistency and accuracy remain to be seen."
+description: "Anthropic is pitching better long-running coding and vision. Hacker News readership comment about consistency, token burn, and whether Claude still feels reliable from one week to the next."
+date: "2026-04-17"
+tags: ["AI", "Anthropic", "LLMs", "Coding"]
+---
+
+Anthropic's [Claude Opus 4.7 announcement](https://www.anthropic.com/news/claude-opus-4-7) is a straightforward model-release pitch: better performance on hard coding tasks, better self-checking, higher-resolution vision, and the same API price as Opus 4.6 (Same price is particularly attractive as I find myself capping out really quickly on the Pro plan). The practical caveat is that Anthropic also says the updated tokenizer can turn the same input into roughly `1.0-1.35x` more tokens, and higher effort settings can increase output token usage.
+
+The [Hacker News thread](https://news.ycombinator.com/item?id=47793411) lands a bit differently. A lot of opinions were centered around ongoing reliability - "can Anthropic make Claude feel stable enough to trust again?". I remember when Opus 4.6 was rolled out and initially it felt great, but performance is so unpredictable one week to the next and Anthropic's backend is completely opaque to us. I suspect there are complex rules that govern how requests are handled, possibly even account level flags - people report very different experiences in quality, usage limits, and reliability on the same plans.
+
+## What Anthropic is selling
+
+Opus 4.7 is being framed as an agentic coding upgrade first. The emphasis is on long-running work, better instruction-following, and fewer breakdowns on complex tasks. Anthropic is also using the release to test new cyber-use safeguards. I think the ongoing hype around agentic coding is likely to meet more real world success if Opus 4.7 has high accuracy & reliability on longrunning tasks.
+
+## What the thread cared about
+
+The dominant themes on HN were perceived silent degradation, plan limits, and token economics. Several commenters said they no longer care much about new benchmark charts if the day-to-day product feels throttled or inconsistent. I agree, I've gone from using Claude Code as my daily driver to complementing with Codex - Claude usage limits seem tiny some days, and overall inconsistent despite similar workflow on my end. Some were interested in stricter literalness, higher effort controls, and better vision. Some security-minded commenters were uneasy about cyber restrictions that may make legitimate defensive research harder. But the central focus was trust, which also resonated with my personal experience.
+
+<Callout type="info" title="April 17, 2026">
+  My read is simple: Anthropic announced a stronger model, while developers responded as if they were being asked to renew confidence in a service.
+</Callout>
+
+## My takeaway
+
+Opus 4.7 might be a capability jump but most developers care about consistency and reliability. I can understand that these are boring things in the hype driven AI business lifecycle, and pumping out higher model numbers then silently degrading them over time is perhaps a better short term business decision for most of the SOTA providers (OpenAI also seem to follow this pattern); but it's definitely not better for software engineers.
