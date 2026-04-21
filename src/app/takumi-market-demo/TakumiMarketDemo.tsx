@@ -285,7 +285,6 @@ export function TakumiMarketDemo({ className }: { className?: string }) {
         products={products}
         auctions={auctions}
         onNavigate={navigate}
-        onChangeRegion={handleChangeRegion}
       />
     )
   }
@@ -358,4 +357,3 @@ export function TakumiMarketDemo({ className }: { className?: string }) {
     </div>
   )
 }
-

@@ -1,8 +1,8 @@
 import { createPricing, createShipping } from './regions'
 import { Product } from '../types'
 
-const img = (seed: string, width: number, height: number) =>
-  `https://picsum.photos/seed/${seed}/${width}/${height}`
+const img = (seed: string, _width: number, _height: number) =>
+  `/takumi-market-demo/images/products/${seed}.jpg`
 
 const compactShipping = createShipping(2400, {
   JPY: [1, 3],
@@ -571,4 +571,3 @@ export const products: Product[] = [
     releaseOrder: 20
   }
 ]
-

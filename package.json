@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "download-images": "ts-node src/app/takumi-market-demo/download-images.ts",
+    "download-images-simple": "ts-node src/app/takumi-market-demo/download-images-simple.ts"
   },
   "dependencies": {
     "@react-three/drei": "10.7.7",
@@ -45,6 +47,7 @@
     "postcss": "8.5.8",
     "raw-loader": "4.0.2",
     "tailwindcss": "4.2.2",
+    "ts-node": "10.9.2",
     "typescript": "6.0.2",
     "vite": "8.0.3",
     "vitest": "4.1.2"

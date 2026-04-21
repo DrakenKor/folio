@@ -38,6 +38,9 @@ export function MarketplaceView({
   const selectedCollection = collections.find((collection) => collection.id === selectedCollectionId)
   const filtered = filterProducts(products, selectedCategory, selectedCollection)
   const sorted = sortProducts(filtered, region, sort, makersById)
+  const activeCategoryLabel = selectedCategory ? CATEGORY_LABELS[selectedCategory] : 'All categories'
+  const activeCollectionLabel = selectedCollection ? selectedCollection.name : 'All collections'
+  const hasActiveFilters = Boolean(selectedCategory || selectedCollectionId)
 
   const gridItems = useMemo(() => {
     const entries: Array<{ type: 'product'; product: Product } | { type: 'spotlight'; maker: Maker }> = []
@@ -69,6 +72,22 @@ export function MarketplaceView({
 
       <section className={styles.sectionShellCompact}>
         <div className={styles.filterBar}>
+          <div className={styles.filterSummary}>
+            <div className={styles.filterSummaryText}>
+              <p className={styles.metaLabel}>
+                {sorted.length} piece{sorted.length === 1 ? '' : 's'} showing · {region}
+              </p>
+              <p className={styles.bodyCopyMuted}>
+                {activeCategoryLabel} · {activeCollectionLabel}
+              </p>
+            </div>
+            {hasActiveFilters ? (
+              <button type="button" className={styles.buttonGhost} onClick={() => onNavigate({ view: 'marketplace', sort, region })}>
+                Clear Filters
+              </button>
+            ) : null}
+          </div>
+
           <div className={styles.categoryFilterRow}>
             <button
               type="button"
@@ -117,7 +136,7 @@ export function MarketplaceView({
             </label>
 
             <label className={styles.selectField}>
-              <span>Collections</span>
+              <span>Collection</span>
               <select
                 value={selectedCollectionId ?? ''}
                 onChange={(event) =>

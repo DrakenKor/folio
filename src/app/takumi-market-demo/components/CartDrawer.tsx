@@ -48,6 +48,7 @@ export function CartDrawer({
     <div className={styles.drawerOverlay}>
       <button type="button" className={styles.overlayBackdropSoft} aria-label="Close cart" onClick={onClose} />
       <aside className={styles.cartDrawer} ref={panelRef} aria-modal="true" role="dialog" aria-label="Your cart">
+        <div className={styles.cartDrawerHandle} />
         <div className={styles.cartHeader}>
           <div>
             <p className={styles.eyebrow}>Cart</p>
@@ -109,33 +110,34 @@ export function CartDrawer({
                 )
               })}
             </div>
-            <div className={styles.cartSummary}>
-              <div className={styles.summaryRow}>
-                <span>Subtotal</span>
-                <span>{formatPrice(subtotal, region)}</span>
+            <div className={styles.cartFooter}>
+              <div className={styles.cartSummary}>
+                <div className={styles.summaryRow}>
+                  <span>Subtotal</span>
+                  <span>{formatPrice(subtotal, region)}</span>
+                </div>
+                <div className={styles.summaryRow}>
+                  <span>Estimated shipping</span>
+                  <span>{formatPrice(shipping, region)}</span>
+                </div>
+                <div className={styles.summaryRow}>
+                  <span>Duties note</span>
+                  <span>Import duties may apply.</span>
+                </div>
               </div>
-              <div className={styles.summaryRow}>
-                <span>Estimated shipping</span>
-                <span>{formatPrice(shipping, region)}</span>
-              </div>
-              <div className={styles.summaryRow}>
-                <span>Duties note</span>
-                <span>Import duties may apply.</span>
-              </div>
+              <button
+                type="button"
+                className={styles.buttonPrimary}
+                onClick={() => {
+                  onClose()
+                  onCheckout()
+                }}>
+                Proceed to Checkout
+              </button>
             </div>
-            <button
-              type="button"
-              className={styles.buttonPrimary}
-              onClick={() => {
-                onClose()
-                onCheckout()
-              }}>
-              Proceed to Checkout
-            </button>
           </>
         )}
       </aside>
     </div>
   )
 }
-

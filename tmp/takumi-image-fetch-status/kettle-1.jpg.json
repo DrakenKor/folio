@@ -1,0 +1,11 @@
+{
+  "filename": "kettle-1.jpg",
+  "section": "7.1 Product Images",
+  "local_path": "/Users/manav/Documents/Repo/folio/public/takumi-market-demo/images/products/kettle-1.jpg",
+  "source_page": "https://commons.wikimedia.org/wiki/File:Round_tea_kettle,_designed_by_Peter_Behrens,_AEG,_Berlin,_1907-1908,_brass_-_Museum_K%C3%BCnstlerkolonie_Darmstadt_-_Mathildenh%C3%B6he_-_Darmstadt,_Germany_-_DSC06381.jpg",
+  "source_image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Round_tea_kettle%2C_designed_by_Peter_Behrens%2C_AEG%2C_Berlin%2C_1907-1908%2C_brass_-_Museum_K%C3%BCnstlerkolonie_Darmstadt_-_Mathildenh%C3%B6he_-_Darmstadt%2C_Germany_-_DSC06381.jpg/1280px-thumbnail.jpg",
+  "final_width": 900,
+  "final_height": 1125,
+  "completed": true,
+  "notes": "query=brass tea kettle; source_title=File:Round tea kettle, designed by Peter Behrens, AEG, Berlin, 1907-1908, brass - Museum K\u00fcnstlerkolonie Darmstadt - Mathildenh\u00f6he - Darmstadt, Germany - DSC06381.jpg; Content-Type: image/jpeg; cropped; resized"
+}

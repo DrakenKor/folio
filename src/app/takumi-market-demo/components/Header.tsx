@@ -124,6 +124,34 @@ export function Header({
                 <FiX aria-hidden />
               </button>
             </div>
+            <div className={styles.mobileNavIntro}>
+              <p className={styles.eyebrow}>Mobile Guide</p>
+              <p className={styles.bodyCopyMuted}>Browse makers, track limited drops, and switch region-aware pricing without leaving the page.</p>
+            </div>
+            <div className={styles.mobileNavActionRow}>
+              <button
+                type="button"
+                className={styles.mobileUtilityCard}
+                onClick={() => {
+                  onOpenSearch()
+                  onMobileNavChange(false)
+                }}>
+                <FiSearch aria-hidden />
+                <span className={styles.mobileUtilityLabel}>Search Catalog</span>
+                <span className={styles.bodyCopyMuted}>Find makers, materials, and products.</span>
+              </button>
+              <button
+                type="button"
+                className={styles.mobileUtilityCard}
+                onClick={() => {
+                  onOpenCart()
+                  onMobileNavChange(false)
+                }}>
+                <FiShoppingBag aria-hidden />
+                <span className={styles.mobileUtilityLabel}>Cart</span>
+                <span className={styles.bodyCopyMuted}>{cartCount > 0 ? `${cartCount} item${cartCount === 1 ? '' : 's'} ready to review.` : 'No items yet. Save pieces as you browse.'}</span>
+              </button>
+            </div>
             <div className={styles.mobileNavLinks}>
               <button type="button" className={styles.mobileNavLink} onClick={() => navigateAndClose({ view: 'home', region })}>
                 Home
@@ -157,4 +185,3 @@ export function Header({
     </header>
   )
 }
-

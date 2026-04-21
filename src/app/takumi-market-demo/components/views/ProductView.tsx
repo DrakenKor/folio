@@ -6,7 +6,7 @@ import { Auction, Maker, Product, Region, ViewParams } from '../../types'
 import { REGION_META } from '../../data/regions'
 import { AnimatedPrice, DemoImage, Reveal } from '../shared'
 import { ProductCard } from '../ProductCard'
-import { CATEGORY_LABELS, shippingForRegion } from '../../utils'
+import { CATEGORY_LABELS, getStockLabel, getStockTone, shippingForRegion } from '../../utils'
 import styles from '../../takumi-market.module.css'
 
 interface ProductViewProps {
@@ -29,6 +29,8 @@ export function ProductView({ product, maker, relatedProducts, auctions, region,
   const [added, setAdded] = useState(false)
   const auction = auctions.find((entry) => entry.id === product.auctionId)
   const shipping = shippingForRegion(product.shipping, region)
+  const stockLabel = getStockLabel(product, auction)
+  const stockToneClass = styles[`stockBadge${capitalize(getStockTone(product, auction))}`]
 
   const mediaItems = useMemo(() => product.images, [product.images])
 
@@ -39,7 +41,7 @@ export function ProductView({ product, maker, relatedProducts, auctions, region,
   }
 
   return (
-    <div className={styles.viewStack}>
+    <div className={`${styles.viewStack} ${styles.productViewStack}`}>
       <section className={styles.sectionShell}>
         <div className={styles.productDetailGrid}>
           <Reveal>
@@ -74,9 +76,25 @@ export function ProductView({ product, maker, relatedProducts, auctions, region,
               <p className={styles.bodyCopyMuted}>{product.origin}</p>
               <AnimatedPrice value={product.pricing[region]} region={region} className={styles.heroPrice} />
               <p className={styles.priceFootnote}>Taxes & duties may apply at import.</p>
+              <div className={styles.mobileProductFacts}>
+                <div className={styles.mobileProductFact}>
+                  <span className={styles.metaLabel}>Technique</span>
+                  <span className={styles.mobileProductFactValue}>{product.technique}</span>
+                </div>
+                <div className={styles.mobileProductFact}>
+                  <span className={styles.metaLabel}>Material</span>
+                  <span className={styles.mobileProductFactValue}>{product.materials[0]}</span>
+                </div>
+                <div className={styles.mobileProductFact}>
+                  <span className={styles.metaLabel}>Ships In</span>
+                  <span className={styles.mobileProductFactValue}>
+                    {shipping.estimatedDays[0]}-{shipping.estimatedDays[1]} days
+                  </span>
+                </div>
+              </div>
 
               <div className={styles.detailBadgeRow}>
-                <span className={styles.stockBadgeGreen}>{product.stockStatus === 'sold-out' ? 'Sold Out' : product.stockStatus === 'made-to-order' ? 'Made to Order' : product.stockStatus === 'low-stock' ? 'Low Stock' : 'In Stock'}</span>
+                <span className={`${styles.stockBadge} ${stockToneClass}`}>{stockLabel}</span>
                 <span className={styles.condensedTrust}>
                   <FiCheckCircle aria-hidden />
                   Vetted Maker
@@ -260,7 +278,41 @@ export function ProductView({ product, maker, relatedProducts, auctions, region,
           ))}
         </div>
       </section>
+
+      <div className={styles.mobilePurchaseBar}>
+        <div className={styles.mobilePurchaseMeta}>
+          <AnimatedPrice value={product.pricing[region]} region={region} className={styles.mobilePurchasePrice} />
+          <p className={styles.mobilePurchaseNote}>
+            {product.stockStatus === 'made-to-order'
+              ? 'Made to order with regional shipping estimates shown above.'
+              : `${stockLabel} · ships to ${REGION_META[region].country} in ${shipping.estimatedDays[0]}-${shipping.estimatedDays[1]} days.`}
+          </p>
+        </div>
+        <div className={styles.mobilePurchaseControls}>
+          {product.stockStatus !== 'made-to-order' ? (
+            <div className={styles.quantityControl}>
+              <button type="button" aria-label="Decrease quantity" onClick={() => setQuantity((current) => Math.max(1, current - 1))}>
+                <FiMinus aria-hidden />
+              </button>
+              <span>{quantity}</span>
+              <button type="button" aria-label="Increase quantity" onClick={() => setQuantity((current) => Math.min(5, current + 1))}>
+                <FiPlus aria-hidden />
+              </button>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            className={`${styles.buttonPrimary} ${styles.mobilePurchaseButton}`}
+            disabled={product.stockStatus === 'sold-out'}
+            onClick={handleAdd}>
+            {product.stockStatus === 'sold-out' ? 'Sold Out' : added ? <><FiCheck aria-hidden /> Added</> : 'Add to Cart'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
 
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}

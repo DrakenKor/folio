@@ -1,7 +1,7 @@
 import { Maker } from '../types'
 
-const img = (seed: string, width: number, height: number) =>
-  `https://picsum.photos/seed/${seed}/${width}/${height}`
+const img = (seed: string, _width: number, _height: number) =>
+  `/takumi-market-demo/images/makers/${seed}.jpg`
 
 export const makers: Maker[] = [
   {
@@ -323,4 +323,3 @@ export const makers: Maker[] = [
       'Tsubame’s metalworking heritage informs the studio’s careful finishing, repeatability, and material honesty.'
   }
 ]
-

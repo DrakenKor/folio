@@ -1,0 +1,11 @@
+{
+  "filename": "takumi-hero.jpg",
+  "section": "7.3 Home Page Hero & Category Images",
+  "local_path": "/Users/manav/Documents/Repo/folio/public/takumi-market-demo/images/home/takumi-hero.jpg",
+  "source_page": "https://unsplash.com/photos/a-display-of-pottery-on-a-wooden-shelf-GutmCf03OTM",
+  "source_image_url": "https://images.unsplash.com/photo-1724436493139-b148164b8e57?ixlib=rb-4.1.0&q=85&fm=jpg&crop=entropy&cs=srgb&dl=eric-prouzet-GutmCf03OTM-unsplash.jpg",
+  "final_width": 1600,
+  "final_height": 960,
+  "completed": true,
+  "notes": "Downloaded from Unsplash; center-cropped to 1600x960 and verified."
+}

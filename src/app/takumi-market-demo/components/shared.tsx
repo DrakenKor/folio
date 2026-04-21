@@ -131,11 +131,12 @@ export function Reveal({
   className?: string
 }) {
   const reducedMotion = usePrefersReducedMotion()
+  const isMobile = useMediaQuery('(max-width: 767px)')
   const ref = useRef<HTMLDivElement | null>(null)
-  const [visible, setVisible] = useState(reducedMotion)
+  const [visible, setVisible] = useState(reducedMotion || isMobile)
 
   useEffect(() => {
-    if (reducedMotion || !ref.current) {
+    if (reducedMotion || isMobile || !ref.current) {
       setVisible(true)
       return
     }
@@ -151,7 +152,7 @@ export function Reveal({
     )
     observer.observe(ref.current)
     return () => observer.disconnect()
-  }, [reducedMotion])
+  }, [isMobile, reducedMotion])
 
   return (
     <div
@@ -270,4 +271,3 @@ export function useAnnouncementClock(interval = 30000) {
 export function VisuallyHidden({ children }: { children: ReactNode }) {
   return <span className={styles.visuallyHidden}>{children}</span>
 }
-

@@ -10,12 +10,12 @@ import { MakerCard } from '../MakerCard'
 import styles from '../../takumi-market.module.css'
 
 const categoryTiles = [
-  { id: 'tableware', label: 'Tableware', seed: 'tableware-tile' },
-  { id: 'kitchen-tools', label: 'Kitchen Tools', seed: 'kitchen-tools-tile' },
-  { id: 'textiles', label: 'Textiles', seed: 'textiles-tile' },
-  { id: 'tea-ritual', label: 'Tea Ritual', seed: 'tea-ritual-tile' },
-  { id: 'paper-goods', label: 'Paper Goods', seed: 'paper-goods-tile' },
-  { id: 'home-objects', label: 'Home Objects', seed: 'home-objects-tile' }
+  { id: 'tableware', label: 'Tableware', image: '/takumi-market-demo/images/home/category-tableware.jpg' },
+  { id: 'kitchen-tools', label: 'Kitchen Tools', image: '/takumi-market-demo/images/home/category-kitchen-tools.jpg' },
+  { id: 'textiles', label: 'Textiles', image: '/takumi-market-demo/images/home/category-textiles.jpg' },
+  { id: 'tea-ritual', label: 'Tea Ritual', image: '/takumi-market-demo/images/home/category-tea-ritual.jpg' },
+  { id: 'paper-goods', label: 'Paper Goods', image: '/takumi-market-demo/images/home/category-paper-goods.jpg' },
+  { id: 'home-objects', label: 'Home Objects', image: '/takumi-market-demo/images/home/category-home-objects.jpg' }
 ] as const
 
 const trustItems = [
@@ -40,10 +40,9 @@ interface HomeViewProps {
   products: Product[]
   auctions: Auction[]
   onNavigate: (params: ViewParams) => void
-  onChangeRegion: (region: Region) => void
 }
 
-export function HomeView({ region, makers, products, auctions, onNavigate, onChangeRegion }: HomeViewProps) {
+export function HomeView({ region, makers, products, auctions, onNavigate }: HomeViewProps) {
   const liveAuction = getLiveAuction(auctions)
   const liveProduct = getProductById(products, liveAuction.productId)
   const countdown = countdownParts(liveAuction.endsAt)
@@ -74,7 +73,7 @@ export function HomeView({ region, makers, products, auctions, onNavigate, onCha
             transform: reducedMotion || isMobile ? undefined : `translateY(${offset}px)`
           }}>
           <DemoImage
-            src="https://picsum.photos/seed/takumi-hero/1600/960"
+            src="/takumi-market-demo/images/home/takumi-hero.jpg"
             alt="Sunlit gallery-like craft interior with pale surfaces, ceramics, textiles, and daylight."
             className={styles.heroImage}
             loading="eager"
@@ -89,25 +88,22 @@ export function HomeView({ region, makers, products, auctions, onNavigate, onCha
           <button type="button" className={styles.buttonPrimary} onClick={() => onNavigate({ view: 'marketplace', region })}>
             Explore the Market
           </button>
-        </div>
-      </section>
-
-      <Reveal className={styles.sectionShell}>
-        <div className={styles.regionStrip}>
-          <p className={styles.eyebrow}>Region</p>
-          <div className={styles.regionPillRow}>
-            {REGIONS.map((entry) => (
-              <button
-                key={entry.code}
-                type="button"
-                className={`${styles.regionPill} ${entry.code === region ? styles.regionPillActive : ''}`}
-                onClick={() => onChangeRegion(entry.code)}>
-                {entry.flagLabel} · {entry.label}
-              </button>
-            ))}
+          <div className={styles.heroStatRow}>
+            <div className={styles.heroStat}>
+              <span className={styles.heroStatValue}>{makers.length}</span>
+              <span className={styles.heroStatLabel}>Vetted studios</span>
+            </div>
+            <div className={styles.heroStat}>
+              <span className={styles.heroStatValue}>{REGIONS.length}</span>
+              <span className={styles.heroStatLabel}>Shipping regions</span>
+            </div>
+            <div className={styles.heroStat}>
+              <span className={styles.heroStatValue}>{liveAuction ? 'Live' : 'Drops'}</span>
+              <span className={styles.heroStatLabel}>Limited releases</span>
+            </div>
           </div>
         </div>
-      </Reveal>
+      </section>
 
       <section className={styles.sectionShell}>
         <Reveal>
@@ -146,7 +142,7 @@ export function HomeView({ region, makers, products, auctions, onNavigate, onCha
                   })
                 }>
                 <DemoImage
-                  src={`https://picsum.photos/seed/${tile.seed}/900/700`}
+                  src={tile.image}
                   alt={`${tile.label} editorial category image`}
                   className={styles.categoryTileImage}
                 />
@@ -262,4 +258,3 @@ export function HomeView({ region, makers, products, auctions, onNavigate, onCha
     </div>
   )
 }
-
