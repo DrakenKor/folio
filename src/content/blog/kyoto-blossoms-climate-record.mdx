@@ -1,0 +1,61 @@
+---
+title: "Kyoto's Cherry Blossoms Are a 1,200-Year Climate Instrument"
+description: "An interactive look at Kyoto's peak cherry blossom record, the extreme modern shift toward earlier bloom dates, and why this may be the cleanest seasonal climate archive humanity has."
+date: "2026-04-21"
+tags: ["Climate", "Data Visualization", "Japan", "History"]
+---
+
+<HeroImage
+  src="/blog/kyoto-blossoms/sakura%202026.jpeg"
+  width={1613}
+  height={1210}
+  alt="Cherry blossoms on tree branches in Kyoto with a glass building in the background."
+/>
+
+After this year's Cherry Blossom season, I keep returning to one quiet thought: Kyoto made a climate archive by waiting for flowers.
+
+For twelve hundred years, people watched the cherry trees and wrote down when the season reached its fullest point. The record begins in 812 CE and continues through 2026. Its source is plain and human: court diaries, chronicles, and hanami records, kept because the blossoms mattered. Later, Yasuyuki Aono and his collaborators gathered and cleaned those observations. [Our World in Data describes the source](https://ourworldindata.org/data-insights/japans-cherry-trees-have-been-blossoming-earlier-due-to-warmer-spring-temperatures) as records from historical diaries and chronicles; the underlying archive is hosted by [NOAA NCEI Paleoclimatology](https://www.ncei.noaa.gov/access/paleo-search/study/26430).
+
+When I look at it this way, the archive feels less like an instrument someone designed and more like one a culture slowly built by paying attention.
+
+<KyotoBlossomExplorer />
+
+## What I notice first
+
+For more than a millennium, I see the blossoms mostly reaching their peak in mid-April. The pre-1900 average is day 105 of the year, close to April 15. There is variation from one year to the next, as there should be in any living season, but the long shape of the record is steady.
+
+The most recent 30-year average is day 94.2, close to April 4.
+
+The 2026 observation is day 88, March 29.
+
+I find it hard to pass over that distance. The 2026 bloom came seventeen days earlier than the pre-1900 baseline, and six days earlier than the already-shifted modern average. It is not alone, either. Three of the eight earliest peak seasons in twelve centuries of record-keeping are 2021, 2023, and 2026. The earliest peak bloom in the archive is 2023, at day 84.
+
+A cluster of record-breaking springs at the end of a 1,200-year record is indicative of an accelerating trend.
+
+It is not loud evidence. It is a long record, quietly changing shape.
+
+## Why I trust this record
+
+Most ancient climate data reaches me through proxies: tree rings, ice cores, lake sediments, isotope ratios. I value those tools, but they ask for translation. I am looking at biological or chemical traces and then inferring what the climate must have been like.
+
+Kyoto's record is different because it begins with direct observation.
+
+Someone saw that Prunus Jamasakura, the mountain cherry, had reached full bloom. Someone wrote it down. Then, across centuries, other people did the same because the moment mattered to them.
+
+I do not need the record to be perfect for it to be important. Some years are missing. Historical sources require interpretation. The archive has gaps. Still, its continuity is remarkable. The cultural importance of the event kept people watching. The place remained stable enough for comparison. The biological marker, bloom timing, is finely sensitive to temperature. And the record is long enough that modern extremes cannot easily hide inside ordinary variation.
+
+The [Met Office attribution work](https://www.metoffice.gov.uk/about-us/press-office/news/weather-and-climate/2022/kyoto-cherry-blossom-dates-shifted-by-human-influence) gives the shift a number: human-driven climate change, combined with urban warming, has moved Kyoto's bloom date forward by approximately eleven days compared with a world without those influences. I read the blossom date as a phenological marker, one of the clearer ways a changing climate enters the rhythm of ordinary life.
+
+## How I read the shift
+
+I use the chart in two ways. In the "Bloom date" view, I can see each year's peak date alongside a moving 30-year average. In the "Deviation" view, I can see how far each year strays from its local 30-year norm.
+
+That second view matters to me because the norm itself has moved.
+
+Against the older archive, a bloom on day 88 would have been a startling outlier. Against today's 30-year baseline, it is still very early. The baseline has already shifted, and the newest observations are still pressing beyond it. This indicates an acceleration of the trend. It will be curious to see the next few years' records.
+
+## Where I got the data
+
+I used the full dataset here: [kyoto-blossom-data-package.zip](/blog/kyoto-blossoms/kyoto-blossom-data-package.zip).
+
+My primary source is [Our World in Data Grapher](https://ourworldindata.org/grapher/date-of-the-peak-cherry-tree-blossom-in-kyoto?v=1&csvType=full&useColumnShortNames=false), built from Yasuyuki Aono's "Cherry Blossom Full Bloom Dates in Kyoto, Japan" archive at [NOAA NCEI Paleoclimatology](https://www.ncei.noaa.gov/access/paleo-search/study/26430). The local package contains the CSV, metadata JSON, and README from `public/blog/kyoto-blossoms`, downloaded 2026-04-21.

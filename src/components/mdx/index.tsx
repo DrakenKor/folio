@@ -3,6 +3,7 @@ import React from 'react'
 import Link from 'next/link'
 import { slugifyHeading } from '@/lib/blog-helpers'
 import { Demo } from './Demo'
+import { KyotoBlossomExplorer } from './KyotoBlossomExplorer'
 
 interface CalloutProps {
   type?: 'info' | 'warning'
@@ -15,6 +16,10 @@ interface VideoProps {
   src?: string
   youtubeId?: string
   poster?: string
+}
+
+interface HeroImageProps extends ComponentPropsWithoutRef<'img'> {
+  caption?: ReactNode
 }
 
 function joinClassNames(...values: Array<string | undefined>) {
@@ -138,6 +143,29 @@ export function Video({ title, src, youtubeId, poster }: VideoProps) {
   )
 }
 
+export function HeroImage({
+  alt = '',
+  caption,
+  className,
+  loading = 'eager',
+  ...props
+}: HeroImageProps) {
+  return (
+    <figure className="blog-post-hero">
+      <div className="blog-post-hero-frame">
+        <img
+          alt={alt}
+          className={joinClassNames('blog-post-hero-image', className)}
+          decoding="async"
+          loading={loading}
+          {...props}
+        />
+      </div>
+      {caption ? <figcaption>{caption}</figcaption> : null}
+    </figure>
+  )
+}
+
 export const mdxComponents = {
   h1: createHeading('h1'),
   h2: createHeading('h2'),
@@ -197,8 +225,10 @@ export const mdxComponents = {
     <td className={joinClassNames('blog-table-cell', className)} {...props} />
   ),
   Callout,
+  HeroImage,
   Video,
-  Demo
+  Demo,
+  KyotoBlossomExplorer
 }
 
 export { Demo }

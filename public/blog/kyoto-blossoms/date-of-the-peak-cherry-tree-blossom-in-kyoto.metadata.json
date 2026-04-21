@@ -1,0 +1,49 @@
+{
+  "chart": {
+    "title": "Day of the year with peak cherry tree blossom in Kyoto, Japan",
+    "subtitle": "The vertical axis shows the date of peak blossom, expressed as the number of days since January 1st. The timing of the peak cherry blossom is influenced by spring temperatures. Higher temperatures due to climate change have caused the peak blossom to gradually move earlier in the year since the early 20th century.",
+    "note": "The 30-year average is calculated when there are at least ten years with data in the 30-year window before the specified year.",
+    "citation": "Yasuyuki Aono (2021; 2025)",
+    "originalChartUrl": "https://ourworldindata.org/grapher/date-of-the-peak-cherry-tree-blossom-in-kyoto?v=1&csvType=full&useColumnShortNames=false",
+    "selection": [
+      "Japan"
+    ]
+  },
+  "columns": {
+    "Day of the year with peak cherry blossom": {
+      "titleShort": "Day of the year with peak cherry blossom",
+      "titleLong": "Day of the year with peak cherry blossom",
+      "descriptionShort": "The day of the year with the peak cherry blossom of the Prunus jamasakura species of cherry tree in Kyoto, Japan.",
+      "shortUnit": "",
+      "unit": "day of the year",
+      "timespan": "812-2026",
+      "type": "Integer",
+      "owidVariableId": 1227647,
+      "shortName": "full_flowering_date",
+      "lastUpdated": "2026-04-16",
+      "nextUpdate": "2027-04-16",
+      "citationShort": "Yasuyuki Aono (2026); Yasuyuki Aono (2021) – with minor processing by Our World in Data",
+      "citationLong": "Yasuyuki Aono (2026); Yasuyuki Aono (2021) – with minor processing by Our World in Data. “Day of the year with peak cherry blossom” [dataset]. Yasuyuki Aono, “Cherry Blossom Full Bloom Dates in Kyoto, Japan” [original data].",
+      "fullMetadata": "https://api.ourworldindata.org/v1/indicators/1227647.metadata.json"
+    },
+    "Thirty-year average day of the year with peak cherry blossom": {
+      "titleShort": "Thirty-year average",
+      "titleLong": "Thirty-year average",
+      "descriptionShort": "A thirty year moving average of the day of the year with peak cherry blossom (Prunus jamasakura species). Only calculated for 30-year periods with at least ten years of data.",
+      "descriptionProcessing": "- The 30-year moving average is calculated by taking the last 30 years (including the current year) and averaging over the day of the year with peak cherry blossom. The average is only calculated for 30-year periods with at least ten years of data.\n- This means the average for 2026 includes data from 1997 to 2026, and is only calculated if at least ten of those years have data on the peak cherry blossom.",
+      "shortUnit": "",
+      "unit": "day of the year",
+      "timespan": "913-2026",
+      "type": "Numeric",
+      "owidVariableId": 1227648,
+      "shortName": "average_last_30_years",
+      "lastUpdated": "2026-04-16",
+      "nextUpdate": "2027-04-16",
+      "citationShort": "Yasuyuki Aono (2026); Yasuyuki Aono (2021) – with major processing by Our World in Data",
+      "citationLong": "Yasuyuki Aono (2026); Yasuyuki Aono (2021) – with major processing by Our World in Data. “Thirty-year average” [dataset]. Yasuyuki Aono, “Cherry Blossom Full Bloom Dates in Kyoto, Japan” [original data].",
+      "fullMetadata": "https://api.ourworldindata.org/v1/indicators/1227648.metadata.json"
+    }
+  },
+  "dateDownloaded": "2026-04-21",
+  "activeFilters": {}
+}
