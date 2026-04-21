@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { FiDownload, FiRotateCcw } from 'react-icons/fi'
 
@@ -67,6 +67,7 @@ const CHART_TOP = 42
 const CHART_BOTTOM = 82
 const PLOT_WIDTH = VIEWBOX_WIDTH - CHART_LEFT - CHART_RIGHT
 const PLOT_HEIGHT = VIEWBOX_HEIGHT - CHART_TOP - CHART_BOTTOM
+const MOBILE_CHART_SCROLL_QUERY = '(max-width: 767px)'
 
 const BLOSSOM_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'short',
@@ -236,6 +237,7 @@ export function KyotoBlossomExplorerClient({
   summary
 }: KyotoBlossomExplorerClientProps) {
   const descId = useId()
+  const svgPanelRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [metric, setMetric] = useState<MetricMode>('date')
   const [startYear, setStartYear] = useState(summary.firstYear)
@@ -385,6 +387,20 @@ export function KyotoBlossomExplorerClient({
   )
   const latestClusterLabelAnchor =
     latestClusterLabelX > CHART_LEFT + PLOT_WIDTH - 140 ? 'end' : 'start'
+
+  useEffect(() => {
+    const panel = svgPanelRef.current
+
+    if (!panel || !window.matchMedia(MOBILE_CHART_SCROLL_QUERY).matches) {
+      return
+    }
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      panel.scrollLeft = panel.scrollWidth - panel.clientWidth
+    })
+
+    return () => window.cancelAnimationFrame(animationFrame)
+  }, [endYear, startYear])
 
   function selectPreset(nextStartYear: number, nextEndYear: number) {
     setStartYear(nextStartYear)
@@ -552,7 +568,7 @@ export function KyotoBlossomExplorerClient({
       </div>
 
       <div className="kyoto-blossom-chart-grid">
-        <div className="kyoto-blossom-svg-panel">
+        <div ref={svgPanelRef} className="kyoto-blossom-svg-panel">
           <svg
             ref={svgRef}
             aria-describedby={descId}

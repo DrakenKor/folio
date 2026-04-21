@@ -588,7 +588,7 @@
 
 .blog-prose {
   width: 100%;
-  max-width: 46rem;
+  max-width: 1120px;
   min-width: 0;
 }
 
@@ -596,8 +596,22 @@
   margin-top: 1.25rem;
 }
 
-.blog-prose > :where(aside, div, figure, img, pre, table) {
-  max-width: 100%;
+.blog-prose
+  > :where(
+    .blog-copy,
+    .blog-heading,
+    .blog-list,
+    .blog-blockquote,
+    .blog-rule,
+    .blog-code-block,
+    .blog-callout,
+    .blog-demo-card,
+    .blog-video,
+    .blog-table-wrap,
+    figure:not(.blog-post-hero),
+    img.blog-image
+  ) {
+  max-width: 46rem;
 }
 
 .blog-heading {
@@ -713,8 +727,8 @@
 .blog-prose > .blog-post-hero {
   display: grid;
   gap: 0.65rem;
-  width: min(1120px, calc(100vw - 2rem));
-  max-width: min(1120px, calc(100vw - 2rem));
+  width: 100%;
+  max-width: 100%;
   margin: 0 0 2rem;
 }
 
@@ -820,8 +834,8 @@
 }
 
 .blog-prose > .kyoto-blossom-explorer {
-  width: min(1120px, calc(100vw - 2rem));
-  max-width: min(1120px, calc(100vw - 2rem));
+  width: 100%;
+  max-width: 100%;
   margin: 2rem 0 2.5rem;
 }
 
@@ -1006,6 +1020,8 @@
 .kyoto-blossom-svg-panel {
   min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   background: #07080a;
@@ -1016,7 +1032,7 @@
   width: 100%;
   min-width: 720px;
   height: auto;
-  touch-action: none;
+  touch-action: auto;
 }
 
 .kyoto-blossom-plot-bg {
@@ -1218,14 +1234,14 @@
   }
 
   .blog-prose > .kyoto-blossom-explorer {
-    width: min(100%, calc(100vw - 1rem));
-    max-width: min(100%, calc(100vw - 1rem));
+    width: 100%;
+    max-width: 100%;
     margin-left: 0;
   }
 
   .blog-prose > .blog-post-hero {
-    width: min(100%, calc(100vw - 1rem));
-    max-width: min(100%, calc(100vw - 1rem));
+    width: 100%;
+    max-width: 100%;
     margin-left: 0;
   }
 
