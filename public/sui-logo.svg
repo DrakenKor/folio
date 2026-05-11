@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="518"
+  height="335"
+  viewBox="0 0 518 335"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">Overlapping geometric salon mark</title>
+  <desc id="desc">Four translucent congruent-style triangular forms: one points right and three point left. The salon text from the source image is omitted.</desc>
+  <rect width="518" height="335" fill="#ffffff"/>
+  <g shape-rendering="geometricPrecision" color-interpolation="sRGB">
+    <polygon
+      id="left-pointing-pale"
+      points="78 211, 265 97, 265 325"
+      fill="#d6e8f5"
+      fill-opacity="0.45"
+    />
+    <polygon
+      id="right-pointing-lavender"
+      points="86 70, 299 193, 86 316"
+      fill="#cdd8f4"
+      fill-opacity="0.72"
+    />
+    <polygon
+      id="left-pointing-upper"
+      points="209 123, 399 8, 399 234"
+      fill="#99bad2"
+      fill-opacity="0.66"
+    />
+    <polygon
+      id="left-pointing-center"
+      points="164 207, 369 82, 369 325"
+      fill="#8fb3ce"
+      fill-opacity="0.61"
+    />
+  </g>
+</svg>

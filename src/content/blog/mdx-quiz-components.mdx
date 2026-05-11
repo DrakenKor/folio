@@ -1,0 +1,79 @@
+---
+title: "Adding Quizzes to the MDX Blog"
+description: "Extending the blog's component surface with interactive quizzes that still feel like markdown to write."
+date: "2026-05-11"
+tags: ["MDX", "Next.js", "React", "Blogging"]
+---
+
+Wrote about the blog system back in March. Markdown for writing, JSX for the rare expressive parts. Small component surface. Callouts, headings, inline SVG doodles. Kept it calm.
+
+Been wanting one more thing tho. Quizzes. Not gamified learn-to-code stuff. Just a way to put a few questions at the end of a technical post so the reader (and honestly, me) can check whether the ideas actually landed.
+
+The constraint was the same as everything else here: it has to feel like markdown to author. Not application code. Not a JSON schema in a separate file. Just tags inline with the prose.
+
+## What it looks like to write
+
+This is a quiz in a `.mdx` file:
+
+```jsx
+<Quiz title="Scaling check" questionCount={3}>
+  <QuizQuestion prompt="What does QPS measure?">
+    <QuizChoice>Latency per request</QuizChoice>
+    <QuizChoice correct>Requests per second</QuizChoice>
+  </QuizQuestion>
+</Quiz>
+```
+
+That's it. No imports. No state. No wiring. The components are already registered in `mdxComponents` so they're available in every post. You write questions and choices as nested tags, mark one choice `correct`, and the system handles the rest.
+
+Felt important that this stays declarative. The quiz definition is data shaped like JSX. The interactivity lives somewhere else.
+
+## How it actually works
+
+Two files. A server component and a client component.
+
+`Quiz`, `QuizQuestion`, and `QuizChoice` are what MDX sees. But `QuizQuestion` and `QuizChoice` don't render anything. They return `null`. They exist so MDX can parse them, and so the parent `Quiz` component can walk `children`, pull out props, and build a flat data structure.
+
+```ts
+// QuizQuestion and QuizChoice render nothing.
+// They're data carriers shaped like JSX.
+export function QuizQuestion(_props: QuizQuestionProps) {
+  return null
+}
+```
+
+`Quiz` does the extraction at render time on the server. Validates that every question has a prompt, every question has at least two choices, exactly one is marked correct. Throws build errors if the structure is wrong. Then passes the clean data to `QuizClient`.
+
+`QuizClient` is `'use client'`. Handles selection state, stepping through questions, scoring, review. Fisher-Yates shuffle for randomization. Progress bar. The interactive surface.
+
+The split is clean. Server component owns validation and data extraction. Client component owns interaction. MDX never touches either directly, it just writes tags.
+
+## Randomization from a pool
+
+Didn't want every quiz attempt to be identical. `Quiz` takes a `questionCount` prop. You can write 6 questions but show 4 per run, randomized. Each attempt pulls a different subset.
+
+```jsx
+<Quiz title="Review" questionCount={4} randomizeChoices>
+  {/* 6 questions here, 4 shown per run */}
+</Quiz>
+```
+
+`randomizeQuestions` defaults to `true`. `randomizeChoices` defaults to `false` because some questions have answer orderings that matter ("All of the above" needs to stay last). You opt in per quiz.
+
+## What the review screen doesn't show
+
+Intentional decision: the results screen shows your score and lists the questions you missed with your wrong answer. It does not reveal the correct answer. You have to go back and try again, or reread the post.
+
+Could have shown explanations and correct answers inline. Chose not to. The point of the quiz is to check understanding, not to be a flashcard. If you missed it, the post is right there.
+
+## Phantom components
+
+The pattern of components that render `null` but carry props for a parent to extract felt unusual at first. But it maps well to MDX. The author writes structured data using familiar JSX nesting. The parent walks `React.Children`, validates, and transforms. No custom parser. No frontmatter schema. No separate data file.
+
+Works with fragments too. `flattenChildren` unwraps `<></>` before filtering, so MDX's occasional fragment wrapping doesn't break extraction.
+
+<Callout type="info" title="May 2026">
+  Added the quiz system while writing the scaling arithmetic post. Wanted the reader to actually do the QPS math instead of skimming past it. First real use of the component felt right. Still markdown to write, still static to deploy.
+</Callout>
+
+That's the update. Blog system got one more component. Writing surface still feels calm. JSX still only carries the edges. Now some of those edges are interactive.

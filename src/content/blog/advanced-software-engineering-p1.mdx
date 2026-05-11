@@ -1,0 +1,450 @@
+---
+title: "Approaching the problem of scaling mathematically"
+description: "Quantitative analysis and arithmetic as the foundation for scaling decisions and architectural choices."
+date: "2026-05-11"
+tags: ["Scale", "Architecture", "Distributed Systems"]
+---
+
+Scaling decisions should start with arithmetic analysis. Four fundamental metrics inform architecture choices: **requests per second**, **data volume**, **concurrent connections**, and **latency targets**.
+
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 420"
+      role="img"
+      aria-labelledby="orders-svg-title orders-svg-desc"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <title id="orders-svg-title">Orders of magnitude scale comparison</title>
+      <desc id="orders-svg-desc">
+        Animated bars compare user-count milestones against a single-server limit line, showing how much room exists before distribution is required.
+      </desc>
+      <defs>
+        <linearGradient id="orders-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#07111a" />
+          <stop offset="100%" stopColor="#0a1724" />
+        </linearGradient>
+        <pattern id="orders-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#dbeafe" strokeWidth="0.5" opacity="0.08" />
+        </pattern>
+        <pattern id="orders-grid-major" width="96" height="96" patternUnits="userSpaceOnUse">
+          <path d="M 96 0 L 0 0 0 96" fill="none" stroke="#dbeafe" strokeWidth="1" opacity="0.12" />
+        </pattern>
+        <radialGradient id="orders-bar-gradient" cx="50%" cy="20%" r="80%">
+          <stop offset="0%" stopColor="#67e8f9" />
+          <stop offset="100%" stopColor="#93c5fd" />
+        </radialGradient>
+        <linearGradient id="orders-warning-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#67e8f9" stopOpacity="0.55" />
+        </linearGradient>
+        <filter id="orders-soft-glow">
+          <feGaussianBlur stdDeviation="4" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+
+      <rect width="720" height="420" rx="18" fill="url(#orders-bg)" />
+      <rect width="720" height="420" fill="url(#orders-grid-minor)" />
+      <rect width="720" height="420" fill="url(#orders-grid-major)" />
+
+      <text x="44" y="48" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        Actual load vs assumed scale
+      </text>
+      <text x="44" y="73" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+        user growth follows logarithmic, not linear, load patterns
+      </text>
+
+      <g filter="url(#orders-soft-glow)">
+        <line x1="58" y1="104" x2="662" y2="104" stroke="#f8fafc" strokeWidth="1.5" strokeDasharray="8 10" opacity="0">
+          <animate attributeName="opacity" values="0;0.7;0.7;0" keyTimes="0;0.18;0.86;1" dur="12s" repeatCount="indefinite" />
+        </line>
+      </g>
+      <text x="500" y="94" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" opacity="0">
+        Single server limit
+        <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.18;0.86;1" dur="12s" repeatCount="indefinite" />
+      </text>
+
+      <g transform="translate(70 0)">
+        <rect x="0" y="318" width="72" height="50" rx="6" fill="url(#orders-bar-gradient)" opacity="0.42">
+          <animate attributeName="y" values="368;318;318;368" keyTimes="0;0.18;0.88;1" dur="12s" repeatCount="indefinite" />
+          <animate attributeName="height" values="0;50;50;0" keyTimes="0;0.18;0.88;1" dur="12s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.35;0.65;0.4;0.65;0.35" dur="5s" repeatCount="indefinite" />
+        </rect>
+        <circle cx="36" cy="362" r="3" fill="#e0f2fe">
+          <animate attributeName="cy" values="362;324;362" dur="4s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;1;0" dur="4s" repeatCount="indefinite" />
+        </circle>
+        <text x="36" y="392" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          1K users
+          <animate attributeName="opacity" values="0.5;1;0.5" dur="5s" repeatCount="indefinite" />
+        </text>
+      </g>
+
+      <g transform="translate(190 0)">
+        <rect x="0" y="268" width="72" height="100" rx="6" fill="url(#orders-bar-gradient)" opacity="0.5">
+          <animate attributeName="y" values="368;268;268;368" keyTimes="0;0.24;0.88;1" dur="12s" begin="0.15s" repeatCount="indefinite" />
+          <animate attributeName="height" values="0;100;100;0" keyTimes="0;0.24;0.88;1" dur="12s" begin="0.15s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.4;0.75;0.48;0.75;0.4" dur="5.8s" repeatCount="indefinite" />
+        </rect>
+        <circle cx="36" cy="360" r="3" fill="#e0f2fe">
+          <animate attributeName="cy" values="360;276;360" dur="4.8s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;1;0" dur="4.8s" repeatCount="indefinite" />
+        </circle>
+        <text x="36" y="392" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          10K users
+          <animate attributeName="opacity" values="0.5;1;0.5" dur="5.8s" repeatCount="indefinite" />
+        </text>
+      </g>
+
+      <g transform="translate(310 0)">
+        <rect x="0" y="168" width="72" height="200" rx="6" fill="url(#orders-bar-gradient)" opacity="0.58">
+          <animate attributeName="y" values="368;168;168;368" keyTimes="0;0.3;0.88;1" dur="12s" begin="0.3s" repeatCount="indefinite" />
+          <animate attributeName="height" values="0;200;200;0" keyTimes="0;0.3;0.88;1" dur="12s" begin="0.3s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.42;0.8;0.5;0.8;0.42" dur="6.4s" repeatCount="indefinite" />
+        </rect>
+        <circle cx="36" cy="360" r="3" fill="#e0f2fe">
+          <animate attributeName="cy" values="360;176;360" dur="5.6s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;1;0" dur="5.6s" repeatCount="indefinite" />
+        </circle>
+        <text x="36" y="392" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          100K users
+          <animate attributeName="opacity" values="0.5;1;0.5" dur="6.4s" repeatCount="indefinite" />
+        </text>
+      </g>
+
+      <g transform="translate(430 0)">
+        <rect x="0" y="78" width="72" height="290" rx="6" fill="url(#orders-warning-gradient)" opacity="0.72">
+          <animate attributeName="y" values="368;78;78;368" keyTimes="0;0.36;0.88;1" dur="12s" begin="0.45s" repeatCount="indefinite" />
+          <animate attributeName="height" values="0;290;290;0" keyTimes="0;0.36;0.88;1" dur="12s" begin="0.45s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.45;0.85;0.58;0.85;0.45" dur="7.2s" repeatCount="indefinite" />
+        </rect>
+        <circle cx="36" cy="360" r="3" fill="#fef3c7">
+          <animate attributeName="cy" values="360;86;360" dur="6.4s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;1;0" dur="6.4s" repeatCount="indefinite" />
+        </circle>
+        <text x="36" y="392" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          1M users
+          <animate attributeName="opacity" values="0.5;1;0.5" dur="7.2s" repeatCount="indefinite" />
+        </text>
+      </g>
+
+      <g transform="translate(550 0)">
+        <rect x="0" y="18" width="72" height="350" rx="6" fill="url(#orders-warning-gradient)" opacity="0.82">
+          <animate attributeName="y" values="368;18;18;368" keyTimes="0;0.42;0.88;1" dur="12s" begin="0.6s" repeatCount="indefinite" />
+          <animate attributeName="height" values="0;350;350;0" keyTimes="0;0.42;0.88;1" dur="12s" begin="0.6s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.5;0.9;0.65;0.9;0.5" dur="8s" repeatCount="indefinite" />
+        </rect>
+        <circle cx="36" cy="360" r="3" fill="#fef3c7">
+          <animate attributeName="cy" values="360;26;360" dur="7.2s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;1;0" dur="7.2s" repeatCount="indefinite" />
+        </circle>
+        <text x="36" y="392" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          10M users
+          <animate attributeName="opacity" values="0.5;1;0.5" dur="8s" repeatCount="indefinite" />
+        </text>
+      </g>
+    </svg>
+  </figure>
+</div>
+
+## Translating user count to QPS
+
+User count is not load. Activity is load. To convert daily active users (DAU) into requests per second:
+
+```text
+average QPS = (DAU x requests_per_user_per_day) / 86,400
+peak QPS    = average QPS x peak_multiplier (typically 10x)
+```
+
+**Example**: 1M DAU, 1 request per user per day:
+
+```text
+1,000,000 / 86,400 = ~12 average QPS
+peak at 10x        = ~120 QPS
+```
+
+At 10 requests per user per day: ~1,157 peak QPS.
+
+Here's the reference table:
+
+| Daily users | Requests/user/day | Average QPS | 10x peak QPS |
+| --- | ---: | ---: | ---: |
+| 1M | 1 | 12 | 116 |
+| 1M | 10 | 116 | 1,157 |
+| 10M | 10 | 1,157 | 11,574 |
+| 100M | 10 | 11,574 | 115,741 |
+
+Quick estimation script:
+
+```python
+SECONDS_PER_DAY = 86_400
+
+
+def estimate_average_qps(daily_users, avg_requests_per_user):
+    return (daily_users * avg_requests_per_user) / SECONDS_PER_DAY
+
+
+def estimate_peak_qps(
+    daily_users,
+    avg_requests_per_user,
+    peak_multiplier=10,
+):
+    return estimate_average_qps(
+        daily_users,
+        avg_requests_per_user,
+    ) * peak_multiplier
+
+
+for users in [1_000_000, 10_000_000, 100_000_000]:
+    print(users, estimate_peak_qps(users, avg_requests_per_user=10))
+```
+
+Load is determined by request frequency, not user count. 1,000 users refreshing a feed every 10 seconds generates more load than 1M users checking email once a day.
+
+## Four metrics for scaling decisions
+
+These metrics establish the quantitative foundation for architecture decisions:
+
+1. **QPS** - how much work arrives per second
+2. **Data volume** - how much state the system stores and scans
+3. **Concurrent connections** - how many things stay open simultaneously
+4. **Latency percentiles** - p50, p95, p99 (not averages)
+
+Average latency hides problems. If p50 is 40ms but p99 is 4 seconds, the system is slow for 1 in 100 users.
+
+These four pressures are independent - a system can have low QPS but huge data, or high QPS but tiny data, or low traffic but high concurrency because every client holds a socket open. Each requires a different scaling strategy.
+
+## Common bottlenecks
+
+Initial bottlenecks typically occur at the code or query level:
+
+- N+1 queries
+- Missing database indexes
+- Hot cache keys
+- Oversized response payloads (e.g., 4 MB responses)
+- Background jobs retrying without jitter
+- Exhausted database connection pools
+- CPU-intensive work per request
+- Missing pagination on list endpoints
+
+Inefficient code scales linearly with load: at 50 QPS, overhead is minimal; at 500 QPS, costs increase; at 5,000 QPS, performance degrades significantly.
+
+Distributing into microservices replicates code-level inefficiencies across multiple services.
+
+## Single server capacity
+
+Typical capacity for a single modern server:
+
+```python
+SINGLE_POSTGRES_RULES_OF_THUMB = {
+    "connections": "100-500 active connections before connection pooling becomes critical",
+    "storage": "terabytes if indexes and maintenance are designed",
+    "read_qps": "10k-50k simple indexed reads in favorable conditions",
+    "write_qps": "depends on indexes, fsync, row size, constraints, and contention",
+}
+```
+
+- Single app servers: thousands of QPS for typical workloads
+- Cached reads: 10k+ QPS per server (Note that some hyper efficient backends can 2x this such as Actix written in Rust, as of 2026)
+- Postgres: hundreds of millions of rows with proper indexes and partitioning
+
+Database scalability depends on: database type, hardware specifications, schema design, query patterns, latency percentiles, and write patterns.
+
+## Common resource limits
+
+Resource exhaustion failure modes:
+
+| Resource | What happens |
+| --- | --- |
+| **Database connections** | Postgres allows a few hundred. Too many app workers exhaust the pool, requests queue, latency spikes, retries pile on → death spiral |
+| **File descriptors** | Every socket/file/pipe/connection consumes one. WebSockets burn through these fast. Box has CPU and memory left but can't open more handles |
+| **Memory** | Caches and queues grow. JSON bodies get copied. A leak invisible in staging ramps under production traffic → OOM |
+| **Locks** | A single hot row serializes work across the whole database. A shared mutex turns 32 cores into 1 |
+| **Thread/worker exhaustion** | All workers blocked on slow I/O, no capacity left for new requests |
+| **Network egress** | Large payloads and media hit bandwidth limits before CPU or memory |
+
+## When to scale vertically vs. distribute
+
+### Vertical scaling stops when:
+
+- **CPU-bound**: workload doesn't parallelize (global locks, single-threaded sections)
+- **Memory-bound**: hot data no longer fits in RAM, everything becomes a cache miss
+- **Disk-bound**: durable writes hit fsync/compaction/checkpoint limits
+- **Network-bound**: payload volume exceeds NIC throughput
+- **Operationally-bound**: backups take too long, schema changes lock tables, restores are impractical (this can force distribution before hardware limits do)
+
+### Scaling decision framework
+
+**Stay monolith when:**
+- One team can understand the codebase
+- One database holds the working set
+- Peak QPS fits on a few app nodes
+- Background work can be queued without changing the product contract
+
+**Scale vertically when:**
+- The bottleneck resource (CPU/memory/disk/network) is identified and measured
+- The next machine size buys meaningful headroom
+- Operational tasks still fit maintenance windows
+
+**Split reads from writes when:**
+- Read traffic dominates write traffic
+- Stale reads are acceptable for some paths
+
+**Add queues when:**
+- User-facing requests wait on deferrable work
+- Spikes are brief but expensive
+- Retries need backoff control
+
+**Split into services when:**
+- Teams require independent deploy cycles
+- Components have different scaling profiles
+- Clear data ownership boundaries exist
+
+**Shard/partition when:**
+- One database can't hold the data or sustain the write rate
+- Queries naturally include a partition key
+- Cross-partition operations are rare
+
+Distribution is a trade: you buy headroom with coordination cost, more failure modes, and more operational surface area.
+
+## The 1M → 100M gap
+
+The jump from 1M to 100M DAU changes the operating model, not just the scale.
+
+**At 1M DAU**: Vertical scaling remains effective. Standard approaches include larger database instances, connection pooling, CDN integration, read replicas, and background job queues. Missing indexes degrade performance but remain recoverable.
+
+**At 100M DAU**: 10 requests/user/day = ~115k peak QPS. An endpoint with 20ms CPU work per request consumes 2,300 CPU-seconds per second at peak. 100M new rows per day requires architectural consideration for retention policies, index strategies, and backfill infrastructure.
+
+Distribution becomes necessary when quantitative analysis indicates single-server limits have been reached.
+
+## Summary
+
+1. Convert user counts to QPS for architecture decisions
+2. Establish four metrics: QPS, data volume, concurrency, latency percentiles
+3. Address code-level bottlenecks (N+1 queries, missing indexes, oversized payloads) before distributing
+4. Single servers and single databases have substantial capacity with proper optimization
+5. Scale vertically until measured resource limits indicate distribution is required
+6. Each additional component introduces new failure modes - distribute when quantitative analysis supports it
+
+---
+
+## Pop quiz
+
+<Quiz
+  title="Scaling arithmetic check"
+  description="A randomized review of the quantitative scaling ideas from this post."
+  questionCount={4}
+  randomizeChoices={true}>
+  <QuizQuestion
+    id="five-million-peak-qps"
+    prompt="You have 5M daily active users, each making 5 requests per day. What is the estimated peak QPS using a 10x multiplier?"
+    explanation="Average QPS is (5,000,000 x 5) / 86,400, or about 289 QPS. At 10x peak, that becomes about 2,894 QPS.">
+    <QuizChoice>About 289 QPS</QuizChoice>
+    <QuizChoice correct>About 2,894 QPS</QuizChoice>
+    <QuizChoice>About 25,000 QPS</QuizChoice>
+    <QuizChoice>About 57,870 QPS</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="tail-latency"
+    prompt="Your system has p50 latency of 30ms and p99 latency of 6 seconds. Is this system fast?"
+    explanation="No. p50 is only the median. A p99 of 6 seconds means 1 in 100 requests is painfully slow, which matters for real users.">
+    <QuizChoice>Yes, because p50 is the user-visible latency that matters most</QuizChoice>
+    <QuizChoice correct>No, because p99 exposes severe tail latency</QuizChoice>
+    <QuizChoice>Yes, because averages are more useful than percentiles</QuizChoice>
+    <QuizChoice>No, but only because p50 should always be under 10ms</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="postgres-200-qps"
+    prompt="Your Postgres database is handling 200 QPS and response times are spiking. The team proposes splitting into three microservices. What should you check first?"
+    explanation="200 QPS is usually well within single-server capacity. Check code and data-access bottlenecks before adding distributed-system complexity.">
+    <QuizChoice correct>Indexes, N+1 queries, pool exhaustion, hot rows, locks, and oversized payloads</QuizChoice>
+    <QuizChoice>Whether the frontend can be split into separate deployments</QuizChoice>
+    <QuizChoice>Whether every endpoint has its own database</QuizChoice>
+    <QuizChoice>Whether the service graph can be drawn cleanly</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="four-scaling-metrics"
+    prompt="Which set of numbers should you establish before drawing an architecture diagram?"
+    explanation="The post frames scaling decisions around QPS, data volume, concurrent connections, and latency percentiles.">
+    <QuizChoice>Monthly users, team size, cloud vendor, and release cadence</QuizChoice>
+    <QuizChoice>CPU brand, deployment region, framework, and test coverage</QuizChoice>
+    <QuizChoice correct>QPS, data volume, concurrent connections, and latency percentiles</QuizChoice>
+    <QuizChoice>Repository size, lines of code, number of services, and build time</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="operational-scaling-pressure"
+    prompt="A 2TB Postgres instance handles traffic fine, but backups take 8 hours and schema migrations lock tables for extended periods. What does this suggest?"
+    explanation="This is an operational scaling pressure. Distribution can be justified when backups, restores, migrations, or maintenance windows stop fitting the system's needs.">
+    <QuizChoice>The database must be CPU-bound</QuizChoice>
+    <QuizChoice>The system needs more frontend caching only</QuizChoice>
+    <QuizChoice correct>Partitioning or distribution may be justified for operational reasons</QuizChoice>
+    <QuizChoice>The p50 latency must be too high</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="cpu-seconds-at-peak"
+    prompt="A system serves 10M DAU with 10 requests/user/day. One endpoint does 20ms of CPU work per request. How many CPU-seconds per second does this endpoint consume at 10x peak?"
+    explanation="Peak QPS is about 11,574. Multiplying by 0.020 seconds of CPU per request gives about 231 CPU-seconds per second.">
+    <QuizChoice>About 23 CPU-seconds per second</QuizChoice>
+    <QuizChoice correct>About 231 CPU-seconds per second</QuizChoice>
+    <QuizChoice>About 2,315 CPU-seconds per second</QuizChoice>
+    <QuizChoice>About 11,574 CPU-seconds per second</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="low-qps-high-concurrency"
+    prompt="A realtime app handles only 40 QPS, but it keeps 250,000 WebSocket connections open. Which scaling pressure matters most?"
+    explanation="Low request rate does not mean low scale. Long-lived sockets consume file descriptors, memory, connection tracking, and operational capacity.">
+    <QuizChoice>Average QPS, because requests per second is always the dominant scaling metric</QuizChoice>
+    <QuizChoice correct>Concurrent connections, because open sockets consume resources even when traffic is quiet</QuizChoice>
+    <QuizChoice>Repository size, because the codebase must be split before sockets matter</QuizChoice>
+    <QuizChoice>Monthly active users, because DAU is not relevant for realtime systems</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="read-replica-fit"
+    prompt="Read traffic is 20x higher than write traffic, and profile pages can tolerate being a few seconds stale. Which scaling move fits best?"
+    explanation="Read replicas help when reads dominate and some paths can tolerate stale data. They do not remove the need to reason about write paths and consistency.">
+    <QuizChoice correct>Split reads from writes with read replicas for stale-tolerant paths</QuizChoice>
+    <QuizChoice>Shard immediately, even if queries do not include a partition key</QuizChoice>
+    <QuizChoice>Put every endpoint in its own service</QuizChoice>
+    <QuizChoice>Increase the peak multiplier until the read traffic looks smaller</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="queue-deferrable-work"
+    prompt="Checkout requests synchronously send email, update analytics, and resize images before returning. What should you consider first?"
+    explanation="Deferrable work should usually move out of the user-facing request path. A queue also gives retries, backoff, and spike absorption.">
+    <QuizChoice>Make the checkout response payload larger so fewer requests are needed</QuizChoice>
+    <QuizChoice>Split the frontend into separate deployments</QuizChoice>
+    <QuizChoice correct>Add a queue for deferrable work so the request can return after the critical path</QuizChoice>
+    <QuizChoice>Increase database connections until all background work runs inline</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="vertical-scaling-limit"
+    prompt="A service has 32 CPU cores available, but a single global lock serializes the hot path. What is the likely vertical-scaling limit?"
+    explanation="A shared lock can turn many cores into effectively one core for the contended section. Adding hardware may not buy useful headroom until the serialization is removed.">
+    <QuizChoice>More cores will always increase throughput linearly</QuizChoice>
+    <QuizChoice correct>The workload may stay effectively single-threaded until the lock contention is fixed</QuizChoice>
+    <QuizChoice>The system must be network-bound because CPU is available</QuizChoice>
+    <QuizChoice>The right fix is always to add read replicas</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="oversized-payload-egress"
+    prompt="An endpoint serves 5,000 QPS and returns a 4 MB JSON payload each time. What bottleneck should you suspect?"
+    explanation="5,000 requests per second times 4 MB per response is about 20 GB/s of response data, so network egress and serialization costs can dominate.">
+    <QuizChoice>The request count is too small to matter</QuizChoice>
+    <QuizChoice>The only likely problem is database write throughput</QuizChoice>
+    <QuizChoice>The p50 latency must be perfect because the payload is JSON</QuizChoice>
+    <QuizChoice correct>Network egress and serialization pressure from oversized responses</QuizChoice>
+  </QuizQuestion>
+</Quiz>

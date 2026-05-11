@@ -5,7 +5,9 @@ date: "2026-04-07"
 tags: ["Apple", "Privacy", "Legal", "iOS"]
 ---
 
-I sat down and actually read Apple's software license agreement — the one you click "Agree" on without reading. There are a few clauses in there worth knowing about, especially if you care about what you're consenting to when you use your own device.
+Woke up this morning and did something nobody does. Read Apple's software license agreement. The whole thing. Every clause you click "Agree" on without reading coz who reads these things.
+
+Turns out there's stuff in there that makes me uneasy about my own device.
 
 <div style={{ margin: '1.75rem 0 2rem' }}>
   <figure>
@@ -148,46 +150,44 @@ I sat down and actually read Apple's software license agreement — the one you 
     </figcaption>
   </figure>
 </div>
-# Key points about iOS 26.4
+## What I found in iOS 26.4
 
-Read through the terms of service and found a few things that stand out/
+Started in section 1c. Silent system updates.
 
-## Silent system updates you can't fully disable
+Even when you turn off automatic updates, Apple pushes "system files" whenever it wants. Fonts, language models, voice assets, firmware. The toggle you think controls this doesn't actually control everything. You're told it happens but there's no full opt-out. Your phone, their update schedule.
 
-**Section 1c.** Even if you turn off automatic OS updates, Apple reserves the right to silently push "system files" — fonts, language models, voice assets, peripheral firmware — whenever you use certain features. There is no full opt-out. You're told it happens, but the toggle doesn't cover everything.
+Section 4 got me thinking about consent.
 
-## Broad data consent baked into feature use
+When you enable Location Services, Siri, Dictation - that act of turning it on *is* your consent to send data to Apple. Not a separate agreement. Just using the feature. They frame it as "details will be provided when you turn on these features" but the consent already happened. The feature is the consent.
 
-**Section 4.** Using Location Services, Siri, or Dictation implicitly consents to your data being sent to Apple. The consent is somewhat buried — it's framed as "details will be provided when you turn on these features" rather than surfaced upfront. The act of enabling the feature *is* the consent.
+Section 8. The $250 cap.
 
-## $250 liability cap
+Apple's total liability for damages is capped at $250. My iPhone cost over a thousand. Bricked phone, lost data, bad update - doesn't matter. Most you can recover is $250. That ratio sits wrong with me.
 
-**Section 8.** Apple's total liability to you for all damages is capped at $250 USD, regardless of what goes wrong. For a device that costs $1,000+, this is notably lopsided. A bricked phone, lost data, a bad update — the most you can recover is $250.
+Apple Pay section 6. Jailbreaking voids everything.
 
-## Jailbreaking voids Apple Pay
+Modify your own device and they can permanently cut you off from Apple Pay and Wallet. Your hardware, but their payment system, their rules. Device modification is legal in many places but Apple doesn't care. Touch the wrong thing and your payment app disappears.
 
-**Apple Pay Section 6.** Modifying your own hardware can get you permanently cut off from Apple Pay and Wallet. This is fairly aggressive given that device modification is legal in many jurisdictions. Your phone, their payment rails.
+Section 10b made me pause. HIPAA disclaimer.
 
-## HIPAA disclaimer
+Apple explicitly says don't use iOS devices for protected health information. That's a large carve-out considering how many health apps I have installed and how heavily they market health features. The contradiction is just sitting there in the license agreement.
 
-**Section 10b.** Apple explicitly says: don't use Apple devices or services to handle protected health information. That's a significant carve-out given how many health apps live on iOS and how heavily Apple markets health features.
+Section 11. California law for everyone.
 
-## California law governs everything
+Unless you're in the UK, Cupertino's legal system governs your disputes. Wherever you live. Your local consumer protections might not apply. Japan gets a small carve-out for intentional misconduct but most of the world operates under California law by clicking Agree.
 
-**Section 11.** Unless you're in the UK, California law applies to disputes globally. This can limit your local consumer protections depending on where you live. Japan's jurisdictional supplement does carve out intentional misconduct liability, but most users are governed by Cupertino's home turf.
+Section 5h. AI outputs.
 
-## The AI outputs disclaimer
+There's a clause that puts all responsibility for AI-generated content on you. Evaluate it yourself before relying on it. That'll age into something bigger as Apple Intelligence gets woven deeper into the OS and starts making more decisions.
 
-**Section 5h.** There's a clause burying responsibility for AI-generated content accuracy onto you. You're told to evaluate AI outputs yourself before relying on them. Broad and self-serving given that Apple Intelligence is now woven into the OS.
+The $250 cap and the silent update carve-out are the two that stuck with me. The AI disclaimer will matter more over time.
 
----
+## What's happening with iOS right now
 
-None of these are unusual for a major tech EULA, but the **$250 liability cap** and the **silent system file update carve-out** are the two most worth knowing about. The AI disclaimer will probably age into relevance as Apple Intelligence takes on more responsibility in the interface.
+Apple's rolling out updates on two fronts. [iOS 26.4.1](https://www.macrumors.com/2026/04/06/ios-26-4-1-coming-soon/) should drop any day - minor bug fixes and security stuff. [iOS 26.5 beta 1](https://www.macrumors.com/2026/03/30/apple-seeds-first-ios-26-5-beta/) landed last week with encrypted RCS in Messages, ads coming to Apple Maps, and if you're in the EU some new features for third-party smartwatches and headphones under the Digital Markets Act.
 
-## Meanwhile, in iOS land
-
-Apple is currently rolling out updates on two fronts. [iOS 26.4.1](https://www.macrumors.com/2026/04/06/ios-26-4-1-coming-soon/) is expected any day now as a minor bug and security fix. More notably, [iOS 26.5 beta 1](https://www.macrumors.com/2026/03/30/apple-seeds-first-ios-26-5-beta/) landed last week with groundwork for end-to-end encrypted RCS in Messages, ads in Apple Maps, and — in the EU — extended iPhone features like notifications and Live Activities for third-party smartwatches and headphones under the Digital Markets Act. For users still on iOS 18, Apple also shipped [iOS 18.7.7](https://tidbits.com/2026/04/01/apple-offers-ios-18-7-7-security-update-as-alternative-to-ios-26-4-upgrade/) as a security-only alternative patching the DarkSword web vulnerability.
+For people still on iOS 18, Apple shipped [iOS 18.7.7](https://tidbits.com/2026/04/01/apple-offers-ios-18-7-7-security-update-as-alternative-to-ios-26-4-upgrade/) as a security patch for the DarkSword web vulnerability without forcing the upgrade.
 
 <Callout type="info" title="April 7, 2026">
-  I'm not a lawyer and this isn't legal advice. These are observations from reading the publicly available Apple SLA. If any of these clauses affect you materially, consult someone who passed the bar.
+  Not a lawyer. These are just observations from reading Apple's publicly available SLA. If any of this affects you materially, talk to someone who actually passed the bar.
 </Callout>

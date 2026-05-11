@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { slugifyHeading } from '@/lib/blog-helpers'
 import { Demo } from './Demo'
 import { KyotoBlossomExplorer } from './KyotoBlossomExplorer'
+import { Quiz, QuizAnswer, QuizChoice, QuizQuestion } from './Quiz'
 
 interface CalloutProps {
   type?: 'info' | 'warning'
@@ -228,6 +229,10 @@ export const mdxComponents = {
   HeroImage,
   Video,
   Demo,
+  Quiz,
+  QuizQuestion,
+  QuizChoice,
+  QuizAnswer,
   KyotoBlossomExplorer
 }
 

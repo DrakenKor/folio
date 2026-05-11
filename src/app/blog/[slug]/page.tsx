@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { TagBadge } from '@/components/blog/TagBadge'
 import { mdxComponents } from '@/components/mdx'
 import { getAdjacentPosts, getAllPostMeta, getPostBySlug } from '@/lib/blog'
+import { blogMdxOptions } from '@/lib/blog-mdx-options'
 import { formatBlogDate } from '@/lib/blog-helpers'
 
 interface BlogPostPageProps {
@@ -84,7 +85,11 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       </header>
 
       <div className="blog-prose">
-        <MDXRemote source={post.content} components={mdxComponents} />
+        <MDXRemote
+          source={post.content}
+          components={mdxComponents}
+          options={blogMdxOptions}
+        />
       </div>
 
       <nav className="blog-adjacent-nav" aria-label="Adjacent posts">

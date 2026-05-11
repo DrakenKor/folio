@@ -5,8 +5,9 @@ date: "2026-03-31"
 tags: ["MDX", "Next.js", "Blogging", "Security"]
 ---
 
-I was thinking of a blog system dynamic enough to accommodate enriched html with embeds, as well as a search function, working within the constraints of github pages (Static hosting). I settled on markdown-first '.mdx' format blog posts 
-where the routes are generated at build time, with interpolated JSX.
+Been thinking about a blog system for this repo. Needed something dynamic enough for rich HTML and embeds, search functionality, but constrained to GitHub Pages which is static hosting only.
+
+Settled on MDX. Markdown-first blog posts with interpolated JSX. Routes generated at build time.
 <div style={{ margin: '1.75rem 0 2rem' }}>
   <figure>
     <svg
@@ -160,9 +161,9 @@ where the routes are generated at build time, with interpolated JSX.
   </figure>
 </div>
 
-## Keep the route surface static
+## How it works
 
-The blog works because the dynamic parts are decided before deployment. Posts are discovered from `src/content/blog`, frontmatter is validated once, and the blog routes are generated ahead of time so the site still fits `output: 'export'`.
+The dynamic parts get decided before deployment. Posts discovered from `src/content/blog`, frontmatter validated once, routes generated ahead of time. Site still fits `output: 'export'`.
 
 ```ts
 const post = getPostBySlug(slug)
@@ -170,12 +171,14 @@ const post = getPostBySlug(slug)
 <MDXRemote source={post.content} components={mdxComponents} />
 ```
 
-## Tight use of JSX
+## JSX kept tight
 
-I used MDX for a small, curated component surface instead of turning posts into unrestricted React files. That gave me headings, links, callouts, demos, and room for visual pieces like the doodle SVG, while the writing still feels like markdown instead of application code.
+Used MDX for a small component surface. Not unrestricted React files. Gave me headings, links, callouts, demos, visual pieces like the SVG doodles. Writing still feels like markdown. Not application code.
+
+I wanted the writing surface to stay calm. JSX only carries the visual edges.
 
 <Callout type="warning" title="March 31, 2026">
-  I finished this at the end of Q1 while the axios supply-chain compromise was unfolding. Public reporting on March 30 and March 31, 2026 identified malicious npm releases `axios@1.14.1` and `axios@0.30.4`. This repo does not install axios, but the incident still made me feel like the defaults in this repo feel correct: exact versions, a lockfile, `min-release-age`, and `ignore-scripts`.
+  Finished this end of Q1 while the axios supply-chain compromise was happening. March 30 and 31, 2026 - malicious npm releases `axios@1.14.1` and `axios@0.30.4`. This repo doesn't install axios but the incident made me think the defaults here are correct. Exact versions, lockfile, `min-release-age`, `ignore-scripts`.
 </Callout>
 
-That was the shape I wanted: markdown for speed, JSX for the rare expressive parts, and a blog system small enough that I can still trust what it is doing.
+That's the shape. Markdown for speed, JSX for the rare expressive parts, blog system small enough I can still trust what it's doing.
