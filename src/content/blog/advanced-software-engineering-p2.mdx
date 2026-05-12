@@ -1,0 +1,718 @@
+---
+title: "Databases don't scale, data models do"
+description: "The database is rarely the first bottleneck. The schema, indexes, and read model decide how much work every request creates."
+date: "2026-05-12"
+tags: ["Databases", "Schema Design", "PostgreSQL", "Scale"]
+---
+
+A slow database usually looks like a database problem first.
+
+CPU is high. Queries queue. The app times out. Someone suggests a larger instance, read replicas, sharding, or a different database.
+
+Sometimes that is correct. More often, the data model is forcing the database to do too much work per request.
+
+This post is about the cheaper path: model the data around the access pattern before changing the storage engine.
+
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 420"
+      role="img"
+      aria-labelledby="data-model-svg-title data-model-svg-desc"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <title id="data-model-svg-title">Normalized and denormalized query paths</title>
+      <desc id="data-model-svg-desc">
+        Animated split-screen comparison between a normalized schema with join paths and a denormalized feed cache with a direct index scan.
+      </desc>
+      <defs>
+        <linearGradient id="data-model-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#07111a" />
+          <stop offset="100%" stopColor="#0a1724" />
+        </linearGradient>
+        <pattern id="data-model-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#dbeafe" strokeWidth="0.5" opacity="0.08" />
+        </pattern>
+        <pattern id="data-model-grid-major" width="96" height="96" patternUnits="userSpaceOnUse">
+          <path d="M 96 0 L 0 0 0 96" fill="none" stroke="#dbeafe" strokeWidth="1" opacity="0.12" />
+        </pattern>
+        <filter id="data-model-soft-glow">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+
+      <rect width="720" height="420" rx="18" fill="url(#data-model-bg)" />
+      <rect width="720" height="420" fill="url(#data-model-grid-minor)" />
+      <rect width="720" height="420" fill="url(#data-model-grid-major)" />
+      <line x1="360" y1="44" x2="360" y2="376" stroke="#dbeafe" strokeWidth="1" opacity="0.3" />
+
+      <text x="180" y="48" textAnchor="middle" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        Normalized
+      </text>
+      <text x="540" y="48" textAnchor="middle" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        Denormalized
+      </text>
+
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.12;0.9;1" dur="10s" repeatCount="indefinite" />
+        <rect x="90" y="100" width="80" height="60" rx="8" fill="none" stroke="#67e8f9" strokeWidth="1.5" />
+        <rect x="90" y="250" width="80" height="60" rx="8" fill="none" stroke="#67e8f9" strokeWidth="1.5" />
+        <rect x="250" y="100" width="80" height="60" rx="8" fill="none" stroke="#67e8f9" strokeWidth="1.5" />
+        <rect x="250" y="250" width="80" height="60" rx="8" fill="none" stroke="#67e8f9" strokeWidth="1.5" />
+
+        <text x="130" y="135" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          users
+        </text>
+        <text x="130" y="285" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          posts
+        </text>
+        <text x="290" y="135" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          comments
+        </text>
+        <text x="290" y="285" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          likes
+        </text>
+
+        <path id="data-model-left-path-a" d="M 170 130 L 250 130 L 290 250" fill="none" stroke="#93c5fd" strokeDasharray="4 8" strokeWidth="1.4" opacity="0.7" />
+        <path id="data-model-left-path-b" d="M 130 160 L 130 250 L 250 280" fill="none" stroke="#93c5fd" strokeDasharray="4 8" strokeWidth="1.4" opacity="0.7" />
+        <path id="data-model-left-path-c" d="M 170 280 L 250 130 L 330 280" fill="none" stroke="#93c5fd" strokeDasharray="4 8" strokeWidth="1.4" opacity="0.7" />
+        <path id="data-model-left-path-d" d="M 290 160 L 130 250 L 290 250" fill="none" stroke="#93c5fd" strokeDasharray="4 8" strokeWidth="1.4" opacity="0.55" />
+
+        <circle r="3" fill="#fbbf24" filter="url(#data-model-soft-glow)">
+          <animateMotion dur="2.8s" begin="1s" repeatCount="indefinite" path="M 170 130 L 250 130 L 290 250" />
+        </circle>
+        <circle r="3" fill="#fbbf24" filter="url(#data-model-soft-glow)">
+          <animateMotion dur="3.4s" begin="1.2s" repeatCount="indefinite" path="M 130 160 L 130 250 L 250 280" />
+        </circle>
+        <circle r="3" fill="#fbbf24" filter="url(#data-model-soft-glow)">
+          <animateMotion dur="4s" begin="1.4s" repeatCount="indefinite" path="M 170 280 L 250 130 L 330 280" />
+        </circle>
+        <circle r="3" fill="#fbbf24" opacity="0.75" filter="url(#data-model-soft-glow)">
+          <animateMotion dur="3.1s" begin="1.6s" repeatCount="indefinite" path="M 290 160 L 130 250 L 290 250" />
+        </circle>
+
+        <rect x="70" y="88" width="280" height="236" rx="14" fill="none" stroke="#ef4444" strokeWidth="2" opacity="0">
+          <animate attributeName="opacity" values="0;0;0.65;0.2;0.65;0" keyTimes="0;0.28;0.42;0.56;0.76;1" dur="10s" repeatCount="indefinite" />
+        </rect>
+      </g>
+
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.12;0.9;1" dur="10s" repeatCount="indefinite" />
+        <rect x="450" y="88" width="180" height="260" rx="8" fill="none" stroke="#10b981" strokeWidth="2" />
+        <text x="540" y="120" textAnchor="middle" fill="#d1fae5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13">
+          feed_cache
+        </text>
+        <line x1="470" y1="146" x2="610" y2="146" stroke="#10b981" strokeWidth="1" opacity="0.55" />
+        <line x1="470" y1="186" x2="610" y2="186" stroke="#10b981" strokeWidth="1" opacity="0.45" />
+        <line x1="470" y1="226" x2="610" y2="226" stroke="#10b981" strokeWidth="1" opacity="0.45" />
+        <line x1="470" y1="266" x2="610" y2="266" stroke="#10b981" strokeWidth="1" opacity="0.45" />
+        <line x1="470" y1="306" x2="610" y2="306" stroke="#10b981" strokeWidth="1" opacity="0.45" />
+        <path d="M 540 142 L 540 322" fill="none" stroke="#bbf7d0" strokeWidth="1.5" strokeDasharray="3 7" opacity="0.8" />
+        <circle r="4" fill="#10b981" filter="url(#data-model-soft-glow)">
+          <animate attributeName="cy" values="142;322;142" dur="2.4s" begin="1s" repeatCount="indefinite" />
+          <animate attributeName="cx" values="540;540;540" dur="2.4s" begin="1s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.16;0.82;1" dur="2.4s" begin="1s" repeatCount="indefinite" />
+        </circle>
+      </g>
+
+      <text x="70" y="374" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+        Query time
+      </text>
+      <text x="160" y="374" fill="#ef4444" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="14" fontWeight="700" opacity="0">
+        450ms
+        <animate attributeName="opacity" values="0;1;0;0;0" keyTimes="0;0.18;0.36;0.74;1" dur="10s" begin="1s" repeatCount="indefinite" />
+      </text>
+      <text x="160" y="374" fill="#ef4444" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="14" fontWeight="700" opacity="0">
+        890ms
+        <animate attributeName="opacity" values="0;0;1;0;0" keyTimes="0;0.28;0.46;0.66;1" dur="10s" begin="1s" repeatCount="indefinite" />
+      </text>
+      <text x="160" y="374" fill="#ef4444" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="14" fontWeight="700" opacity="0">
+        1200ms
+        <animate attributeName="opacity" values="0;0;0;1;0" keyTimes="0;0.48;0.62;0.82;1" dur="10s" begin="1s" repeatCount="indefinite" />
+      </text>
+
+      <text x="430" y="374" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+        Query time
+      </text>
+      <text x="520" y="374" fill="#10b981" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="14" fontWeight="700" opacity="0">
+        12ms
+        <animate attributeName="opacity" values="0;1;0;0;0" keyTimes="0;0.18;0.36;0.74;1" dur="10s" begin="1s" repeatCount="indefinite" />
+      </text>
+      <text x="520" y="374" fill="#10b981" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="14" fontWeight="700" opacity="0">
+        15ms
+        <animate attributeName="opacity" values="0;0;1;0;0" keyTimes="0;0.28;0.46;0.66;1" dur="10s" begin="1s" repeatCount="indefinite" />
+      </text>
+      <text x="520" y="374" fill="#10b981" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="14" fontWeight="700" opacity="0">
+        18ms
+        <animate attributeName="opacity" values="0;0;0;1;0" keyTimes="0;0.48;0.62;0.82;1" dur="10s" begin="1s" repeatCount="indefinite" />
+      </text>
+    </svg>
+  </figure>
+</div>
+
+## Start with the read path
+
+A schema is not good or bad in isolation. It is good or bad for a workload.
+
+Before adding tables or indexes, write down the read path:
+
+1. What endpoint or job is reading?
+2. Which columns does it filter by?
+3. Which column decides sort order?
+4. How many rows can match before `LIMIT` applies?
+5. Does the read need fresh data, or is stale data acceptable?
+6. Is this path hit 10 times per minute, or 10,000 times per second?
+
+The answer changes the model.
+
+An admin report can join six tables and run for two seconds. A feed endpoint cannot. A nightly billing job can scan a large table. A signup request cannot wait on the same scan.
+
+<Callout title="Rule of thumb">
+  Normalize the source of truth. Denormalize the read model when the product repeatedly asks the same expensive question.
+</Callout>
+
+## The normalized version
+
+Start with a normal schema:
+
+```sql
+CREATE TABLE users (
+  id bigint PRIMARY KEY,
+  display_name text NOT NULL
+);
+
+CREATE TABLE posts (
+  id bigint PRIMARY KEY,
+  user_id bigint NOT NULL REFERENCES users (id),
+  title text NOT NULL,
+  created_at timestamptz NOT NULL
+);
+
+CREATE TABLE comments (
+  id bigint PRIMARY KEY,
+  post_id bigint NOT NULL REFERENCES posts (id),
+  author_id bigint NOT NULL REFERENCES users (id),
+  content text NOT NULL,
+  created_at timestamptz NOT NULL
+);
+```
+
+This is clean. Each fact lives in one place.
+
+Now add the read:
+
+```sql
+SELECT
+  u.display_name AS post_author,
+  p.title AS post_title,
+  c.id AS comment_id,
+  c.content,
+  c.created_at
+FROM users u
+JOIN posts p ON p.user_id = u.id
+JOIN comments c ON c.post_id = p.id
+WHERE u.id = $1
+ORDER BY c.created_at DESC
+LIMIT 100;
+```
+
+The product question is simple: "Show the latest comments on this user's posts."
+
+The database question is bigger:
+
+1. Find the user's posts.
+2. Find comments for those posts.
+3. Order comments across all matching posts.
+4. Return the newest 100 rows.
+5. Fetch display data from related tables.
+
+`LIMIT 100` does not make this automatically cheap. If the user has 50,000 posts and 80M comments across those posts (Most prolific user in history), the planner still needs a path to find the newest 100 without doing work proportional to the full match set.
+
+Indexes help:
+
+```sql
+CREATE INDEX posts_user_id_idx
+  ON posts (user_id, id);
+
+CREATE INDEX comments_post_created_idx
+  ON comments (post_id, created_at DESC);
+```
+
+This is better than a full scan. It is still not the same as one direct lookup. The query shape requires a join boundary between `posts` and `comments`, then an ordering problem across many `post_id` values.
+
+## What I notice
+
+The expensive part is rarely the join keyword itself.
+
+The expensive part is the amount of candidate data created before the database can return the first page. A join over 100 rows is fine. A join that creates 4M candidate rows and sorts them to return 100 rows is not fine.
+
+This is where teams often mislabel the problem.
+
+"Postgres is slow" is usually too broad.
+
+"This endpoint needs latest comments by user, but comments are keyed by post" is specific enough to fix.
+
+## Build the read model
+
+For a hot feed path, create a read-optimized table:
+
+```sql
+CREATE TABLE comment_feed (
+  user_id bigint NOT NULL,
+  created_at timestamptz NOT NULL,
+  comment_id bigint NOT NULL,
+  post_id bigint NOT NULL,
+  post_title text NOT NULL,
+  post_author_name text NOT NULL,
+  comment_author_id bigint NOT NULL,
+  comment_author_name text NOT NULL,
+  content text NOT NULL,
+  PRIMARY KEY (user_id, created_at, comment_id)
+);
+
+CREATE INDEX comment_feed_user_recent_idx
+  ON comment_feed (user_id, created_at DESC, comment_id);
+```
+
+The read becomes:
+
+```sql
+SELECT
+  post_title,
+  post_author_name,
+  comment_author_name,
+  content,
+  created_at
+FROM comment_feed
+WHERE user_id = $1
+ORDER BY created_at DESC
+LIMIT 100;
+```
+
+Now the database can walk one index range in the same order the endpoint needs.
+
+That is the main idea. Not "avoid joins always." Not "duplicate everything." The idea is to make the common read path proportional to the page size, not proportional to the historical data behind the page.
+
+## The cost of denormalization
+
+Denormalization moves work from read time to write time.
+
+When a comment is created, more than one thing may happen:
+
+```sql
+BEGIN;
+
+INSERT INTO comments (
+  id,
+  post_id,
+  author_id,
+  content,
+  created_at
+) VALUES (
+  $1,
+  $2,
+  $3,
+  $4,
+  now()
+);
+
+INSERT INTO comment_feed (
+  user_id,
+  created_at,
+  comment_id,
+  post_id,
+  post_title,
+  post_author_name,
+  comment_author_id,
+  comment_author_name,
+  content
+)
+SELECT
+  p.user_id,
+  now(),
+  $1,
+  p.id,
+  p.title,
+  post_author.display_name,
+  comment_author.id,
+  comment_author.display_name,
+  $4
+FROM posts p
+JOIN users post_author ON post_author.id = p.user_id
+JOIN users comment_author ON comment_author.id = $3
+WHERE p.id = $2;
+
+COMMIT;
+```
+
+One logical write now creates multiple physical writes. That is write amplification.
+
+It is acceptable when:
+
+1. Reads dominate writes.
+2. The read path has strict latency needs.
+3. The duplicated fields are small and stable enough.
+4. You have a repair path for rebuilding the derived table.
+
+It is risky when:
+
+1. The duplicated fields change constantly.
+2. Writes are already the bottleneck.
+3. The read model needs to update thousands of rows synchronously.
+4. No one owns backfills and consistency checks.
+
+<Callout type="warning" title="Warning">
+  A denormalized table without a rebuild job is only half a design. Derived data needs a way to be repaired after bugs, retries, and schema changes.
+</Callout>
+
+## Optimize for reads, batch writes
+
+In many product systems, read paths outnumber write paths. That does not mean writes are unimportant. It means the write path can often absorb extra work asynchronously.
+
+For example:
+
+```text
+comment.created
+  -> insert canonical comment
+  -> enqueue feed projection update
+  -> enqueue notification update
+  -> enqueue search indexing
+```
+
+The request path can commit the canonical row and enqueue durable work. Workers can update read models in batches.
+
+This creates an explicit product decision:
+
+1. If the user must see the new data immediately, update the read model synchronously.
+2. If a delay of a few seconds is acceptable, update it asynchronously.
+3. If the read model is only for analytics, update it in larger batches.
+
+Freshness is part of schema design. Treat it as a requirement, not an implementation detail.
+
+## Indexes are data models too
+
+An index is a stored projection of the table. It has a shape. It has maintenance cost. It is not a general speed switch.
+
+Use the query to choose the index order.
+
+For this query:
+
+```sql
+SELECT *
+FROM comment_feed
+WHERE user_id = $1
+ORDER BY created_at DESC
+LIMIT 100;
+```
+
+This index matches the access pattern:
+
+```sql
+CREATE INDEX comment_feed_user_recent_idx
+  ON comment_feed (user_id, created_at DESC);
+```
+
+This one looks similar but is weaker for the same query:
+
+```sql
+CREATE INDEX comment_feed_recent_user_idx
+  ON comment_feed (created_at DESC, user_id);
+```
+
+The first index groups one user's rows together, already sorted by time. The second index starts with time across all users. The database may still need to skip over many rows from other users.
+
+Column order matters.
+
+## B-tree, hash, covering, partial
+
+Most everyday Postgres indexes are B-tree indexes. They support equality, range scans, and ordered reads. That makes them the default choice for feed queries, lookup pages, account lists, and most filters.
+
+Hash indexes are narrower. They are for equality lookup only. They do not support order. If you need `ORDER BY`, a hash index is the wrong shape.
+
+Covering indexes use `INCLUDE` columns to avoid extra table fetches for small, commonly returned fields:
+
+```sql
+CREATE INDEX comment_feed_covering_idx
+  ON comment_feed (user_id, created_at DESC)
+  INCLUDE (comment_id, post_id, post_title, comment_author_name);
+```
+
+Do not put large text blobs into covering indexes by default. You are copying data into the index. That can increase storage, cache pressure, and write cost.
+
+Partial indexes index only the rows a query actually needs:
+
+```sql
+CREATE INDEX comments_visible_recent_idx
+  ON comments (post_id, created_at DESC)
+  WHERE deleted_at IS NULL;
+```
+
+This is useful when most queries ignore deleted, archived, private, or expired rows.
+
+The wrong index can be worse than no index because every index adds write cost. Each insert, update, and delete has more structures to maintain. Too many unused indexes slow writes and make maintenance heavier.
+
+## When to add a column vs. a table
+
+Add a column when:
+
+1. The value is one-to-one with the row.
+2. It is read with the row most of the time.
+3. It changes at the same lifecycle as the row.
+4. It has bounded size.
+
+Create another table when:
+
+1. The relationship is one-to-many.
+2. The data has a different lifecycle.
+3. The data changes at a much higher rate.
+4. The data is optional, sparse, or large.
+
+Example:
+
+```sql
+-- Usually fine: one post has one current moderation state.
+ALTER TABLE posts
+ADD COLUMN moderation_state text NOT NULL DEFAULT 'pending';
+
+-- Better as a table: one post has many moderation events.
+CREATE TABLE post_moderation_events (
+  id bigint PRIMARY KEY,
+  post_id bigint NOT NULL REFERENCES posts (id),
+  actor_id bigint NOT NULL REFERENCES users (id),
+  action text NOT NULL,
+  created_at timestamptz NOT NULL
+);
+```
+
+The decision is not about purity. It is about read cost, write cost, and lifecycle.
+
+## Partitioning
+
+Partitioning splits one logical table into smaller physical pieces.
+
+Horizontal partitioning splits by rows:
+
+```text
+comments_2026_05
+comments_2026_06
+comments_2026_07
+```
+
+Vertical partitioning splits by columns:
+
+```text
+posts
+post_bodies
+post_embeddings
+```
+
+Horizontal partitioning helps when queries can exclude partitions. A query for May 2026 comments does not need to inspect June 2026 partitions.
+
+Vertical partitioning helps when a small hot row carries large cold fields. A list page may need `post_id`, `title`, and `created_at`, but not a 40 KB body or a 1,536-dimension embedding.
+
+Partitioning helps only if the query includes the partition key.
+
+```sql
+-- Good partition fit: includes created_at.
+SELECT *
+FROM comments
+WHERE created_at >= '2026-05-01'
+  AND created_at < '2026-06-01';
+
+-- Poor partition fit: no partition key.
+SELECT *
+FROM comments
+WHERE author_id = $1;
+```
+
+If the table is partitioned by month, the second query may still touch many partitions.
+
+## Hot partitions
+
+Partitioning can create a new bottleneck.
+
+If you partition writes by `created_at`, almost every new row goes into the current partition. Historical partitions are quiet. The current partition is hot.
+
+If you partition by `tenant_id`, one large tenant can dominate one partition.
+
+If you hash by `user_id`, writes spread more evenly, but range queries by date become harder.
+
+There is no free partition key. Pick the key that matches the dominant access pattern and the dominant failure mode.
+
+## Sharding decision point
+
+Sharding is partitioning across database servers. It is operationally expensive, so delay it until the numbers justify it.
+
+Consider sharding when:
+
+1. One primary cannot sustain the write rate.
+2. One database cannot hold the working set.
+3. Backups, restores, vacuum, or migrations no longer fit operational windows.
+4. Most critical queries include a shard key.
+5. Cross-shard transactions are rare or can be redesigned.
+
+Avoid sharding when:
+
+1. The slow query is missing an index.
+2. The app has N+1 queries.
+3. One hot customer or hot key is the real issue.
+4. The product needs frequent global ordering, global uniqueness, or cross-tenant reports.
+
+Sharding does not remove data modeling work. It makes bad data models harder to fix.
+
+## What I think
+
+The practical sequence is:
+
+1. Measure the slow path.
+2. Write the query shape in plain language.
+3. Add the obvious index.
+4. Check the plan with `EXPLAIN (ANALYZE, BUFFERS)`.
+5. If the endpoint is still doing work proportional to history, build a read model.
+6. If write amplification becomes the bottleneck, batch or queue derived updates.
+7. Partition for operations and query exclusion.
+8. Shard only when one database is no longer a reasonable unit.
+
+This is why "database scaling" is often a misleading phrase. The database executes the work your model asks for. Change the work first.
+
+## Tutorial checklist
+
+For any hot read path, fill this out:
+
+| Question | Example answer |
+| --- | --- |
+| Product read | Latest comments on a user's posts |
+| Filter | `user_id = $1` |
+| Sort | `created_at DESC` |
+| Page size | 100 rows |
+| Candidate set | Up to tens of millions for large users |
+| Freshness | A few seconds stale is acceptable |
+| Source of truth | `comments`, `posts`, `users` |
+| Read model | `comment_feed` |
+| Primary index | `(user_id, created_at DESC)` |
+| Repair path | Rebuild feed rows from canonical comments |
+
+Then choose the lowest-complexity design that makes the common read proportional to the page size.
+
+## Summary
+
+1. Schema design is where scale begins.
+2. Normalization is good for source-of-truth data, but hot reads often need derived models.
+3. Denormalization trades read speed for write amplification and consistency work.
+4. Index order should match filter columns, sort columns, and page limits.
+5. Partial and covering indexes help when they match specific query shapes.
+6. Partitioning helps when queries include the partition key.
+7. Sharding is a last step, not a first fix.
+
+---
+
+## Pop quiz
+
+<Quiz
+  title="Data modeling for scale"
+  description="A randomized review of schema, index, denormalization, and partitioning decisions from this post."
+  questionCount={4}
+  randomizeChoices={true}>
+  <QuizQuestion
+    id="read-path-first"
+    prompt="What should you write down before changing the schema for a hot endpoint?"
+    explanation="A schema should be evaluated against the workload. The read path tells you filters, sort order, page size, freshness, and candidate row count.">
+    <QuizChoice>A database-wide benchmark that does not describe the endpoint</QuizChoice>
+    <QuizChoice correct>The endpoint's filters, sort order, page size, freshness requirement, and candidate set</QuizChoice>
+    <QuizChoice>The number of tables in the entire database</QuizChoice>
+    <QuizChoice>The total number of application repositories</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="limit-does-not-save-query"
+    prompt="Why does `LIMIT 100` not automatically make a query cheap?"
+    explanation="The database may need to find, join, filter, or sort a large candidate set before it knows which 100 rows are first.">
+    <QuizChoice correct>The database may still need to process a large candidate set before returning the first 100 rows</QuizChoice>
+    <QuizChoice>`LIMIT` only works on tables with fewer than 100 rows</QuizChoice>
+    <QuizChoice>`LIMIT` disables indexes in relational databases</QuizChoice>
+    <QuizChoice>`LIMIT` makes writes slower, not reads</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="denormalization-tradeoff"
+    prompt="What is the main tradeoff when adding a denormalized read model?"
+    explanation="Denormalization usually moves work from read time to write time. Reads get simpler, but writes update more stored structures and need repair paths.">
+    <QuizChoice>It removes the need for indexes</QuizChoice>
+    <QuizChoice>It guarantees strong consistency without transactions</QuizChoice>
+    <QuizChoice correct>It speeds common reads by adding write amplification and consistency work</QuizChoice>
+    <QuizChoice>It makes every query global by default</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="index-order"
+    prompt="For `WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`, which index shape matches best?"
+    explanation="Put the equality filter first, then the sort column. This lets the database walk one user's rows in the requested order.">
+    <QuizChoice>`(created_at DESC, user_id)`</QuizChoice>
+    <QuizChoice correct>`(user_id, created_at DESC)`</QuizChoice>
+    <QuizChoice>`(content, created_at DESC)`</QuizChoice>
+    <QuizChoice>`(created_at DESC)` only</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="hash-index-fit"
+    prompt="When is a hash index a poor fit?"
+    explanation="Hash indexes are for equality lookup. They do not support ordered scans, so they are a poor fit when the query needs `ORDER BY`.">
+    <QuizChoice>When the query is a pure equality lookup</QuizChoice>
+    <QuizChoice correct>When the query needs rows returned in sorted order</QuizChoice>
+    <QuizChoice>When the table has a primary key</QuizChoice>
+    <QuizChoice>When the table has fewer than one million rows</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="partial-index"
+    prompt="What is a partial index useful for?"
+    explanation="A partial index stores entries only for rows matching a predicate, such as non-deleted rows, which can reduce index size and write cost.">
+    <QuizChoice correct>Indexing only the subset of rows a query actually uses, such as rows where `deleted_at IS NULL`</QuizChoice>
+    <QuizChoice>Splitting every table across multiple database servers automatically</QuizChoice>
+    <QuizChoice>Making unbounded text blobs free to store in every index</QuizChoice>
+    <QuizChoice>Replacing a primary key in every schema</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="partition-key"
+    prompt="When does horizontal partitioning help most?"
+    explanation="Partitioning helps when the query includes the partition key, allowing the database to exclude irrelevant partitions.">
+    <QuizChoice>When every query omits the partition key</QuizChoice>
+    <QuizChoice>When the app needs cross-partition global ordering on every request</QuizChoice>
+    <QuizChoice correct>When common queries include the partition key and can skip irrelevant partitions</QuizChoice>
+    <QuizChoice>When writes must all target a single current partition</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="hot-partition"
+    prompt="What is a hot partition?"
+    explanation="A hot partition receives a disproportionate amount of traffic or writes, so partitioning moves the bottleneck instead of removing it.">
+    <QuizChoice>A partition that has been archived to cold storage</QuizChoice>
+    <QuizChoice correct>A partition that receives a disproportionate share of reads or writes</QuizChoice>
+    <QuizChoice>A partition with no indexes</QuizChoice>
+    <QuizChoice>A partition used only for local development</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="column-vs-table"
+    prompt="When is a new table usually better than adding a column?"
+    explanation="A separate table fits one-to-many data, different lifecycle, high churn, sparse fields, or large optional data.">
+    <QuizChoice>When the value is one-to-one, small, and always read with the row</QuizChoice>
+    <QuizChoice correct>When the data is one-to-many, high-churn, sparse, large, or has a different lifecycle</QuizChoice>
+    <QuizChoice>When the field is a required boolean</QuizChoice>
+    <QuizChoice>When avoiding joins is the only goal in the system</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="sharding-last"
+    prompt="Which condition best supports sharding?"
+    explanation="Sharding is justified when one database is no longer a reasonable unit and critical queries naturally include a shard key.">
+    <QuizChoice>A single slow endpoint has an obvious missing index</QuizChoice>
+    <QuizChoice>The application has an N+1 query pattern</QuizChoice>
+    <QuizChoice correct>One primary cannot sustain the write rate, and critical queries include a shard key</QuizChoice>
+    <QuizChoice>The schema has more than ten tables</QuizChoice>
+  </QuizQuestion>
+</Quiz>
