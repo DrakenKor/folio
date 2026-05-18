@@ -1,0 +1,1907 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>salon sui ・ Honolulu Edition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Outfit:wght@300;400;500;600&family=Shippori+Mincho+B1:wght@400;500;600;700;800&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&family=Zen+Old+Mincho:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      --paper: #faf3e6;
+      --paper-warm: #f5ead4;
+      --paper-deep: #efe1c4;
+      --ink: #2a2520;
+      --ink-soft: #6e6258;
+      --ink-fade: #a59786;
+
+      --lagoon: #1f7a8c;
+      --lagoon-deep: #145a6b;
+      --lagoon-mist: #d3e8ec;
+      --lagoon-glow: #b5d8df;
+
+      --coral: #e6603f;
+      --coral-deep: #c84a2f;
+      --coral-mist: #fadcce;
+      --coral-blush: #f6d0c2;
+
+      --palm: #5a7d4e;
+      --palm-deep: #3e5a36;
+      --palm-mist: #dee9cd;
+
+      --mango: #f1b34a;
+      --mango-mist: #fae5b8;
+
+      --sand: #ead5b3;
+      --shell: #fcf8ee;
+
+      --shadow-soft: 0 22px 50px -32px rgba(58, 40, 22, 0.32);
+      --shadow-card: 0 18px 40px -28px rgba(58, 40, 22, 0.45);
+
+      --display-jp: 'Shippori Mincho B1', 'Zen Old Mincho', serif;
+      --display-en: 'Fraunces', 'Shippori Mincho B1', serif;
+      --body-jp: 'Zen Kaku Gothic New', 'Noto Sans JP', sans-serif;
+      --body-en: 'Outfit', 'Zen Kaku Gothic New', sans-serif;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--body-jp);
+      color: var(--ink);
+      background: radial-gradient(120% 80% at 50% 0%, #fef7e4 0%, #f5e7c9 55%, #ebd3a8 100%);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: 0.01em;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.18  0 0 0 0 0.15  0 0 0 0 0.12  0 0 0 0.08 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>");
+      background-size: 240px 240px;
+      mix-blend-mode: multiply;
+      opacity: 0.42;
+      z-index: 1;
+    }
+
+    main {
+      position: relative;
+      z-index: 2;
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 64px 28px 96px;
+      display: grid;
+      gap: 72px;
+    }
+
+    /* --------- decorative band that sits above page 1 --------- */
+    .topband {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 12px;
+      color: var(--ink-soft);
+      font-family: var(--body-en);
+      font-size: 11px;
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+    }
+
+    .topband .stamp {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 14px;
+      border: 1px dashed rgba(42, 37, 32, 0.45);
+      border-radius: 999px;
+      background: rgba(255, 250, 235, 0.5);
+      color: var(--ink);
+      letter-spacing: 0.32em;
+    }
+
+    .topband .coords {
+      font-family: var(--body-en);
+      font-feature-settings: 'tnum' 1;
+      letter-spacing: 0.18em;
+      font-size: 10px;
+    }
+
+    /* ============ pamphlet shell ============ */
+    .pamphlet {
+      position: relative;
+      background:
+        radial-gradient(140% 80% at 100% 0%, rgba(245, 196, 142, 0.18) 0%, transparent 55%),
+        radial-gradient(120% 80% at 0% 100%, rgba(211, 232, 236, 0.5) 0%, transparent 55%),
+        linear-gradient(180deg, var(--shell) 0%, var(--paper) 30%, var(--paper-warm) 100%);
+      border-radius: 28px;
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.6) inset,
+        0 0 0 1px rgba(180, 152, 110, 0.18) inset,
+        0 30px 60px -38px rgba(48, 28, 8, 0.35),
+        0 80px 120px -60px rgba(48, 28, 8, 0.18);
+      overflow: hidden;
+    }
+
+    .pamphlet::before {
+      content: '';
+      position: absolute;
+      inset: 14px;
+      border: 1px solid rgba(118, 95, 68, 0.22);
+      border-radius: 18px;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .pamphlet-inner {
+      position: relative;
+      z-index: 2;
+      padding: 56px 52px 48px;
+    }
+
+    /* corner decorations */
+    .corner {
+      position: absolute;
+      z-index: 0;
+      pointer-events: none;
+    }
+    .corner-tl { top: -28px; left: -28px; width: 240px; opacity: 0.95; transform: rotate(-8deg); }
+    .corner-tr { top: -12px; right: -36px; width: 200px; opacity: 0.85; transform: rotate(14deg); }
+    .corner-br { bottom: -28px; right: -32px; width: 240px; opacity: 0.92; transform: rotate(8deg); }
+    .corner-bl { bottom: -22px; left: -36px; width: 220px; opacity: 0.85; transform: rotate(-16deg); }
+
+    /* =========== hero =========== */
+    .hero {
+      position: relative;
+      display: grid;
+      gap: 22px;
+      text-align: center;
+      padding: 8px 0 4px;
+    }
+
+    .hero-mark {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .hero-mark .badge {
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      font-family: var(--body-en);
+      letter-spacing: 0.5em;
+      font-size: 10px;
+      color: var(--lagoon-deep);
+      text-transform: uppercase;
+    }
+    .hero-mark .badge::before,
+    .hero-mark .badge::after {
+      content: '';
+      width: 30px;
+      height: 1px;
+      background: var(--lagoon-deep);
+      opacity: 0.55;
+    }
+
+    .hero-mono {
+      width: 64px;
+      height: 64px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: linear-gradient(140deg, #fffaf0 0%, #faecd0 80%);
+      box-shadow: 0 2px 0 #f1ddb1 inset, 0 0 0 1px rgba(180, 152, 110, 0.4);
+      color: var(--lagoon-deep);
+      font-family: var(--display-en);
+      font-style: italic;
+      font-weight: 500;
+      font-size: 26px;
+      letter-spacing: 0.01em;
+    }
+
+    .hero h1 {
+      margin: 6px 0 0;
+      font-family: var(--display-jp);
+      font-weight: 700;
+      color: var(--ink);
+      font-size: clamp(32px, 5.2vw, 48px);
+      line-height: 1.18;
+      letter-spacing: 0.02em;
+      word-break: keep-all;
+      overflow-wrap: normal;
+      line-break: strict;
+    }
+    .hero h1 .stroke {
+      display: inline-block;
+      position: relative;
+    }
+    .hero h1 .stroke::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -2px;
+      height: 6px;
+      background: linear-gradient(90deg, transparent, var(--coral-mist) 30%, var(--coral-mist) 70%, transparent);
+      border-radius: 999px;
+      z-index: -1;
+    }
+    .hero h2.sub {
+      margin: 0;
+      font-family: var(--display-jp);
+      font-weight: 500;
+      font-size: clamp(20px, 2.4vw, 24px);
+      letter-spacing: 0.12em;
+      color: var(--lagoon-deep);
+    }
+
+    .hero p.lede {
+      margin: 0 auto;
+      max-width: 560px;
+      font-family: var(--body-jp);
+      font-size: 13.5px;
+      color: var(--ink-soft);
+      letter-spacing: 0.05em;
+      line-height: 1.85;
+    }
+    .hero p.lede strong {
+      color: var(--coral-deep);
+      font-weight: 600;
+    }
+
+    .hero-decor {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      margin: 8px 0 4px;
+    }
+
+    /* info pills */
+    .info-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 12px;
+    }
+    .info-pill {
+      position: relative;
+      border-radius: 18px;
+      background: rgba(255, 250, 238, 0.7);
+      padding: 16px 16px 14px;
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 10px;
+      align-items: center;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 0 0 1px rgba(31, 122, 140, 0.12), 0 18px 30px -28px rgba(31, 122, 140, 0.4);
+    }
+    .info-pill .glyph {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(140deg, var(--lagoon-mist), var(--shell));
+      color: var(--lagoon-deep);
+      box-shadow: 0 0 0 1px rgba(31, 122, 140, 0.15);
+    }
+    .info-pill strong {
+      display: block;
+      font-family: var(--display-jp);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+    }
+    .info-pill small {
+      display: block;
+      font-family: var(--body-en);
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--ink-fade);
+      margin-top: 2px;
+    }
+
+    /* section heading */
+    .section-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 44px 0 22px;
+    }
+    .section-head .lead-svg {
+      flex: 0 0 28px;
+    }
+    .section-head .label {
+      font-family: var(--body-en);
+      font-size: 10.5px;
+      letter-spacing: 0.42em;
+      color: var(--coral-deep);
+      text-transform: uppercase;
+    }
+    .section-head h3 {
+      margin: 0;
+      font-family: var(--display-jp);
+      font-weight: 600;
+      font-size: 22px;
+      letter-spacing: 0.06em;
+      color: var(--ink);
+    }
+    .section-head .ruler {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(110, 98, 88, 0.45), transparent);
+    }
+
+    /* concern chips */
+    .concerns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .concern-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(255, 250, 238, 0.85), rgba(245, 234, 212, 0.7));
+      box-shadow: 0 0 0 1px rgba(110, 98, 88, 0.18);
+      font-family: var(--display-jp);
+      font-weight: 500;
+      font-size: 14px;
+      color: var(--ink);
+      letter-spacing: 0.05em;
+    }
+    .concern-chip .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--coral);
+      box-shadow: 0 0 0 3px var(--coral-mist);
+    }
+    .concern-chip:nth-child(2n) .dot { background: var(--lagoon); box-shadow: 0 0 0 3px var(--lagoon-mist); }
+    .concern-chip:nth-child(3n) .dot { background: var(--palm); box-shadow: 0 0 0 3px var(--palm-mist); }
+    .concern-chip:nth-child(5n) .dot { background: var(--mango); box-shadow: 0 0 0 3px var(--mango-mist); }
+
+    /* offer ticket */
+    .ticket {
+      position: relative;
+      margin-top: 26px;
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 0;
+      background:
+        radial-gradient(60% 80% at 0% 50%, rgba(244, 211, 200, 0.55) 0%, transparent 60%),
+        linear-gradient(180deg, #fff5e0, #fbe7c5);
+      border-radius: 24px;
+      box-shadow: 0 0 0 1px rgba(110, 98, 88, 0.22), var(--shadow-card);
+      overflow: hidden;
+    }
+    .ticket::before,
+    .ticket::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 18px;
+      height: 18px;
+      background: var(--paper);
+      border-radius: 50%;
+      transform: translateY(-50%);
+      box-shadow: 0 0 0 1px rgba(110, 98, 88, 0.22) inset;
+    }
+    .ticket::before { left: -10px; }
+    .ticket::after { right: 56%; }
+
+    .ticket-text {
+      padding: 24px 28px 24px 30px;
+      border-right: 1.5px dashed rgba(110, 98, 88, 0.4);
+      display: grid;
+      gap: 6px;
+      align-content: center;
+    }
+    .ticket-text .eyebrow {
+      font-family: var(--body-en);
+      font-size: 10px;
+      letter-spacing: 0.42em;
+      color: var(--coral-deep);
+      text-transform: uppercase;
+    }
+    .ticket-text h4 {
+      margin: 0;
+      font-family: var(--display-jp);
+      font-size: 22px;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+      line-height: 1.3;
+    }
+    .ticket-text p {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: var(--ink-soft);
+      line-height: 1.7;
+    }
+
+    .ticket-price {
+      padding: 22px 28px;
+      display: grid;
+      gap: 4px;
+      align-content: center;
+      justify-items: center;
+      text-align: center;
+      background:
+        repeating-linear-gradient(135deg, transparent 0 6px, rgba(255, 250, 238, 0.6) 6px 8px),
+        linear-gradient(140deg, var(--coral-blush), var(--coral-mist));
+    }
+    .ticket-price .ribbon {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: var(--coral-deep);
+      color: #fff;
+      font-family: var(--body-en);
+      letter-spacing: 0.3em;
+      font-size: 9.5px;
+      text-transform: uppercase;
+    }
+    .ticket-price .duration {
+      font-family: var(--display-jp);
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--coral-deep);
+    }
+    .ticket-price .price {
+      font-family: var(--display-en);
+      font-weight: 600;
+      font-size: 48px;
+      color: var(--coral-deep);
+      letter-spacing: -0.01em;
+      line-height: 1;
+      margin-top: 4px;
+    }
+    .ticket-price .price .yen {
+      font-size: 28px;
+      vertical-align: 0.2em;
+      margin-right: 2px;
+    }
+    .ticket-price .footnote {
+      margin-top: 6px;
+      font-size: 10.5px;
+      color: var(--coral-deep);
+      opacity: 0.78;
+    }
+
+    /* menu cards */
+    .menu {
+      display: grid;
+      gap: 14px;
+    }
+    .menu-card {
+      position: relative;
+      display: grid;
+      grid-template-columns: 44px 1fr auto auto;
+      align-items: center;
+      gap: 18px;
+      padding: 18px 22px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255, 250, 238, 0.85), rgba(252, 244, 224, 0.9));
+      box-shadow: 0 0 0 1px rgba(110, 98, 88, 0.16);
+      transition: transform 200ms ease;
+    }
+    .menu-card:hover { transform: translateY(-2px); }
+    .menu-card .index {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--lagoon-deep);
+      color: var(--shell);
+      display: grid;
+      place-items: center;
+      font-family: var(--display-en);
+      font-weight: 600;
+      font-style: italic;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+      box-shadow: 0 8px 18px -14px rgba(20, 90, 107, 0.6);
+    }
+    .menu-card .body strong {
+      display: block;
+      font-family: var(--display-jp);
+      font-size: 15.5px;
+      letter-spacing: 0.03em;
+      color: var(--ink);
+    }
+    .menu-card .body small {
+      display: block;
+      margin-top: 2px;
+      font-size: 11.5px;
+      color: var(--ink-soft);
+      letter-spacing: 0.04em;
+    }
+    .menu-card .dur {
+      font-family: var(--body-en);
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      color: var(--ink-soft);
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(211, 232, 236, 0.55);
+      box-shadow: 0 0 0 1px rgba(31, 122, 140, 0.18);
+    }
+    .menu-card .price {
+      font-family: var(--display-en);
+      font-weight: 600;
+      font-size: 22px;
+      color: var(--lagoon-deep);
+      letter-spacing: -0.01em;
+    }
+    .menu-card .price .yen { font-size: 14px; vertical-align: 0.18em; margin-right: 1px; }
+
+    /* option strip */
+    .option-strip {
+      margin-top: 22px;
+      padding: 18px 22px;
+      border-radius: 18px;
+      display: grid;
+      grid-template-columns: auto 1fr 1fr;
+      gap: 22px;
+      align-items: center;
+      background:
+        linear-gradient(180deg, rgba(222, 233, 205, 0.5), rgba(238, 246, 222, 0.45));
+      box-shadow: 0 0 0 1px rgba(90, 125, 78, 0.2);
+    }
+    .option-strip .opt-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--display-en);
+      font-style: italic;
+      font-weight: 500;
+      color: var(--palm-deep);
+      font-size: 16px;
+      letter-spacing: 0.02em;
+    }
+    .option-strip .opt-label::before,
+    .option-strip .opt-label::after {
+      content: '';
+      width: 18px; height: 1px;
+      background: var(--palm-deep);
+      opacity: 0.4;
+    }
+    .option-row {
+      display: grid;
+      grid-template-columns: 32px 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .option-row .glyph {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: rgba(255, 250, 238, 0.8);
+      display: grid; place-items: center;
+      color: var(--palm-deep);
+      box-shadow: 0 0 0 1px rgba(90, 125, 78, 0.25);
+    }
+    .option-row strong {
+      font-family: var(--display-jp);
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+    }
+    .option-row .dur {
+      font-family: var(--body-en);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      color: var(--palm-deep);
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(255, 250, 238, 0.7);
+      box-shadow: 0 0 0 1px rgba(90, 125, 78, 0.25);
+    }
+    .option-row .price {
+      font-family: var(--display-en);
+      font-weight: 600;
+      color: var(--palm-deep);
+      font-size: 18px;
+    }
+    .option-row .price .yen { font-size: 12px; vertical-align: 0.16em; margin-right: 1px; }
+
+    /* footer block */
+    .footer-grid {
+      margin-top: 28px;
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+    .contact-card {
+      position: relative;
+      padding: 24px 26px;
+      border-radius: 22px;
+      background:
+        radial-gradient(120% 90% at 0% 0%, rgba(211, 232, 236, 0.7) 0%, transparent 60%),
+        linear-gradient(180deg, var(--lagoon-deep), #0e4a59);
+      color: var(--shell);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+    .contact-card::after {
+      content: '';
+      position: absolute;
+      bottom: -40px;
+      right: -30px;
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(closest-side, rgba(244, 211, 200, 0.35), transparent 70%);
+      border-radius: 50%;
+    }
+    .contact-card .stamp {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--body-en);
+      font-size: 10px;
+      letter-spacing: 0.42em;
+      color: var(--coral-blush);
+      text-transform: uppercase;
+    }
+    .contact-card h4 {
+      margin: 10px 0 4px;
+      font-family: var(--display-jp);
+      font-weight: 600;
+      font-size: 22px;
+      letter-spacing: 0.08em;
+      line-height: 1.4;
+    }
+    .contact-card h4 em {
+      font-family: var(--display-en);
+      font-style: italic;
+      font-weight: 500;
+      color: var(--mango-mist);
+      margin: 0 4px;
+    }
+    .contact-card p {
+      margin: 6px 0 14px;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      opacity: 0.86;
+    }
+    .qr-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      position: relative;
+      z-index: 1;
+    }
+    .qr-block {
+      width: 72px;
+      display: grid;
+      gap: 6px;
+      justify-items: center;
+    }
+    .qr-block .qr {
+      width: 72px;
+      height: 72px;
+      background: #fff;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18);
+    }
+    .qr-block .lbl {
+      font-family: var(--body-en);
+      font-size: 9.5px;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: var(--shell);
+      opacity: 0.85;
+    }
+    .qr-block .lbl.line { color: var(--mango-mist); }
+    .qr-block .lbl.ig { color: var(--coral-blush); }
+
+    .access-card {
+      padding: 24px 26px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255, 250, 238, 0.95), rgba(245, 234, 212, 0.85));
+      box-shadow: 0 0 0 1px rgba(110, 98, 88, 0.2), var(--shadow-soft);
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+    .access-card .head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--body-en);
+      font-size: 10.5px;
+      letter-spacing: 0.42em;
+      color: var(--coral-deep);
+      text-transform: uppercase;
+    }
+    .access-card .head svg { color: var(--coral-deep); }
+    .access-card h4 {
+      margin: 2px 0 0;
+      font-family: var(--display-jp);
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: 0.06em;
+      color: var(--ink);
+    }
+    .access-card dl {
+      margin: 8px 0 0;
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      row-gap: 6px;
+      column-gap: 12px;
+      font-size: 12px;
+    }
+    .access-card dt {
+      font-family: var(--body-en);
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      font-size: 9.5px;
+      color: var(--ink-fade);
+      padding-top: 3px;
+    }
+    .access-card dd {
+      margin: 0;
+      color: var(--ink);
+      font-size: 12px;
+      line-height: 1.55;
+      font-family: var(--body-jp);
+      letter-spacing: 0.04em;
+    }
+    .access-card .ig-handle {
+      margin-top: 8px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(244, 211, 200, 0.4);
+      font-family: var(--display-en);
+      font-style: italic;
+      font-weight: 500;
+      font-size: 13px;
+      color: var(--coral-deep);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      justify-self: start;
+    }
+
+    /* ============ pamphlet 2 ============ */
+    .p2 .pamphlet-inner {
+      padding: 60px 56px 52px;
+    }
+
+    .p2-hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: 0.85fr 1.6fr;
+      gap: 32px;
+      align-items: center;
+    }
+    .vase {
+      position: relative;
+      width: 100%;
+      max-width: 240px;
+      justify-self: center;
+    }
+    .p2-hero .text {
+      display: grid;
+      gap: 18px;
+    }
+    .p2-hero .text .label {
+      font-family: var(--body-en);
+      font-size: 10px;
+      letter-spacing: 0.5em;
+      color: var(--lagoon-deep);
+      text-transform: uppercase;
+    }
+    .p2-hero .text h2 {
+      margin: 0;
+      font-family: var(--display-jp);
+      font-weight: 700;
+      font-size: clamp(26px, 3.6vw, 36px);
+      line-height: 1.3;
+      letter-spacing: 0.04em;
+      word-break: keep-all;
+      overflow-wrap: normal;
+      line-break: strict;
+    }
+    .p2-hero .text h2 em {
+      font-style: normal;
+      color: var(--coral-deep);
+    }
+    .p2-hero .text p {
+      margin: 0;
+      max-width: 460px;
+      color: var(--ink-soft);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      line-height: 1.85;
+    }
+    .p2-hero .text small {
+      font-size: 10.5px;
+      color: var(--ink-fade);
+      letter-spacing: 0.06em;
+    }
+
+    .course-list {
+      margin-top: 36px;
+      display: grid;
+      gap: 16px;
+    }
+    .course-row {
+      position: relative;
+      display: grid;
+      grid-template-columns: 124px 1fr auto;
+      align-items: center;
+      gap: 26px;
+      padding: 22px 26px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255, 250, 238, 0.92), rgba(252, 244, 224, 0.95));
+      box-shadow: 0 0 0 1px rgba(110, 98, 88, 0.16), var(--shadow-soft);
+    }
+    .course-row::after {
+      content: '';
+      position: absolute;
+      left: 28px; right: 28px; bottom: -1px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(110, 98, 88, 0.25), transparent);
+    }
+    .course-row:last-child::after { display: none; }
+
+    .course-thumb {
+      width: 124px;
+      height: 124px;
+      border-radius: 50%;
+      background:
+        radial-gradient(closest-side, rgba(255, 250, 238, 0.9), rgba(244, 211, 200, 0.45));
+      display: grid;
+      place-items: center;
+      box-shadow: inset 0 0 0 1px rgba(110, 98, 88, 0.18);
+      position: relative;
+    }
+    .course-thumb svg {
+      width: 88%;
+      height: 88%;
+    }
+    .course-thumb .leaf {
+      position: absolute;
+      bottom: -6px;
+      left: -10px;
+      width: 60px;
+      height: auto;
+      transform: rotate(-12deg);
+    }
+
+    .course-info h3 {
+      margin: 0;
+      font-family: var(--display-jp);
+      font-weight: 600;
+      font-size: 20px;
+      letter-spacing: 0.06em;
+      color: var(--ink);
+    }
+    .course-info .sub {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(211, 232, 236, 0.5);
+      font-family: var(--body-jp);
+      font-size: 11.5px;
+      letter-spacing: 0.06em;
+      color: var(--lagoon-deep);
+    }
+    .course-info p {
+      margin: 10px 0 0;
+      font-size: 12.5px;
+      color: var(--ink-soft);
+      letter-spacing: 0.04em;
+      line-height: 1.75;
+    }
+
+    .course-meta {
+      display: grid;
+      gap: 8px;
+      justify-items: end;
+      text-align: right;
+    }
+    .course-meta .price {
+      font-family: var(--display-en);
+      font-weight: 600;
+      font-size: 30px;
+      color: var(--coral-deep);
+      letter-spacing: -0.01em;
+      line-height: 1;
+    }
+    .course-meta .price .yen { font-size: 18px; vertical-align: 0.15em; margin-right: 1px; }
+    .course-meta .price .dash { font-size: 22px; color: var(--coral); margin-left: 2px; }
+    .course-meta .dur {
+      font-family: var(--body-en);
+      font-size: 10.5px;
+      letter-spacing: 0.2em;
+      color: var(--ink-soft);
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: rgba(211, 232, 236, 0.55);
+      box-shadow: 0 0 0 1px rgba(31, 122, 140, 0.18);
+    }
+
+    /* options card for p2 */
+    .p2-options {
+      margin-top: 32px;
+      padding: 22px 26px;
+      border-radius: 22px;
+      background:
+        repeating-linear-gradient(135deg, transparent 0 6px, rgba(255, 250, 238, 0.5) 6px 8px),
+        linear-gradient(180deg, rgba(222, 233, 205, 0.4), rgba(238, 246, 222, 0.4));
+      box-shadow: 0 0 0 1px rgba(90, 125, 78, 0.2);
+    }
+    .p2-options .head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .p2-options .head h4 {
+      margin: 0;
+      font-family: var(--display-en);
+      font-style: italic;
+      font-weight: 500;
+      color: var(--palm-deep);
+      font-size: 22px;
+    }
+    .p2-options .head .ruler {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(62, 90, 54, 0.45), transparent);
+    }
+    .p2-options .lines {
+      display: grid;
+      gap: 10px;
+    }
+    .p2-options .line {
+      display: grid;
+      grid-template-columns: 36px 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      padding: 8px 0;
+    }
+    .p2-options .line .glyph {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: rgba(255, 250, 238, 0.85);
+      display: grid; place-items: center;
+      color: var(--palm-deep);
+      box-shadow: 0 0 0 1px rgba(90, 125, 78, 0.25);
+    }
+    .p2-options .line strong {
+      font-family: var(--display-jp);
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+    }
+    .p2-options .line .leaders {
+      flex: 1;
+      height: 6px;
+      margin: 0 4px;
+      background-image: radial-gradient(circle, rgba(110, 98, 88, 0.45) 1px, transparent 1.6px);
+      background-size: 8px 6px;
+      background-repeat: repeat-x;
+      background-position: center;
+    }
+    .p2-options .line .price {
+      font-family: var(--display-en);
+      font-weight: 600;
+      color: var(--coral-deep);
+      font-size: 18px;
+    }
+    .p2-options .line .price .yen { font-size: 12px; vertical-align: 0.16em; margin-right: 1px; }
+    .p2-options .line .price .dash { font-size: 14px; opacity: 0.85; margin-left: 1px; }
+    .p2-options .line .dur {
+      font-family: var(--body-en);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      color: var(--palm-deep);
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(255, 250, 238, 0.85);
+      box-shadow: 0 0 0 1px rgba(90, 125, 78, 0.25);
+    }
+
+    /* divider between pamphlets */
+    .seam {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      color: var(--ink-fade);
+      font-family: var(--body-en);
+      font-size: 10px;
+      letter-spacing: 0.5em;
+      text-transform: uppercase;
+      padding: 0 20px;
+    }
+    .seam .line {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(110, 98, 88, 0.35), transparent);
+    }
+
+    /* footer */
+    .doc-foot {
+      margin-top: 8px;
+      text-align: center;
+      font-family: var(--body-en);
+      font-size: 10px;
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+      color: var(--ink-fade);
+    }
+    .doc-foot .heart { color: var(--coral); margin: 0 4px; }
+
+    /* animations */
+    @keyframes drift {
+      0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+      50% { transform: translateY(-6px) rotate(calc(var(--rot, 0deg) + 1.5deg)); }
+    }
+    .corner { animation: drift 14s ease-in-out infinite; }
+    .corner-tl { --rot: -8deg; animation-delay: -2s; }
+    .corner-tr { --rot: 14deg; animation-delay: -5s; }
+    .corner-br { --rot: 8deg; animation-delay: -1s; }
+    .corner-bl { --rot: -16deg; animation-delay: -8s; }
+
+    @keyframes fadein {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .pamphlet { animation: fadein 700ms ease both; }
+    .p2 { animation-delay: 200ms; }
+
+    /* responsive */
+    @media (max-width: 760px) {
+      main { padding: 40px 16px 64px; gap: 56px; }
+      .pamphlet-inner { padding: 40px 24px 36px; }
+      .p2 .pamphlet-inner { padding: 40px 24px 36px; }
+      .info-row { grid-template-columns: 1fr; }
+      .ticket { grid-template-columns: 1fr; }
+      .ticket::after { display: none; }
+      .ticket-text { border-right: none; border-bottom: 1.5px dashed rgba(110, 98, 88, 0.4); }
+      .menu-card { grid-template-columns: 36px 1fr; row-gap: 4px; }
+      .menu-card .dur, .menu-card .price { grid-column: 2; }
+      .menu-card .price { justify-self: end; }
+      .option-strip { grid-template-columns: 1fr; }
+      .footer-grid { grid-template-columns: 1fr; }
+      .p2-hero { grid-template-columns: 1fr; }
+      .vase { max-width: 180px; }
+      .course-row { grid-template-columns: 84px 1fr; row-gap: 12px; }
+      .course-thumb { width: 84px; height: 84px; }
+      .course-meta { justify-items: start; text-align: left; grid-column: 1 / -1; flex-direction: row; display: flex; align-items: center; gap: 12px; }
+      .corner { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============ reusable SVG sprite ============ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- plumeria petal radial gradient -->
+    <radialGradient id="plumPetal" cx="50%" cy="80%" r="80%">
+      <stop offset="0%" stop-color="#FCCE6E" />
+      <stop offset="38%" stop-color="#FFF5E0" />
+      <stop offset="100%" stop-color="#F8DCC7" />
+    </radialGradient>
+    <radialGradient id="plumPetalCoral" cx="50%" cy="80%" r="80%">
+      <stop offset="0%" stop-color="#FCCE6E" />
+      <stop offset="38%" stop-color="#FFEFD8" />
+      <stop offset="100%" stop-color="#EFAE92" />
+    </radialGradient>
+    <radialGradient id="plumPetalMint" cx="50%" cy="80%" r="80%">
+      <stop offset="0%" stop-color="#FCCE6E" />
+      <stop offset="42%" stop-color="#F2FBE7" />
+      <stop offset="100%" stop-color="#BFD7B5" />
+    </radialGradient>
+
+    <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7AA374" />
+      <stop offset="60%" stop-color="#5A7D4E" />
+      <stop offset="100%" stop-color="#3E5A36" />
+    </linearGradient>
+
+    <linearGradient id="leafGradLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#B5CC9F" />
+      <stop offset="60%" stop-color="#86A275" />
+      <stop offset="100%" stop-color="#5A7D4E" />
+    </linearGradient>
+
+    <linearGradient id="seaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7CB6C0" />
+      <stop offset="100%" stop-color="#1F7A8C" />
+    </linearGradient>
+
+    <linearGradient id="hibiscusGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FAD0BE" />
+      <stop offset="60%" stop-color="#E6603F" />
+      <stop offset="100%" stop-color="#B23A23" />
+    </linearGradient>
+
+    <!-- plumeria 5 petal -->
+    <symbol id="plumeria" viewBox="-60 -60 120 120">
+      <g>
+        <g transform="rotate(0)">
+          <path d="M 0,-10 C -18,-15 -26,-32 -18,-46 C -8,-56 8,-56 18,-46 C 26,-32 18,-15 0,-10 Z"
+                fill="url(#plumPetal)" stroke="rgba(176,128,76,0.18)" stroke-width="0.4" />
+        </g>
+        <g transform="rotate(72)">
+          <path d="M 0,-10 C -18,-15 -26,-32 -18,-46 C -8,-56 8,-56 18,-46 C 26,-32 18,-15 0,-10 Z"
+                fill="url(#plumPetal)" stroke="rgba(176,128,76,0.18)" stroke-width="0.4" />
+        </g>
+        <g transform="rotate(144)">
+          <path d="M 0,-10 C -18,-15 -26,-32 -18,-46 C -8,-56 8,-56 18,-46 C 26,-32 18,-15 0,-10 Z"
+                fill="url(#plumPetal)" stroke="rgba(176,128,76,0.18)" stroke-width="0.4" />
+        </g>
+        <g transform="rotate(216)">
+          <path d="M 0,-10 C -18,-15 -26,-32 -18,-46 C -8,-56 8,-56 18,-46 C 26,-32 18,-15 0,-10 Z"
+                fill="url(#plumPetal)" stroke="rgba(176,128,76,0.18)" stroke-width="0.4" />
+        </g>
+        <g transform="rotate(288)">
+          <path d="M 0,-10 C -18,-15 -26,-32 -18,-46 C -8,-56 8,-56 18,-46 C 26,-32 18,-15 0,-10 Z"
+                fill="url(#plumPetal)" stroke="rgba(176,128,76,0.18)" stroke-width="0.4" />
+        </g>
+        <circle r="7" fill="#F1B34A" />
+        <circle r="3" fill="#E07E2E" />
+      </g>
+    </symbol>
+
+    <symbol id="plumeria-coral" viewBox="-60 -60 120 120">
+      <g>
+        <g transform="rotate(0)"><path d="M 0,-10 C -18,-15 -26,-32 -18,-46 C -8,-56 8,-56 18,-46 C 26,-32 18,-15 0,-10 Z" fill="url(#plumPetalCoral)" stroke="rgba(176,80,46,0.2)" stroke-width="0.4"/></g>
+        <g transform="rotate(72)"><path d="M 0,-10 C -18,-15 -26,-32 -18,-46 C -8,-56 8,-56 18,-46 C 26,-32 18,-15 0,-10 Z" fill="url(#plumPetalCoral)" stroke="rgba(176,80,46,0.2)" stroke-width="0.4"/></g>
+        <g transform="rotate(144)"><path d="M 0,-10 C -18,-15 -26,-32 -18,-46 C -8,-56 8,-56 18,-46 C 26,-32 18,-15 0,-10 Z" fill="url(#plumPetalCoral)" stroke="rgba(176,80,46,0.2)" stroke-width="0.4"/></g>
+        <g transform="rotate(216)"><path d="M 0,-10 C -18,-15 -26,-32 -18,-46 C -8,-56 8,-56 18,-46 C 26,-32 18,-15 0,-10 Z" fill="url(#plumPetalCoral)" stroke="rgba(176,80,46,0.2)" stroke-width="0.4"/></g>
+        <g transform="rotate(288)"><path d="M 0,-10 C -18,-15 -26,-32 -18,-46 C -8,-56 8,-56 18,-46 C 26,-32 18,-15 0,-10 Z" fill="url(#plumPetalCoral)" stroke="rgba(176,80,46,0.2)" stroke-width="0.4"/></g>
+        <circle r="7" fill="#F1B34A"/>
+        <circle r="3" fill="#E07E2E"/>
+      </g>
+    </symbol>
+
+    <!-- monstera leaf with split-leaf cuts -->
+    <symbol id="monstera" viewBox="-60 -80 120 160">
+      <g>
+        <path d="M 0,70 Q -4,30 -10,-10 Q -16,-50 0,-72 Q 16,-50 10,-10 Q 4,30 0,70 Z"
+              fill="url(#leafGrad)" />
+        <!-- stem -->
+        <path d="M 0,70 L 0,-60" stroke="#3E5A36" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+        <!-- split cuts (left) -->
+        <path d="M -1,-58 Q -12,-55 -14,-44 Q -10,-42 -2,-50 Z" fill="#faf3e6" />
+        <path d="M -1,-32 Q -16,-30 -20,-18 Q -12,-16 -2,-22 Z" fill="#faf3e6" />
+        <path d="M -1,-8 Q -16,-4 -18,8 Q -8,12 -2,4 Z" fill="#faf3e6" />
+        <path d="M -1,16 Q -12,22 -12,34 Q -4,32 -2,22 Z" fill="#faf3e6" />
+        <!-- split cuts (right) -->
+        <path d="M 1,-50 Q 12,-46 14,-36 Q 8,-32 2,-40 Z" fill="#faf3e6" />
+        <path d="M 1,-24 Q 18,-20 20,-8 Q 10,-6 2,-14 Z" fill="#faf3e6" />
+        <path d="M 1,0 Q 16,6 16,18 Q 8,18 2,12 Z" fill="#faf3e6" />
+        <path d="M 1,26 Q 12,32 12,42 Q 4,40 2,32 Z" fill="#faf3e6" />
+        <!-- veins -->
+        <g stroke="#3E5A36" stroke-width="0.4" fill="none" opacity="0.6">
+          <path d="M 0,-50 Q -6,-46 -10,-44"/>
+          <path d="M 0,-50 Q 6,-46 10,-44"/>
+          <path d="M 0,-22 Q -8,-18 -16,-16"/>
+          <path d="M 0,-22 Q 8,-18 16,-16"/>
+          <path d="M 0,4 Q -10,8 -16,12"/>
+          <path d="M 0,4 Q 10,8 16,12"/>
+          <path d="M 0,26 Q -8,30 -10,34"/>
+          <path d="M 0,26 Q 8,30 10,34"/>
+        </g>
+      </g>
+    </symbol>
+
+    <!-- palm frond -->
+    <symbol id="palm" viewBox="-80 -20 160 80">
+      <g>
+        <path d="M -70,40 Q -30,-10 60,-2 Q 50,5 50,12 Q 20,10 -10,18 Q -40,28 -70,40 Z"
+              fill="url(#leafGradLight)" />
+        <g stroke="#3E5A36" stroke-width="0.5" fill="none" opacity="0.55">
+          <path d="M -68,38 L 55,4" />
+          <path d="M -60,36 Q -50,28 -42,24"/>
+          <path d="M -45,32 Q -32,22 -22,18"/>
+          <path d="M -25,26 Q -10,18 0,14"/>
+          <path d="M -5,22 Q 12,12 22,10"/>
+          <path d="M 15,18 Q 30,10 42,8"/>
+        </g>
+        <g stroke="#5A7D4E" stroke-width="0.6" fill="none" opacity="0.7">
+          <path d="M -55,38 Q -60,32 -58,28"/>
+          <path d="M -38,34 Q -44,28 -42,22"/>
+          <path d="M -20,28 Q -26,22 -24,16"/>
+          <path d="M -2,22 Q -8,16 -6,10"/>
+          <path d="M 16,16 Q 12,10 14,6"/>
+          <path d="M 34,12 Q 30,8 32,4"/>
+        </g>
+      </g>
+    </symbol>
+
+    <!-- hibiscus -->
+    <symbol id="hibiscus" viewBox="-50 -50 100 100">
+      <g>
+        <g transform="rotate(0)">
+          <path d="M 0,0 Q -22,-8 -28,-26 Q -20,-44 0,-42 Q 20,-44 28,-26 Q 22,-8 0,0 Z"
+                fill="url(#hibiscusGrad)" />
+        </g>
+        <g transform="rotate(72)">
+          <path d="M 0,0 Q -22,-8 -28,-26 Q -20,-44 0,-42 Q 20,-44 28,-26 Q 22,-8 0,0 Z"
+                fill="url(#hibiscusGrad)" opacity="0.95"/>
+        </g>
+        <g transform="rotate(144)">
+          <path d="M 0,0 Q -22,-8 -28,-26 Q -20,-44 0,-42 Q 20,-44 28,-26 Q 22,-8 0,0 Z"
+                fill="url(#hibiscusGrad)" opacity="0.9"/>
+        </g>
+        <g transform="rotate(216)">
+          <path d="M 0,0 Q -22,-8 -28,-26 Q -20,-44 0,-42 Q 20,-44 28,-26 Q 22,-8 0,0 Z"
+                fill="url(#hibiscusGrad)" opacity="0.92"/>
+        </g>
+        <g transform="rotate(288)">
+          <path d="M 0,0 Q -22,-8 -28,-26 Q -20,-44 0,-42 Q 20,-44 28,-26 Q 22,-8 0,0 Z"
+                fill="url(#hibiscusGrad)" opacity="0.94"/>
+        </g>
+        <!-- stamen -->
+        <line x1="0" y1="0" x2="6" y2="22" stroke="#F1B34A" stroke-width="1.4" stroke-linecap="round"/>
+        <circle cx="6" cy="22" r="3" fill="#F1B34A" />
+        <circle cx="3" cy="18" r="1.4" fill="#FFE38C" />
+        <circle cx="8" cy="20" r="1.2" fill="#FFE38C" />
+        <circle cx="6" cy="24" r="1.2" fill="#FFE38C" />
+        <circle r="3.5" fill="#B23A23" />
+      </g>
+    </symbol>
+
+    <!-- sun with rays -->
+    <symbol id="sun" viewBox="-40 -40 80 80">
+      <g>
+        <circle r="16" fill="#F1B34A"/>
+        <circle r="10" fill="#FCCE6E"/>
+        <g stroke="#F1B34A" stroke-width="2" stroke-linecap="round">
+          <line x1="0" y1="-22" x2="0" y2="-32"/>
+          <line x1="0" y1="22" x2="0" y2="32"/>
+          <line x1="-22" y1="0" x2="-32" y2="0"/>
+          <line x1="22" y1="0" x2="32" y2="0"/>
+          <line x1="-16" y1="-16" x2="-24" y2="-24"/>
+          <line x1="16" y1="-16" x2="24" y2="-24"/>
+          <line x1="-16" y1="16" x2="-24" y2="24"/>
+          <line x1="16" y1="16" x2="24" y2="24"/>
+        </g>
+      </g>
+    </symbol>
+
+    <!-- decorative wave -->
+    <symbol id="wave" viewBox="0 0 120 18">
+      <path d="M 0,9 Q 10,1 20,9 T 40,9 T 60,9 T 80,9 T 100,9 T 120,9"
+            fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </symbol>
+
+    <!-- droplet -->
+    <symbol id="drop" viewBox="-20 -24 40 48">
+      <g>
+        <path d="M 0,-22 C 12,-6 14,8 6,16 C -2,22 -10,18 -12,8 C -14,-2 -8,-14 0,-22 Z"
+              fill="#BEE3DB" stroke="#1F7A8C" stroke-width="0.8" />
+        <ellipse cx="-4" cy="-2" rx="3" ry="6" fill="#fff" opacity="0.65"/>
+      </g>
+    </symbol>
+
+    <!-- bottle -->
+    <symbol id="bottle" viewBox="-40 -50 80 100">
+      <g>
+        <rect x="-8" y="-46" width="16" height="10" rx="2" fill="#C8B79F" />
+        <rect x="-3" y="-50" width="6" height="6" rx="1.5" fill="#A89779" />
+        <path d="M -22,-30 Q -22,-36 -14,-36 L 14,-36 Q 22,-36 22,-30 L 22,40 Q 22,46 16,46 L -16,46 Q -22,46 -22,40 Z"
+              fill="#fbf4e4" stroke="#9F8862" stroke-width="0.8"/>
+        <path d="M -16,-28 L 16,-28" stroke="#9F8862" stroke-width="0.6" opacity="0.6"/>
+        <ellipse cx="0" cy="12" rx="14" ry="20" fill="#EFE2C8" opacity="0.6"/>
+        <ellipse cx="-6" cy="6" rx="4" ry="10" fill="#fff" opacity="0.5"/>
+      </g>
+    </symbol>
+
+    <!-- hand silhouette -->
+    <symbol id="hand" viewBox="-50 -50 100 100">
+      <g>
+        <path d="M -28,28 Q -28,-2 -16,-4 L -16,-26 Q -16,-32 -10,-32 Q -4,-32 -4,-26 L -4,-8 L -2,-8 L -2,-36 Q -2,-42 4,-42 Q 10,-42 10,-36 L 10,-10 L 12,-10 L 12,-32 Q 12,-38 18,-38 Q 24,-38 24,-32 L 24,-6 L 26,-6 L 26,-22 Q 26,-28 32,-28 Q 38,-28 38,-22 L 38,4 Q 38,30 16,38 Q -10,42 -22,32 Z"
+              fill="#F4D3C8" stroke="#C4866A" stroke-width="0.8"/>
+        <g stroke="#C4866A" stroke-width="0.5" fill="none" opacity="0.45">
+          <path d="M -10,16 Q -4,18 4,16" />
+          <path d="M -12,22 Q -2,24 8,20" />
+        </g>
+        <circle cx="-22" cy="-8" r="2" fill="#F1B34A" opacity="0.7"/>
+        <circle cx="-30" cy="-2" r="1.4" fill="#1F7A8C" opacity="0.7"/>
+      </g>
+    </symbol>
+
+    <!-- icons -->
+    <symbol id="i-clock" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M 12,7 L 12,12 L 16,14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-map" viewBox="0 0 24 24">
+      <path d="M 12,2 C 7,2 4,6 4,10 C 4,16 12,22 12,22 C 12,22 20,16 20,10 C 20,6 17,2 12,2 Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="12" cy="10" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    </symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24">
+      <path d="M 4,20 C 4,12 10,4 20,4 C 20,14 14,20 4,20 Z M 4,20 L 14,10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24">
+      <path d="M 6,3 L 18,3 L 18,21 L 12,17 L 6,21 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-line" viewBox="0 0 24 24">
+      <path d="M 4,4 H 20 V 16 H 14 L 10,21 V 16 H 4 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <circle cx="9" cy="10" r="1" fill="currentColor"/>
+      <circle cx="12" cy="10" r="1" fill="currentColor"/>
+      <circle cx="15" cy="10" r="1" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-ig" viewBox="0 0 24 24">
+      <rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="17" cy="7" r="1" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-drop" viewBox="0 0 24 24">
+      <path d="M 12,3 C 7,11 5,15 8,19 C 11,22 17,21 17,17 C 17,14 14,9 12,3 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-brow" viewBox="0 0 24 24">
+      <path d="M 3,11 Q 8,7 12,9 Q 16,11 21,9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M 6,15 Q 12,12 18,15" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+    </symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24">
+      <path d="M 12,3 L 13.5,10.5 L 21,12 L 13.5,13.5 L 12,21 L 10.5,13.5 L 3,12 L 10.5,10.5 Z" fill="currentColor" />
+    </symbol>
+
+    <!-- QR pattern decorative -->
+    <symbol id="qr-line" viewBox="0 0 60 60">
+      <rect width="60" height="60" fill="#fff"/>
+      <g fill="#1B5C49">
+        <rect x="4" y="4" width="14" height="14" rx="2"/>
+        <rect x="42" y="4" width="14" height="14" rx="2"/>
+        <rect x="4" y="42" width="14" height="14" rx="2"/>
+        <rect x="7" y="7" width="8" height="8" fill="#fff"/>
+        <rect x="45" y="7" width="8" height="8" fill="#fff"/>
+        <rect x="7" y="45" width="8" height="8" fill="#fff"/>
+        <rect x="9" y="9" width="4" height="4"/>
+        <rect x="47" y="9" width="4" height="4"/>
+        <rect x="9" y="47" width="4" height="4"/>
+        <g>
+          <rect x="22" y="6" width="3" height="3"/><rect x="28" y="6" width="3" height="3"/><rect x="34" y="9" width="3" height="3"/>
+          <rect x="22" y="12" width="3" height="3"/><rect x="28" y="14" width="3" height="3"/>
+          <rect x="22" y="22" width="3" height="3"/><rect x="28" y="22" width="3" height="3"/><rect x="34" y="22" width="3" height="3"/><rect x="42" y="22" width="3" height="3"/><rect x="48" y="22" width="3" height="3"/>
+          <rect x="22" y="28" width="3" height="3"/><rect x="34" y="28" width="3" height="3"/><rect x="48" y="28" width="3" height="3"/>
+          <rect x="22" y="34" width="3" height="3"/><rect x="28" y="34" width="3" height="3"/><rect x="42" y="34" width="3" height="3"/>
+          <rect x="22" y="42" width="3" height="3"/><rect x="28" y="42" width="3" height="3"/><rect x="34" y="42" width="3" height="3"/><rect x="48" y="42" width="3" height="3"/>
+          <rect x="22" y="48" width="3" height="3"/><rect x="34" y="48" width="3" height="3"/><rect x="42" y="48" width="3" height="3"/>
+          <rect x="28" y="50" width="3" height="3"/><rect x="48" y="50" width="3" height="3"/>
+        </g>
+      </g>
+    </symbol>
+    <symbol id="qr-ig" viewBox="0 0 60 60">
+      <rect width="60" height="60" fill="#fff"/>
+      <g fill="#A03E2E">
+        <rect x="4" y="4" width="14" height="14" rx="2"/>
+        <rect x="42" y="4" width="14" height="14" rx="2"/>
+        <rect x="4" y="42" width="14" height="14" rx="2"/>
+        <rect x="7" y="7" width="8" height="8" fill="#fff"/>
+        <rect x="45" y="7" width="8" height="8" fill="#fff"/>
+        <rect x="7" y="45" width="8" height="8" fill="#fff"/>
+        <rect x="9" y="9" width="4" height="4"/>
+        <rect x="47" y="9" width="4" height="4"/>
+        <rect x="9" y="47" width="4" height="4"/>
+        <g>
+          <rect x="24" y="6" width="3" height="3"/><rect x="30" y="9" width="3" height="3"/><rect x="36" y="6" width="3" height="3"/>
+          <rect x="24" y="14" width="3" height="3"/><rect x="30" y="14" width="3" height="3"/>
+          <rect x="22" y="24" width="3" height="3"/><rect x="28" y="22" width="3" height="3"/><rect x="36" y="24" width="3" height="3"/><rect x="42" y="24" width="3" height="3"/><rect x="50" y="24" width="3" height="3"/>
+          <rect x="24" y="30" width="3" height="3"/><rect x="30" y="32" width="3" height="3"/><rect x="42" y="30" width="3" height="3"/>
+          <rect x="22" y="36" width="3" height="3"/><rect x="32" y="36" width="3" height="3"/><rect x="44" y="36" width="3" height="3"/><rect x="50" y="36" width="3" height="3"/>
+          <rect x="24" y="42" width="3" height="3"/><rect x="32" y="44" width="3" height="3"/><rect x="42" y="42" width="3" height="3"/>
+          <rect x="24" y="50" width="3" height="3"/><rect x="36" y="50" width="3" height="3"/><rect x="44" y="50" width="3" height="3"/>
+        </g>
+      </g>
+    </symbol>
+
+    <!-- pineapple -->
+    <symbol id="pineapple" viewBox="-30 -50 60 100">
+      <g>
+        <g stroke="#5A7D4E" stroke-width="0.6" fill="#86A275">
+          <path d="M 0,-18 Q -8,-30 -14,-44 Q -4,-36 0,-22 Z"/>
+          <path d="M 0,-18 Q 8,-30 14,-44 Q 4,-36 0,-22 Z" fill="#5A7D4E"/>
+          <path d="M 0,-22 Q -4,-38 -2,-48 Q 4,-38 2,-26 Z" fill="#B5CC9F"/>
+        </g>
+        <ellipse cx="0" cy="6" rx="20" ry="28" fill="#F1B34A"/>
+        <g stroke="#9F6F1C" stroke-width="0.6" fill="none" opacity="0.7">
+          <path d="M -16,-8 L 16,-8"/><path d="M -16,4 L 16,4"/><path d="M -16,16 L 16,16"/>
+          <path d="M -18,-4 L 18,-4"/><path d="M -18,8 L 18,8"/><path d="M -18,20 L 18,20"/>
+          <path d="M -20,0 L 20,0"/><path d="M -20,12 L 20,12"/><path d="M -20,24 L 20,24"/>
+          <path d="M -20,-12 L 20,-12"/>
+        </g>
+        <g fill="#9F6F1C" opacity="0.85">
+          <path d="M -8,-12 l -2,4 l 2,4 l 2,-4 z"/>
+          <path d="M 0,-12 l -2,4 l 2,4 l 2,-4 z"/>
+          <path d="M 8,-12 l -2,4 l 2,4 l 2,-4 z"/>
+          <path d="M -8,0 l -2,4 l 2,4 l 2,-4 z"/>
+          <path d="M 0,0 l -2,4 l 2,4 l 2,-4 z"/>
+          <path d="M 8,0 l -2,4 l 2,4 l 2,-4 z"/>
+          <path d="M -8,12 l -2,4 l 2,4 l 2,-4 z"/>
+          <path d="M 0,12 l -2,4 l 2,4 l 2,-4 z"/>
+          <path d="M 8,12 l -2,4 l 2,4 l 2,-4 z"/>
+        </g>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+
+<main>
+
+  <!-- =================== Top band =================== -->
+  <div class="topband">
+    <span class="stamp">
+      <svg width="14" height="14" style="color:var(--coral-deep)"><use href="#i-spark"/></svg>
+      Honolulu Edition · Vol.03
+    </span>
+    <span class="coords">21°18′25″N &nbsp;·&nbsp; 157°51′30″W</span>
+  </div>
+
+  <!-- =================== PAMPHLET 1 =================== -->
+  <article class="pamphlet p1">
+
+    <!-- corner SVGs -->
+    <svg class="corner corner-tl" viewBox="0 0 240 240" aria-hidden="true">
+      <g>
+        <use href="#palm" x="-40" y="100" width="180" height="80" transform="rotate(15 0 0)"/>
+        <use href="#monstera" x="60" y="-20" width="120" height="180" transform="rotate(-20 110 60)" opacity="0.95"/>
+        <use href="#plumeria-coral" x="120" y="80" width="80" height="80"/>
+        <use href="#plumeria" x="20" y="40" width="58" height="58"/>
+      </g>
+    </svg>
+    <svg class="corner corner-tr" viewBox="0 0 200 200" aria-hidden="true">
+      <g>
+        <use href="#palm" x="-30" y="40" width="160" height="80" transform="rotate(-30 60 40)"/>
+        <use href="#plumeria" x="80" y="80" width="80" height="80"/>
+        <use href="#plumeria-coral" x="120" y="20" width="56" height="56"/>
+        <use href="#sun" x="20" y="20" width="50" height="50" opacity="0.7"/>
+      </g>
+    </svg>
+    <svg class="corner corner-br" viewBox="0 0 240 240" aria-hidden="true">
+      <g>
+        <use href="#palm" x="100" y="40" width="180" height="80" transform="rotate(-160 180 80)"/>
+        <use href="#monstera" x="20" y="60" width="120" height="180" transform="rotate(180 80 140)"/>
+        <use href="#plumeria-coral" x="80" y="120" width="76" height="76"/>
+        <use href="#plumeria" x="160" y="160" width="58" height="58"/>
+      </g>
+    </svg>
+    <svg class="corner corner-bl" viewBox="0 0 220 220" aria-hidden="true">
+      <g>
+        <use href="#palm" x="40" y="80" width="180" height="80" transform="rotate(200 130 120)"/>
+        <use href="#plumeria" x="60" y="60" width="78" height="78"/>
+        <use href="#plumeria-coral" x="20" y="120" width="54" height="54"/>
+        <use href="#pineapple" x="140" y="20" width="50" height="80" opacity="0.85"/>
+      </g>
+    </svg>
+
+    <div class="pamphlet-inner">
+
+      <!-- hero -->
+      <header class="hero">
+        <div class="hero-mark">
+          <span class="badge">salon · sui · uemachi</span>
+          <div class="hero-mono">sui</div>
+        </div>
+        <h1>
+          上本町の<span class="stroke">肌質改善</span><br/>
+          フェイシャルサロン
+        </h1>
+        <h2 class="sub">Aloha Skin Care Studio</h2>
+        <p class="lede">
+          エレクトロポレーション導入で、<strong>うるおい・ツヤ感・キメ</strong>を整えるケア。<br/>
+          肌状態を確認し、お悩みに合わせて施術をご提案します。
+        </p>
+        <div class="hero-decor">
+          <svg width="170" height="22" style="color:var(--lagoon)" aria-hidden="true">
+            <use href="#wave" x="0" y="2" width="170" height="18"/>
+          </svg>
+        </div>
+      </header>
+
+      <!-- info pills -->
+      <div class="info-row">
+        <div class="info-pill">
+          <span class="glyph">
+            <svg width="20" height="20"><use href="#i-bookmark"/></svg>
+          </span>
+          <div>
+            <strong>完全予約制でゆったり施術</strong>
+            <small>by appointment</small>
+          </div>
+        </div>
+        <div class="info-pill">
+          <span class="glyph">
+            <svg width="20" height="20"><use href="#i-map"/></svg>
+          </span>
+          <div>
+            <strong>大阪上本町駅 徒歩3分</strong>
+            <small>3 min from station</small>
+          </div>
+        </div>
+        <div class="info-pill">
+          <span class="glyph">
+            <svg width="20" height="20"><use href="#i-clock"/></svg>
+          </span>
+          <div>
+            <strong>10:00 – 22:00 営業</strong>
+            <small>open daily</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- concerns -->
+      <div class="section-head">
+        <span class="lead-svg">
+          <svg width="28" height="28"><use href="#plumeria-coral"/></svg>
+        </span>
+        <span class="label">For you</span>
+        <h3>こんなお悩みに</h3>
+        <span class="ruler"></span>
+      </div>
+      <div class="concerns">
+        <span class="concern-chip"><span class="dot"></span>乾燥</span>
+        <span class="concern-chip"><span class="dot"></span>くすみ印象</span>
+        <span class="concern-chip"><span class="dot"></span>ハリ不足</span>
+        <span class="concern-chip"><span class="dot"></span>キメの乱れ</span>
+        <span class="concern-chip"><span class="dot"></span>手元の乾燥</span>
+      </div>
+
+      <!-- offer ticket -->
+      <div class="ticket">
+        <div class="ticket-text">
+          <span class="eyebrow">First Visit · Welcome Aloha</span>
+          <h4>初回カウンセリング付き<br/>エクソソーム導入体験</h4>
+          <p>肌状態を確認し、お悩みに合わせて<br/>最適な施術内容をご提案します。</p>
+        </div>
+        <div class="ticket-price">
+          <span class="ribbon">はじめての方へ</span>
+          <span class="duration">45<small style="font-size:0.7em">分</small></span>
+          <span class="price"><span class="yen">¥</span>8,800</span>
+          <small class="footnote">tax included</small>
+        </div>
+      </div>
+
+      <!-- menu -->
+      <div class="section-head">
+        <span class="lead-svg">
+          <svg width="28" height="28"><use href="#hibiscus"/></svg>
+        </span>
+        <span class="label">Treatment menu</span>
+        <h3>通常メニュー</h3>
+        <span class="ruler"></span>
+      </div>
+
+      <div class="menu">
+        <div class="menu-card">
+          <div class="index">01</div>
+          <div class="body">
+            <strong>肌質改善エクソソーム導入コース</strong>
+            <small>うるおい・ツヤ感・キメを整える方へ</small>
+          </div>
+          <div class="dur">30 MIN</div>
+          <div class="price"><span class="yen">¥</span>10,000</div>
+        </div>
+        <div class="menu-card">
+          <div class="index">02</div>
+          <div class="body">
+            <strong>プレミアムエクソソーム導入コース</strong>
+            <small>よりしっかりケアしたい方へ</small>
+          </div>
+          <div class="dur">30 MIN</div>
+          <div class="price"><span class="yen">¥</span>12,000</div>
+        </div>
+        <div class="menu-card">
+          <div class="index">03</div>
+          <div class="body">
+            <strong>手の甲エクソソームケア</strong>
+            <small>手元の乾燥・くすみ印象が気になる方へ</small>
+          </div>
+          <div class="dur">10 MIN</div>
+          <div class="price"><span class="yen">¥</span>5,500</div>
+        </div>
+      </div>
+
+      <!-- option strip -->
+      <div class="option-strip">
+        <div class="opt-label">Option</div>
+        <div class="option-row">
+          <span class="glyph"><svg width="18" height="18"><use href="#i-drop"/></svg></span>
+          <strong>保湿パック</strong>
+          <span class="dur">10 MIN</span>
+          <span class="price"><span class="yen">¥</span>2,000</span>
+        </div>
+        <div class="option-row">
+          <span class="glyph"><svg width="18" height="18"><use href="#i-brow"/></svg></span>
+          <strong>眉毛カット</strong>
+          <span class="dur">30 MIN</span>
+          <span class="price"><span class="yen">¥</span>2,200</span>
+        </div>
+      </div>
+
+      <!-- footer cards -->
+      <div class="footer-grid">
+        <div class="contact-card">
+          <span class="stamp">
+            <svg width="14" height="14" style="color:var(--coral-blush)"><use href="#i-spark"/></svg>
+            Reservation · Aloha
+          </span>
+          <h4>ご予約・ご相談は<br/><em>LINE</em>&nbsp;または&nbsp;<em>Instagram</em>から</h4>
+          <p>ご相談だけでも歓迎です。<br/>お気軽にお問い合わせください。</p>
+          <div class="qr-row">
+            <div class="qr-block">
+              <div class="qr">
+                <svg width="60" height="60"><use href="#qr-line"/></svg>
+              </div>
+              <span class="lbl line">LINE</span>
+            </div>
+            <div class="qr-block">
+              <div class="qr">
+                <svg width="60" height="60"><use href="#qr-ig"/></svg>
+              </div>
+              <span class="lbl ig">Instagram</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="access-card">
+          <div class="head">
+            <svg width="14" height="14"><use href="#i-map"/></svg>
+            Access
+          </div>
+          <h4>salon sui</h4>
+          <dl>
+            <dt>Address</dt>
+            <dd>大阪市天王寺区上本町6-9-19<br/>FLAT34 703</dd>
+            <dt>Open</dt>
+            <dd>10:00 – 22:00 / 完全予約制</dd>
+          </dl>
+          <span class="ig-handle">
+            <svg width="14" height="14" style="color:var(--coral-deep)"><use href="#i-ig"/></svg>
+            @sui.bihadalabo
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- =================== seam =================== -->
+  <div class="seam" aria-hidden="true">
+    <span class="line"></span>
+    <svg width="48" height="20" style="color:var(--coral-deep)" aria-hidden="true">
+      <use href="#wave" x="0" y="1" width="48" height="18"/>
+    </svg>
+    <span>Continue · 続きへ</span>
+    <svg width="48" height="20" style="color:var(--coral-deep)" aria-hidden="true">
+      <use href="#wave" x="0" y="1" width="48" height="18"/>
+    </svg>
+    <span class="line"></span>
+  </div>
+
+  <!-- =================== PAMPHLET 2 =================== -->
+  <article class="pamphlet p2">
+
+    <svg class="corner corner-tl" viewBox="0 0 240 240" aria-hidden="true">
+      <g>
+        <use href="#palm" x="-20" y="60" width="170" height="80" transform="rotate(20 60 100)"/>
+        <use href="#plumeria-coral" x="110" y="40" width="76" height="76"/>
+        <use href="#plumeria" x="40" y="120" width="58" height="58"/>
+        <use href="#monstera" x="140" y="100" width="110" height="160" transform="rotate(-30 195 180)"/>
+      </g>
+    </svg>
+    <svg class="corner corner-tr" viewBox="0 0 200 200" aria-hidden="true">
+      <g>
+        <use href="#palm" x="-50" y="20" width="180" height="80" transform="rotate(-30 40 60)"/>
+        <use href="#plumeria" x="80" y="80" width="78" height="78"/>
+        <use href="#plumeria-coral" x="130" y="40" width="50" height="50"/>
+        <use href="#hibiscus" x="20" y="120" width="60" height="60" opacity="0.85"/>
+      </g>
+    </svg>
+    <svg class="corner corner-br" viewBox="0 0 240 240" aria-hidden="true">
+      <g>
+        <use href="#palm" x="80" y="60" width="180" height="80" transform="rotate(-200 170 100)"/>
+        <use href="#monstera" x="20" y="60" width="110" height="170" transform="rotate(160 75 145)"/>
+        <use href="#plumeria-coral" x="90" y="130" width="80" height="80"/>
+        <use href="#plumeria" x="160" y="170" width="56" height="56"/>
+      </g>
+    </svg>
+    <svg class="corner corner-bl" viewBox="0 0 220 220" aria-hidden="true">
+      <g>
+        <use href="#palm" x="20" y="100" width="180" height="80" transform="rotate(200 110 140)"/>
+        <use href="#plumeria-coral" x="50" y="40" width="78" height="78"/>
+        <use href="#plumeria" x="20" y="120" width="56" height="56"/>
+        <use href="#pineapple" x="140" y="40" width="46" height="76" opacity="0.85"/>
+      </g>
+    </svg>
+
+    <div class="pamphlet-inner">
+
+      <!-- top: vase + title -->
+      <section class="p2-hero">
+        <div class="vase" aria-hidden="true">
+          <svg viewBox="-80 -120 160 240" width="100%">
+            <!-- vase -->
+            <ellipse cx="0" cy="100" rx="40" ry="10" fill="rgba(110,98,88,0.18)"/>
+            <path d="M -28,28 Q -38,32 -38,48 L -38,82 Q -38,98 -22,100 L 22,100 Q 38,98 38,82 L 38,48 Q 38,32 28,28 Z"
+                  fill="#eee0bf" stroke="#9f8862" stroke-width="0.8"/>
+            <path d="M -22,28 L 22,28" stroke="#9f8862" stroke-width="0.6"/>
+            <ellipse cx="-8" cy="50" rx="6" ry="20" fill="#fff" opacity="0.45"/>
+            <!-- gypsophila/foliage from vase -->
+            <g stroke="#9f8862" stroke-width="0.7" fill="none">
+              <path d="M -8,30 Q -16,0 -34,-30"/>
+              <path d="M 0,30 Q 4,-10 -2,-60"/>
+              <path d="M 6,30 Q 18,2 30,-24"/>
+              <path d="M -14,30 Q -28,16 -50,4"/>
+              <path d="M 12,30 Q 26,18 44,8"/>
+              <path d="M -2,30 Q 0,-30 16,-72"/>
+            </g>
+            <g fill="#fff" stroke="#cdb8a0" stroke-width="0.4">
+              <circle cx="-34" cy="-30" r="2.4"/>
+              <circle cx="-30" cy="-22" r="1.6"/>
+              <circle cx="-38" cy="-20" r="1.8"/>
+              <circle cx="-2" cy="-60" r="2.4"/>
+              <circle cx="-8" cy="-54" r="1.8"/>
+              <circle cx="4" cy="-50" r="1.6"/>
+              <circle cx="30" cy="-24" r="2.4"/>
+              <circle cx="36" cy="-16" r="1.8"/>
+              <circle cx="24" cy="-30" r="1.6"/>
+              <circle cx="-50" cy="4" r="2.2"/>
+              <circle cx="-44" cy="-6" r="1.6"/>
+              <circle cx="-40" cy="14" r="1.6"/>
+              <circle cx="44" cy="8" r="2.2"/>
+              <circle cx="38" cy="-2" r="1.6"/>
+              <circle cx="50" cy="16" r="1.6"/>
+              <circle cx="16" cy="-72" r="2.4"/>
+              <circle cx="10" cy="-66" r="1.6"/>
+              <circle cx="22" cy="-62" r="1.6"/>
+            </g>
+            <!-- a couple of plumeria scattered -->
+            <use href="#plumeria" x="-58" y="-44" width="42" height="42"/>
+            <use href="#plumeria-coral" x="14" y="-86" width="36" height="36"/>
+            <use href="#plumeria" x="36" y="-46" width="34" height="34"/>
+            <!-- monstera leaf behind -->
+            <use href="#monstera" x="22" y="-60" width="60" height="100" transform="rotate(35 52 -10)" opacity="0.85"/>
+          </svg>
+        </div>
+        <div class="text">
+          <span class="label">Electroporation · Treatment</span>
+          <h2>エレクトロ<wbr/>ポレーション<br/><em>導入コース</em></h2>
+          <p>美容成分を肌の深部※へ届け、うるおいと透明感のある肌へ。やさしい島の風のように、肌を整える時間を。</p>
+          <small>※角質層まで</small>
+        </div>
+      </section>
+
+      <!-- course list -->
+      <div class="course-list">
+
+        <div class="course-row">
+          <div class="course-thumb">
+            <svg viewBox="-50 -50 100 100" aria-hidden="true">
+              <circle r="44" fill="rgba(211,232,236,0.6)" />
+              <use href="#drop" x="-22" y="-26" width="44" height="52"/>
+              <ellipse cx="-2" cy="32" rx="22" ry="4" fill="rgba(110,98,88,0.15)"/>
+            </svg>
+            <svg class="leaf" viewBox="-80 -20 160 60">
+              <use href="#palm" width="160" height="60"/>
+            </svg>
+          </div>
+          <div class="course-info">
+            <h3>高濃度エクソソームコース</h3>
+            <span class="sub">ヒト幹美容液 + 化粧水</span>
+            <p>うるおいやハリを与え、輝くような肌へ導きます。<br/>定期的なケアにおすすめのスタンダードコース。</p>
+          </div>
+          <div class="course-meta">
+            <div class="price"><span class="yen">¥</span>10,000<span class="dash">-</span></div>
+            <div class="dur">30 MIN</div>
+          </div>
+        </div>
+
+        <div class="course-row">
+          <div class="course-thumb">
+            <svg viewBox="-50 -50 100 100" aria-hidden="true">
+              <circle r="44" fill="rgba(244,211,200,0.55)" />
+              <use href="#bottle" x="-30" y="-40" width="60" height="80"/>
+              <ellipse cx="0" cy="36" rx="22" ry="4" fill="rgba(110,98,88,0.15)"/>
+            </svg>
+            <svg class="leaf" viewBox="-80 -20 160 60">
+              <use href="#palm" width="160" height="60" transform="rotate(8 0 0)"/>
+            </svg>
+          </div>
+          <div class="course-info">
+            <h3>超濃度エクソソームコース</h3>
+            <span class="sub">ヒト幹美容液 + 美容液</span>
+            <p>年齢肌や乾燥が気になる方に。<br/>弾むようなハリと、しっかりとした手応えのある肌へ。</p>
+          </div>
+          <div class="course-meta">
+            <div class="price"><span class="yen">¥</span>12,000<span class="dash">-</span></div>
+            <div class="dur">30 MIN</div>
+          </div>
+        </div>
+
+        <div class="course-row">
+          <div class="course-thumb">
+            <svg viewBox="-50 -50 100 100" aria-hidden="true">
+              <circle r="44" fill="rgba(222,233,205,0.6)" />
+              <use href="#hand" x="-34" y="-30" width="68" height="68"/>
+              <g fill="#F1B34A" opacity="0.85">
+                <path d="M 22,-22 l -1.5,3 l 1.5,3 l 1.5,-3 z"/>
+                <path d="M -28,-10 l -1.2,2.5 l 1.2,2.5 l 1.2,-2.5 z"/>
+                <path d="M 26,8 l -1.2,2.5 l 1.2,2.5 l 1.2,-2.5 z"/>
+              </g>
+            </svg>
+            <svg class="leaf" viewBox="-80 -20 160 60">
+              <use href="#palm" width="160" height="60"/>
+            </svg>
+          </div>
+          <div class="course-info">
+            <h3>手の甲エクソソームコース</h3>
+            <span class="sub">美容液</span>
+            <p>手元のハリ・透明感ケアに。<br/>若々しい印象の手肌へ導く、隙間時間に嬉しいケア。</p>
+          </div>
+          <div class="course-meta">
+            <div class="price"><span class="yen">¥</span>5,500<span class="dash">-</span></div>
+            <div class="dur">10 MIN</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- options -->
+      <section class="p2-options" aria-label="オプション">
+        <div class="head">
+          <svg width="22" height="22" style="color:var(--palm-deep)"><use href="#i-leaf"/></svg>
+          <h4>Option</h4>
+          <span class="ruler"></span>
+        </div>
+        <div class="lines">
+          <div class="line">
+            <span class="glyph"><svg width="20" height="20"><use href="#i-drop"/></svg></span>
+            <strong>パック</strong>
+            <span class="leaders"></span>
+            <span class="dur">10 MIN</span>
+            <span class="price"><span class="yen">¥</span>2,000<span class="dash">-</span></span>
+          </div>
+          <div class="line">
+            <span class="glyph"><svg width="20" height="20"><use href="#i-brow"/></svg></span>
+            <strong>眉毛カット</strong>
+            <span class="leaders"></span>
+            <span class="dur">30 MIN</span>
+            <span class="price"><span class="yen">¥</span>2,200<span class="dash">-</span></span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </article>
+
+  <p class="doc-foot">salon sui <span class="heart">·</span> aloha edition <span class="heart">·</span> uemachi · osaka</p>
+
+</main>
+
+</body>
+</html>

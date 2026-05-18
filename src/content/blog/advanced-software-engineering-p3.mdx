@@ -1,0 +1,805 @@
+---
+title: "The write path is your architecture"
+description: "How data gets into your system decides latency, durability, retries, consistency, and every read model that follows."
+date: "2026-05-18"
+tags: ["Architecture", "Writes", "Event Streaming", "Scale"]
+---
+
+Most architecture diagrams lie by omission.
+
+They show boxes. API, database, queue, worker, cache, search. Sometimes they show arrows.
+
+The useful diagram is narrower.
+
+What happens after a user clicks submit?
+
+That is the write path. The write path decides what the user waits for, what can be retried, what can be lost, what needs to be repaired, and which read models are even possible later.
+
+If the write path is vague, the architecture is vague.
+
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 420"
+      role="img"
+      aria-labelledby="write-path-svg-title write-path-svg-desc"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <title id="write-path-svg-title">Synchronous and asynchronous write paths</title>
+      <desc id="write-path-svg-desc">
+        Animated comparison between a blocking write chain and an asynchronous queue-based write path with parallel workers.
+      </desc>
+      <defs>
+        <linearGradient id="write-path-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#07111a" />
+          <stop offset="100%" stopColor="#0a1724" />
+        </linearGradient>
+        <pattern id="write-path-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#dbeafe" strokeWidth="0.5" opacity="0.08" />
+        </pattern>
+        <pattern id="write-path-grid-major" width="96" height="96" patternUnits="userSpaceOnUse">
+          <path d="M 96 0 L 0 0 0 96" fill="none" stroke="#dbeafe" strokeWidth="1" opacity="0.12" />
+        </pattern>
+        <filter id="write-path-soft-glow">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <marker id="write-path-arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
+        </marker>
+        <marker id="write-path-arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
+        </marker>
+      </defs>
+
+      <rect width="720" height="420" rx="18" fill="url(#write-path-bg)" />
+      <rect width="720" height="420" fill="url(#write-path-grid-minor)" />
+      <rect width="720" height="420" fill="url(#write-path-grid-major)" />
+      <line x1="42" y1="210" x2="678" y2="210" stroke="#dbeafe" strokeWidth="1" opacity="0.25" />
+
+      <text x="46" y="44" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        Blocking
+      </text>
+      <text x="46" y="244" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        Async
+      </text>
+
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.9;1" dur="8s" repeatCount="indefinite" />
+        <rect x="82" y="82" width="100" height="60" rx="8" fill="none" stroke="#ef4444" strokeWidth="1.8" />
+        <rect x="242" y="82" width="100" height="60" rx="8" fill="none" stroke="#ef4444" strokeWidth="1.8" />
+        <rect x="402" y="82" width="100" height="60" rx="8" fill="none" stroke="#ef4444" strokeWidth="1.8" />
+        <rect x="562" y="82" width="100" height="60" rx="8" fill="none" stroke="#ef4444" strokeWidth="1.8" />
+        <text x="132" y="117" textAnchor="middle" fill="#fee2e2" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13">API</text>
+        <text x="292" y="117" textAnchor="middle" fill="#fee2e2" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13">DB</text>
+        <text x="452" y="117" textAnchor="middle" fill="#fee2e2" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13">Cache</text>
+        <text x="612" y="117" textAnchor="middle" fill="#fee2e2" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13">Notify</text>
+
+        <path d="M 184 112 L 238 112" stroke="#ef4444" strokeWidth="1.8" markerEnd="url(#write-path-arrow-red)" />
+        <path d="M 344 112 L 398 112" stroke="#ef4444" strokeWidth="1.8" markerEnd="url(#write-path-arrow-red)" />
+        <path d="M 504 112 L 558 112" stroke="#ef4444" strokeWidth="1.8" markerEnd="url(#write-path-arrow-red)" />
+
+        <text x="206" y="99" textAnchor="middle" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">lock</text>
+        <text x="366" y="99" textAnchor="middle" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">lock</text>
+        <text x="526" y="99" textAnchor="middle" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">lock</text>
+
+        <circle r="8" fill="#fbbf24" filter="url(#write-path-soft-glow)">
+          <animateMotion
+            dur="8s"
+            repeatCount="indefinite"
+            keyPoints="0;0.13;0.13;0.36;0.36;0.58;0.58;0.82;0.82;1"
+            keyTimes="0;0.12;0.24;0.36;0.48;0.6;0.72;0.84;0.92;1"
+            calcMode="linear"
+            path="M 58 112 L 132 112 L 132 112 L 292 112 L 292 112 L 452 112 L 452 112 L 612 112 L 612 112 L 682 112" />
+        </circle>
+
+        <text x="82" y="172" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">Timer</text>
+        <text x="145" y="172" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" opacity="0">
+          50ms
+          <animate attributeName="opacity" values="0;1;0;0;0" keyTimes="0;0.16;0.3;0.9;1" dur="8s" repeatCount="indefinite" />
+        </text>
+        <text x="145" y="172" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" opacity="0">
+          150ms
+          <animate attributeName="opacity" values="0;0;1;0;0" keyTimes="0;0.3;0.46;0.9;1" dur="8s" repeatCount="indefinite" />
+        </text>
+        <text x="145" y="172" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" opacity="0">
+          200ms
+          <animate attributeName="opacity" values="0;0;0;1;0" keyTimes="0;0.46;0.62;0.9;1" dur="8s" repeatCount="indefinite" />
+        </text>
+        <text x="145" y="172" fill="#ef4444" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          Total: 450ms
+          <animate attributeName="opacity" values="0;0;0;1;1;0" keyTimes="0;0.62;0.78;0.86;0.95;1" dur="8s" repeatCount="indefinite" />
+        </text>
+      </g>
+
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.9;1" dur="8s" repeatCount="indefinite" />
+        <rect x="82" y="280" width="100" height="60" rx="8" fill="none" stroke="#10b981" strokeWidth="1.8" />
+        <rect x="252" y="260" width="90" height="100" rx="10" fill="none" stroke="#10b981" strokeWidth="2" />
+        <rect x="430" y="246" width="72" height="48" rx="8" fill="none" stroke="#67e8f9" strokeWidth="1.5" />
+        <rect x="430" y="306" width="72" height="48" rx="8" fill="none" stroke="#67e8f9" strokeWidth="1.5" />
+        <rect x="540" y="276" width="72" height="48" rx="8" fill="none" stroke="#67e8f9" strokeWidth="1.5" />
+        <text x="132" y="315" textAnchor="middle" fill="#d1fae5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13">API</text>
+        <text x="297" y="314" textAnchor="middle" fill="#d1fae5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13">Queue</text>
+        <text x="466" y="274" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">Worker 1</text>
+        <text x="466" y="334" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">Worker 2</text>
+        <text x="576" y="304" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">Worker 3</text>
+
+        <path d="M 184 310 L 248 310" stroke="#10b981" strokeWidth="1.8" markerEnd="url(#write-path-arrow-green)" />
+        <path d="M 342 286 C 380 260 398 268 426 270" stroke="#10b981" strokeWidth="1.3" strokeDasharray="4 7" markerEnd="url(#write-path-arrow-green)" />
+        <path d="M 342 314 C 384 318 398 330 426 330" stroke="#10b981" strokeWidth="1.3" strokeDasharray="4 7" markerEnd="url(#write-path-arrow-green)" />
+        <path d="M 342 302 C 424 292 476 298 536 300" stroke="#10b981" strokeWidth="1.3" strokeDasharray="4 7" markerEnd="url(#write-path-arrow-green)" />
+
+        <circle r="6" fill="#bbf7d0" filter="url(#write-path-soft-glow)">
+          <animateMotion dur="2.1s" begin="0.5s" repeatCount="indefinite" path="M 58 300 L 132 300 L 297 300" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.8;1" dur="2.1s" begin="0.5s" repeatCount="indefinite" />
+        </circle>
+        <circle r="6" fill="#bbf7d0" filter="url(#write-path-soft-glow)">
+          <animateMotion dur="2.1s" begin="1.15s" repeatCount="indefinite" path="M 58 316 L 132 316 L 297 316" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.8;1" dur="2.1s" begin="1.15s" repeatCount="indefinite" />
+        </circle>
+        <circle r="6" fill="#bbf7d0" filter="url(#write-path-soft-glow)">
+          <animateMotion dur="2.1s" begin="1.8s" repeatCount="indefinite" path="M 58 332 L 132 332 L 297 332" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.8;1" dur="2.1s" begin="1.8s" repeatCount="indefinite" />
+        </circle>
+
+        <circle r="4" fill="#67e8f9" filter="url(#write-path-soft-glow)">
+          <animateMotion dur="2.6s" begin="1.4s" repeatCount="indefinite" path="M 297 300 C 380 260 398 268 466 270" />
+        </circle>
+        <circle r="4" fill="#67e8f9" filter="url(#write-path-soft-glow)">
+          <animateMotion dur="2.9s" begin="1.8s" repeatCount="indefinite" path="M 297 316 C 384 318 398 330 466 330" />
+        </circle>
+        <circle r="4" fill="#67e8f9" filter="url(#write-path-soft-glow)">
+          <animateMotion dur="3.2s" begin="2.2s" repeatCount="indefinite" path="M 297 308 C 424 292 476 298 576 300" />
+        </circle>
+
+        <text x="82" y="382" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">Response</text>
+        <text x="168" y="382" fill="#10b981" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="14" fontWeight="700">
+          15ms
+          <animate attributeName="opacity" values="0.45;1;0.45" dur="2s" repeatCount="indefinite" />
+        </text>
+        <text x="430" y="382" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          workers processing in parallel
+        </text>
+      </g>
+    </svg>
+  </figure>
+</div>
+
+## Start with the acknowledgement boundary
+
+
+The first question:
+
+```text
+What must be true before we tell the user the write succeeded?
+```
+
+That line is the acknowledgement boundary.
+
+For a blog comment, success might mean "the canonical comment row exists." Notifications, search indexing, abuse scanning, and feed fanout can happen later.
+
+For a bank transfer, success might mean "the ledger entries are durably committed, balanced, and visible to the account owner." Sending an email receipt can happen later.
+
+For a file upload, success might mean "the object bytes and metadata are durable." Thumbnail generation can happen later.
+
+If the boundary is too far downstream, users wait on work they do not care about.
+
+If the boundary is too early, you say "success" for work that can still disappear.
+
+<Callout title="Rule of thumb">
+  Return only after the smallest durable fact that the product promise requires. Everything else is a derived effect.
+</Callout>
+
+## The naive write path
+
+This is the shape most systems start with:
+
+```python
+def create_post(user_id, content):
+    post = db.insert_post(user_id, content)
+    cache.invalidate(f"feed:{user_id}")
+    search.index_post(post)
+    notifications.send_to_followers(user_id, post)
+    analytics.track("post.created", user_id=user_id, post_id=post.id)
+    return post
+```
+
+It is easy to read.
+
+It is also a latency trap. The user waits for the database, cache, search, notifications, analytics, and every network hop behind those calls.
+
+It is a failure trap too:
+
+1. The post insert succeeds.
+2. Search indexing times out.
+3. The API returns `500`.
+4. The user retries.
+5. The second request creates a duplicate post.
+
+Now the code needs cleanup logic, dedupe logic, and product support.
+
+The problem is not that synchronous writes are always wrong. The problem is that this function has no explicit boundary between the canonical write and the derived side effects.
+
+## What I notice
+
+The write path tends to grow quietly.
+
+One team adds analytics. Another adds notifications. Another adds search. Another invalidates a cache. Another writes audit logs. The endpoint still looks like one function, but the product contract has changed.
+
+The user thinks they are creating a post.
+
+The system is doing six things.
+
+When p99 latency spikes, database is seen as the default culprit because that is the obvious stateful component. But the real issue is that the request path became an integration path.
+
+The fix is to name the critical path.
+
+## Split canonical writes from derived work
+
+A more scalable write path is usually:
+
+```text
+request
+  -> validate input
+  -> write canonical fact
+  -> enqueue durable event
+  -> return
+
+worker
+  -> consume event
+  -> update read models
+  -> send notifications
+  -> index search
+  -> update analytics
+```
+
+The user waits for the fact. Workers handle the effects.
+
+```python
+def create_post(user_id, content, idempotency_key):
+    post_id = generate_id()
+
+    with db.transaction() as tx:
+        existing = tx.get_idempotency_result(
+            user_id=user_id,
+            key=idempotency_key,
+        )
+        if existing:
+            return existing
+
+        post = tx.insert_post(
+            id=post_id,
+            user_id=user_id,
+            content=content,
+            status="published",
+        )
+        tx.insert_outbox_event(
+            event_id=generate_id(),
+            event_type="post.created",
+            aggregate_id=post_id,
+            payload={
+                "post_id": post_id,
+                "user_id": user_id,
+            },
+        )
+        tx.save_idempotency_result(
+            user_id=user_id,
+            key=idempotency_key,
+            response={"id": post_id, "status": "published"},
+        )
+
+    return {"id": post_id, "status": "published"}
+```
+
+There are three important details here.
+
+First, the canonical row and the event are written in the same database transaction.
+
+Second, the idempotency result is stored in the same transaction.
+
+Third, nothing calls search, notifications, or analytics before returning to the user.
+
+This keeps the request path small without pretending derived work is optional.
+
+## The outbox pattern
+
+The awkward problem with queues is the gap between the database commit and the queue publish.
+
+This is unsafe:
+
+```python
+def create_post(user_id, content):
+    post = db.insert_post(user_id, content)
+    queue.publish("post.created", {"post_id": post.id})
+    return post
+```
+
+If the database write succeeds and the queue publish fails, the post exists but no worker hears about it.
+
+The outbox pattern removes that gap by writing the event into the same database transaction as the canonical fact.
+
+```sql
+CREATE TABLE posts (
+  id bigint PRIMARY KEY,
+  user_id bigint NOT NULL,
+  content text NOT NULL,
+  status text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE outbox_events (
+  id bigint PRIMARY KEY,
+  event_type text NOT NULL,
+  aggregate_id bigint NOT NULL,
+  payload jsonb NOT NULL,
+  published_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+```
+
+Then a relay publishes unpublished events:
+
+```python
+def publish_outbox_batch(limit=100):
+    events = db.fetch_unpublished_outbox_events(limit=limit)
+
+    for event in events:
+        queue.publish(
+            event.event_type,
+            key=str(event.aggregate_id),
+            payload=event.payload,
+        )
+        db.mark_outbox_event_published(event.id)
+```
+
+This relay can crash after publishing but before marking the event as published. That means workers may receive duplicates.
+
+That is normal.
+
+The system must be designed around at-least-once delivery unless you have a very specific reason and infrastructure support for something stricter.
+
+<Callout type="warning" title="Warning">
+  "Exactly once" is usually a property of a narrow subsystem, not your whole product workflow. Design handlers so duplicate events are harmless.
+</Callout>
+
+## Idempotency is the retry contract
+
+Retries are not optional.
+
+Clients retry after timeouts. Load balancers retry. Workers retry. Operators replay events after bugs. You replay outbox rows after deploys. A mobile app sends the same request twice because the connection died before it saw the response.
+
+If retries are unsafe, the system is unsafe.
+
+For external API writes, require an idempotency key:
+
+```sql
+CREATE TABLE idempotency_keys (
+  user_id bigint NOT NULL,
+  key text NOT NULL,
+  request_hash text NOT NULL,
+  response jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, key)
+);
+```
+
+The key should mean: "For this user, this logical command may run once."
+
+The request hash matters because clients can accidentally reuse keys for different payloads. If the same key arrives with a different request body, return a conflict instead of guessing.
+
+For worker handlers, make each effect idempotent too:
+
+```python
+def handle_post_created(event):
+    if db.event_already_processed(event.id, handler="feed_projection"):
+        return
+
+    with db.transaction() as tx:
+        tx.upsert_feed_item(
+            user_id=event.payload["user_id"],
+            post_id=event.payload["post_id"],
+        )
+        tx.mark_event_processed(
+            event_id=event.id,
+            handler="feed_projection",
+        )
+```
+
+The important part is the handler name. Search indexing, feed projection, notifications, and analytics are different effects. Each needs its own dedupe boundary.
+
+## A queue is not a magic durability machine
+
+Queues help when work can happen later.
+
+They do not remove decisions.
+
+You still need to decide:
+
+| Question | Why it matters |
+| --- | --- |
+| Is enqueue durable? | Returning after an in-memory enqueue is not a durable success. |
+| Can events be duplicated? | Assume yes unless proven otherwise. |
+| Can events arrive out of order? | Assume yes across partitions, retries, and separate topics. |
+| What is the retry policy? | Infinite hot retries can take down dependencies. |
+| Where do poison messages go? | Bad payloads need a dead-letter path. |
+| What is the max acceptable lag? | Async work still has a product freshness budget. |
+
+The queue turns one failure mode into another.
+
+Without a queue, a spike makes users wait.
+
+With a queue, a spike makes lag grow.
+
+That is often a good trade, but only if lag is visible and bounded.
+
+## Backpressure
+
+Backpressure is the system saying: "I cannot accept work at this rate and still keep my promises."
+
+Ignoring backpressure creates dishonest success.
+
+Imagine this:
+
+1. The API accepts 20,000 writes per second.
+2. Workers can process 5,000 events per second.
+3. The queue grows by 15,000 events per second.
+4. Notification lag reaches 45 minutes.
+5. Users complain that the product is broken even though the API is returning `200`.
+
+The write path needs a policy before this happens.
+
+Possible policies:
+
+1. Return `429` or `503` when queue lag crosses a threshold.
+2. Accept the write but mark derived effects as delayed.
+3. Drop low-value effects such as analytics while preserving canonical writes.
+4. Degrade expensive fanout into smaller batches.
+5. Route large tenants through separate partitions.
+
+The right policy depends on the product.
+
+For payments, slow down intake before losing ledger correctness.
+
+For social notifications, preserve the post and delay the notification.
+
+For analytics, sample or drop events before impacting the user-facing write.
+
+## Streams vs queues vs direct writes
+
+These words get overloaded.
+
+The simpler distinction:
+
+| Pattern | Use it when | Watch out for |
+| --- | --- | --- |
+| Direct write | The work is part of the success contract and must complete now | Latency, cascading failures, duplicate side effects |
+| Queue | Each item should be processed by one consumer group for background work | Poison messages, retries, visibility timeouts, lag |
+| Stream/log | Many consumers need the same ordered history of facts | Retention, replay safety, partition keys, schema evolution |
+
+Examples:
+
+```text
+Direct write:
+  create ledger entry before returning payment success
+
+Queue:
+  resize uploaded image
+  send email receipt
+  run abuse scan
+
+Stream/log:
+  post.created feeds search, ranking, notifications, analytics, audit
+```
+
+Use a queue when you want work distribution.
+
+Use a stream when you want a durable history that multiple consumers can independently read and replay.
+
+Use a direct write when the user-facing command is not true until that write completes.
+
+## Ordering comes from partition keys
+
+Ordering is not global by default.
+
+Most scalable logs order records within a partition. That means the key matters.
+
+For posts, a reasonable key may be `post_id` if all events for one post need order:
+
+```text
+post.created
+post.updated
+post.deleted
+```
+
+For account balances, the key is usually `account_id` because operations for one account need a single sequence.
+
+For notifications, the key may be `recipient_user_id` so one user's notification timeline stays ordered.
+
+The wrong key creates subtle bugs.
+
+If all events use one global key, one partition becomes hot.
+
+If events use random keys, related updates can be processed out of order.
+
+Pick the key based on the invariant you need to preserve.
+
+## Update-in-place vs append-only
+
+A normal table stores current state:
+
+```sql
+UPDATE posts
+SET content = $2,
+    updated_at = now()
+WHERE id = $1;
+```
+
+An append-only log stores facts:
+
+```sql
+INSERT INTO post_events (
+  id,
+  post_id,
+  event_type,
+  payload,
+  created_at
+) VALUES (
+  $1,
+  $2,
+  'post.updated',
+  $3,
+  now()
+);
+```
+
+Append-only is useful when history matters, replay matters, or multiple projections need to be rebuilt.
+
+It is not automatically better.
+
+Current-state tables are easier to query. Logs are easier to audit and replay. Many systems need both:
+
+```text
+post_events     -> source of historical facts
+posts           -> current state projection
+feed_items      -> read model
+search_index    -> external projection
+```
+
+This is event sourcing in the small. You do not need to redesign the whole company around it. You can use append-only facts where replay and audit justify the cost.
+
+## A practical decision matrix
+
+Before designing a write path, fill this out:
+
+| Requirement | Direct DB write | DB + outbox | Queue first | Stream first |
+| --- | --- | --- | --- | --- |
+| User needs read-after-write | Strong fit | Strong fit | Weak unless status is pending | Depends on projection lag |
+| Derived work is slow | Weak | Strong | Strong | Strong |
+| Many consumers need the event | Weak | Strong | Medium | Strong |
+| Must not lose accepted writes | Strong | Strong | Depends on queue durability | Strong if durable |
+| Must absorb bursts | Weak | Medium | Strong | Strong |
+| Simple operational model | Strong | Medium | Medium | Weak |
+
+My default for product systems is DB + outbox.
+
+It preserves a simple source of truth, gives workers a durable event stream, and avoids coupling the request path to every side effect.
+
+Queue first can be correct when the command itself is naturally asynchronous:
+
+```text
+import a CSV
+train a model
+transcode a video
+send a campaign
+```
+
+In those cases the user should get a job id and a status endpoint:
+
+```python
+def start_import(user_id, file_id):
+    job_id = generate_id()
+    queue.publish("import.requested", {
+        "job_id": job_id,
+        "user_id": user_id,
+        "file_id": file_id,
+    })
+    return {"job_id": job_id, "status": "queued"}
+```
+
+But be honest in the product language. If the work is queued, call it queued. Do not call it done.
+
+## Failure states are product states
+
+Async writes create intermediate states.
+
+Name them.
+
+```sql
+CREATE TABLE import_jobs (
+  id bigint PRIMARY KEY,
+  user_id bigint NOT NULL,
+  status text NOT NULL CHECK (
+    status IN ('queued', 'processing', 'completed', 'failed')
+  ),
+  error_message text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+```
+
+The status model is not UX polish. It is part of correctness.
+
+If the user can start a job, refresh the page, and see nothing, the write path is incomplete. The request returned before the real work finished, so the product needs a way to represent the pending work.
+
+## What I think
+
+The useful mental model is:
+
+```text
+command -> fact -> effects -> projections
+```
+
+A command is what the user asks for.
+
+A fact is what the system durably records.
+
+Effects are things caused by the fact.
+
+Projections are read models created from facts.
+
+Most messy architectures mix these together. A request handler validates a command, writes a fact, mutates three projections, calls two external systems, and returns success based on whatever happened last.
+
+That is how a write path becomes untestable.
+
+Separate the pieces. Then decide where the acknowledgement boundary belongs.
+
+## Tutorial checklist
+
+For any important write path, fill this out:
+
+| Question | Example answer |
+| --- | --- |
+| User command | Create post |
+| Canonical fact | Row in `posts` |
+| Ack boundary | Return after `posts` row and `outbox_events` row commit |
+| Idempotency key | `(user_id, client_request_id)` |
+| Derived effects | Feed projection, search indexing, notifications, analytics |
+| Delivery model | At least once |
+| Dedupe table | `processed_events(event_id, handler)` |
+| Ordering key | `post_id` for post lifecycle events |
+| Backpressure signal | Outbox age over 60 seconds or queue lag over 50k |
+| Repair path | Replay `post.created` events from outbox or event log |
+| User-visible states | Published immediately; side effects may lag |
+
+Then ask the harder question:
+
+```text
+What happens if every step after the acknowledgement boundary fails?
+```
+
+If the answer is "we do not know," the write path is not designed yet.
+
+## Summary
+
+1. The write path is the real architecture for user-facing state changes.
+2. Start by defining the acknowledgement boundary.
+3. Keep the request path limited to the smallest durable product promise.
+4. Move derived effects behind queues, workers, or streams.
+5. Use an outbox when a database write and event publish must move together.
+6. Assume retries and duplicates; make commands and handlers idempotent.
+7. Treat queue lag and backpressure as product concerns, not just ops metrics.
+8. Pick partition keys based on the ordering invariant you need.
+9. Async workflows need explicit pending, completed, and failed states.
+
+---
+
+## Pop quiz
+
+<Quiz
+  title="Write path design"
+  description="A randomized review of acknowledgement boundaries, outbox events, idempotency, and backpressure."
+  questionCount={4}
+  randomizeChoices={true}>
+  <QuizQuestion
+    id="ack-boundary"
+    prompt="What is the acknowledgement boundary?"
+    explanation="The acknowledgement boundary is the point where the system has done enough durable work to truthfully tell the user the write succeeded.">
+    <QuizChoice>The first line of code in a request handler</QuizChoice>
+    <QuizChoice correct>The set of conditions that must be true before returning success to the user</QuizChoice>
+    <QuizChoice>The number of workers assigned to a queue</QuizChoice>
+    <QuizChoice>The maximum size of a database transaction log</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="sync-side-effects"
+    prompt="A create-post endpoint inserts the post, invalidates cache, indexes search, sends notifications, and tracks analytics before returning. What is the main risk?"
+    explanation="The endpoint has coupled the user-facing write to every derived side effect, increasing latency and creating partial-failure problems.">
+    <QuizChoice correct>The user waits on derived work, and partial failures can make a successful canonical write look like a failed request</QuizChoice>
+    <QuizChoice>The database cannot store text fields</QuizChoice>
+    <QuizChoice>The endpoint is guaranteed to be strongly consistent across all external systems</QuizChoice>
+    <QuizChoice>The code cannot be tested because it uses a function</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="outbox-purpose"
+    prompt="Why use the outbox pattern?"
+    explanation="The outbox pattern writes the canonical fact and event record in the same transaction, avoiding the gap where the database commit succeeds but queue publish fails.">
+    <QuizChoice>To remove the need for a database transaction</QuizChoice>
+    <QuizChoice correct>To commit the canonical write and event record together before publishing asynchronously</QuizChoice>
+    <QuizChoice>To guarantee that workers will never receive duplicate events</QuizChoice>
+    <QuizChoice>To make every event globally ordered across all users</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="at-least-once"
+    prompt="An outbox relay publishes an event, then crashes before marking it published. What should the system assume?"
+    explanation="The event may be published again after the relay restarts. Handlers should be idempotent because at-least-once delivery creates duplicates.">
+    <QuizChoice>The event is permanently lost</QuizChoice>
+    <QuizChoice>The database will automatically undo the canonical write</QuizChoice>
+    <QuizChoice correct>The event may be delivered more than once, so handlers must dedupe or upsert safely</QuizChoice>
+    <QuizChoice>The queue will prevent all duplicate effects in every downstream system</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="idempotency-key"
+    prompt="What should an idempotency key protect?"
+    explanation="An idempotency key should make one logical command safe to retry, usually scoped to the user or account and checked against the request payload.">
+    <QuizChoice>A random background metric that can be sampled</QuizChoice>
+    <QuizChoice correct>One logical command, so a retry does not create duplicate state</QuizChoice>
+    <QuizChoice>The number of database indexes on a table</QuizChoice>
+    <QuizChoice>The visual order of buttons in the UI</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="request-hash"
+    prompt="Why store a request hash with an idempotency key?"
+    explanation="If a client reuses the same key with a different payload, the server should detect the mismatch and return a conflict instead of replaying an unrelated response.">
+    <QuizChoice>To compress the response body before returning it</QuizChoice>
+    <QuizChoice>To make the key globally ordered</QuizChoice>
+    <QuizChoice correct>To detect accidental reuse of the same key for different payloads</QuizChoice>
+    <QuizChoice>To avoid storing the original response</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="queue-lag"
+    prompt="The API accepts 20,000 writes per second, but workers process 5,000 events per second. What happens if intake continues?"
+    explanation="The queue grows by 15,000 events per second. Async processing protects request latency only if lag is visible and bounded.">
+    <QuizChoice>Nothing, because queues remove capacity limits</QuizChoice>
+    <QuizChoice correct>Queue lag grows, and derived effects become increasingly stale</QuizChoice>
+    <QuizChoice>The database automatically shards the queue</QuizChoice>
+    <QuizChoice>Every write becomes strongly consistent faster</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="stream-vs-queue"
+    prompt="When is a stream or log a better fit than a simple work queue?"
+    explanation="A stream is useful when multiple consumers need the same durable history and may need independent replay. A queue is usually for distributing work to one consumer group.">
+    <QuizChoice>When only one worker should ever see each job and history does not matter</QuizChoice>
+    <QuizChoice correct>When many consumers need the same durable event history and independent replay</QuizChoice>
+    <QuizChoice>When the result must be invisible to all downstream systems</QuizChoice>
+    <QuizChoice>When no partition key can be chosen</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="ordering-key"
+    prompt="How should you choose a stream partition key?"
+    explanation="Partition keys define where ordering is preserved. Choose the key around the invariant that needs ordered processing, such as account_id for account operations.">
+    <QuizChoice>Always use one global key for every event in the company</QuizChoice>
+    <QuizChoice>Always use a random UUID so related records are separated</QuizChoice>
+    <QuizChoice correct>Choose the entity whose related events must be processed in order</QuizChoice>
+    <QuizChoice>Use the largest text field in the payload</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="async-status"
+    prompt="A request returns before a CSV import finishes. What does the product need?"
+    explanation="Async workflows need explicit user-visible states such as queued, processing, completed, and failed, usually behind a status endpoint or job page.">
+    <QuizChoice>A success message that says the import completed even though it has not</QuizChoice>
+    <QuizChoice correct>A job id and explicit states like queued, processing, completed, and failed</QuizChoice>
+    <QuizChoice>A larger database connection pool only</QuizChoice>
+    <QuizChoice>A hidden retry loop with no status visibility</QuizChoice>
+  </QuizQuestion>
+</Quiz>

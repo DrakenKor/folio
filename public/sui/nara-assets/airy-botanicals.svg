@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 760" role="img" aria-labelledby="title desc">
+  <title id="title">Airy Nara botanical corner spray</title>
+  <desc id="desc">A transparent corner arrangement of young maple leaves, soft grass, and subtle peach blossoms in sage, peach, pale blue, and muted gold.</desc>
+  <defs>
+    <linearGradient id="stemSage" x1="77" y1="711" x2="653" y2="163" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b8caa4"/>
+      <stop offset=".48" stop-color="#9fb990"/>
+      <stop offset="1" stop-color="#d6c38c"/>
+    </linearGradient>
+    <linearGradient id="grassFade" x1="71" y1="737" x2="357" y2="332" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b7c8a1" stop-opacity=".78"/>
+      <stop offset="1" stop-color="#d7e2c7" stop-opacity=".18"/>
+    </linearGradient>
+    <radialGradient id="mapleLeaf" cx="50%" cy="42%" r="66%">
+      <stop offset="0" stop-color="#d9e6c6"/>
+      <stop offset=".66" stop-color="#aeca9d"/>
+      <stop offset="1" stop-color="#8daf80"/>
+    </radialGradient>
+    <radialGradient id="newLeaf" cx="45%" cy="35%" r="75%">
+      <stop offset="0" stop-color="#edf2ce"/>
+      <stop offset=".72" stop-color="#c8d9a8"/>
+      <stop offset="1" stop-color="#a8be8c"/>
+    </radialGradient>
+    <radialGradient id="peachPetal" cx="43%" cy="36%" r="70%">
+      <stop offset="0" stop-color="#fff6ee"/>
+      <stop offset=".68" stop-color="#f4cfc4"/>
+      <stop offset="1" stop-color="#dfa99f"/>
+    </radialGradient>
+    <filter id="softLift" x="-18%" y="-18%" width="136%" height="136%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#a28c67" flood-opacity=".12"/>
+    </filter>
+    <path id="maple" d="M0-47 10-20 33-34 25-7 54-4 27 10 43 33 14 24 3 53-8 24-36 33-21 10-49-4-19-7-28-34-5-20Z"/>
+    <path id="petal" d="M0-17C11-16 18-7 15 3 12 14 2 19-6 14-15 8-15-7 0-17Z"/>
+  </defs>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M41 724C159 639 221 528 305 446 399 354 486 283 642 205" stroke="url(#stemSage)" stroke-width="8" opacity=".68"/>
+    <path d="M76 704C164 626 200 521 252 430 309 331 389 232 514 123" stroke="#c7b673" stroke-width="3.2" opacity=".32"/>
+    <path d="M47 737C127 639 139 522 167 410 197 289 265 188 367 86" stroke="#9eb790" stroke-width="3.4" opacity=".34"/>
+    <path d="M63 706C103 630 110 553 117 470" stroke="url(#grassFade)" stroke-width="5.5" opacity=".72"/>
+    <path d="M94 713C137 620 164 545 216 459" stroke="url(#grassFade)" stroke-width="4.5" opacity=".63"/>
+    <path d="M36 711C95 655 130 596 146 523" stroke="#c9d7b3" stroke-width="3.2" opacity=".54"/>
+    <path d="M18 740C57 672 71 594 75 522" stroke="#d2deb8" stroke-width="3.8" opacity=".48"/>
+    <path d="M123 727C156 662 198 611 254 566" stroke="#b2c79d" stroke-width="3.1" opacity=".46"/>
+  </g>
+
+  <g fill="none" stroke="#d5c58a" stroke-linecap="round" opacity=".42">
+    <path d="M194 527C232 514 260 489 279 452" stroke-width="2.4"/>
+    <path d="M290 461C332 433 356 394 369 348" stroke-width="2.1"/>
+    <path d="M408 336C445 319 479 293 508 257" stroke-width="2"/>
+    <path d="M145 585C181 573 207 552 228 520" stroke-width="1.9"/>
+  </g>
+
+  <g filter="url(#softLift)">
+    <g transform="translate(246 481) rotate(-29) scale(.74)">
+      <use href="#maple" fill="url(#mapleLeaf)"/>
+      <path d="M0-36 1 39M-31-2 28 8M-18-25 14 25" stroke="#f2f4df" stroke-width="2.2" opacity=".55" fill="none" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(334 397) rotate(21) scale(.58)">
+      <use href="#maple" fill="url(#newLeaf)"/>
+      <path d="M0-33 0 36M-27-3 25 6M-15-22 11 22" stroke="#fbf7df" stroke-width="2" opacity=".62" fill="none" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(455 304) rotate(-17) scale(.68)">
+      <use href="#maple" fill="url(#mapleLeaf)"/>
+      <path d="M0-35 0 40M-30-3 29 7M-17-23 13 24" stroke="#f5f5df" stroke-width="2.1" opacity=".56" fill="none" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(584 232) rotate(28) scale(.47)">
+      <use href="#maple" fill="url(#newLeaf)"/>
+      <path d="M0-33 0 35M-26-2 24 6M-14-22 11 21" stroke="#fff8df" stroke-width="2.2" opacity=".58" fill="none" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(183 558) rotate(13) scale(.45)">
+      <use href="#maple" fill="url(#newLeaf)"/>
+      <path d="M0-31 0 34M-25-2 23 6" stroke="#fff8df" stroke-width="2.1" opacity=".54" fill="none" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <g fill="#aabd96" opacity=".58">
+    <ellipse cx="107" cy="623" rx="9" ry="42" transform="rotate(20 107 623)"/>
+    <ellipse cx="136" cy="612" rx="7" ry="48" transform="rotate(36 136 612)"/>
+    <ellipse cx="79" cy="668" rx="7" ry="51" transform="rotate(9 79 668)"/>
+    <ellipse cx="165" cy="660" rx="6" ry="37" transform="rotate(46 165 660)"/>
+    <ellipse cx="50" cy="687" rx="5" ry="43" transform="rotate(-13 50 687)"/>
+  </g>
+
+  <g opacity=".9">
+    <g transform="translate(298 446) rotate(-11)">
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(0) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(72) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(144) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(216) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(288) translate(0 -11)"/>
+      <circle r="5.2" fill="#d6b45f"/>
+      <circle r="2.2" fill="#fff4d9"/>
+    </g>
+    <g transform="translate(386 358) rotate(17) scale(.72)">
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(0) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(72) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(144) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(216) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(288) translate(0 -11)"/>
+      <circle r="5.2" fill="#d6b45f"/>
+    </g>
+    <g transform="translate(521 267) rotate(-31) scale(.58)">
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(0) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(72) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(144) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(216) translate(0 -11)"/>
+      <use href="#petal" fill="url(#peachPetal)" transform="rotate(288) translate(0 -11)"/>
+      <circle r="5.2" fill="#d6b45f"/>
+    </g>
+  </g>
+
+  <g opacity=".72">
+    <ellipse cx="230" cy="426" rx="6" ry="11" fill="#f0cabe" transform="rotate(-54 230 426)"/>
+    <ellipse cx="361" cy="302" rx="5" ry="9" fill="#f6d9ce" transform="rotate(18 361 302)"/>
+    <ellipse cx="477" cy="226" rx="4" ry="8" fill="#efc7bd" transform="rotate(63 477 226)"/>
+    <ellipse cx="610" cy="182" rx="4" ry="7" fill="#f7ded3" transform="rotate(-22 610 182)"/>
+    <ellipse cx="421" cy="504" rx="4.5" ry="8.5" fill="#f4d3c8" transform="rotate(77 421 504)"/>
+    <circle cx="566" cy="338" r="3.5" fill="#d8c16f" opacity=".55"/>
+    <circle cx="195" cy="486" r="3" fill="#d8c16f" opacity=".5"/>
+  </g>
+
+  <g fill="none" stroke="#b7d6dc" stroke-linecap="round" opacity=".28">
+    <path d="M256 609C320 576 367 532 399 479" stroke-width="2.5"/>
+    <path d="M446 419C504 395 549 357 580 309" stroke-width="2.1"/>
+  </g>
+</svg>

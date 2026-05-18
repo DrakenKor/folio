@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 420" role="img" aria-labelledby="title desc">
+  <title id="title">Wisteria cloud accent</title>
+  <desc id="desc">A transparent Nara-inspired accent with pale sky movement, airy clouds, wisteria strands, floating petals, and muted gold details.</desc>
+  <defs>
+    <linearGradient id="skyStroke" x1="97" y1="208" x2="883" y2="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#cfe7ed" stop-opacity=".05"/>
+      <stop offset=".48" stop-color="#a9d1dc" stop-opacity=".58"/>
+      <stop offset="1" stop-color="#dcecef" stop-opacity=".09"/>
+    </linearGradient>
+    <linearGradient id="cloudWash" x1="186" y1="258" x2="765" y2="83" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8f4ea" stop-opacity=".12"/>
+      <stop offset=".52" stop-color="#d9eef2" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#fdf8ef" stop-opacity=".1"/>
+    </linearGradient>
+    <linearGradient id="vine" x1="480" y1="50" x2="488" y2="303" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c8b978" stop-opacity=".72"/>
+      <stop offset=".42" stop-color="#a9bd91" stop-opacity=".64"/>
+      <stop offset="1" stop-color="#9db8aa" stop-opacity=".08"/>
+    </linearGradient>
+    <radialGradient id="wisteriaA" cx="40%" cy="32%" r="72%">
+      <stop offset="0" stop-color="#fff8f7"/>
+      <stop offset=".52" stop-color="#e7d6e8"/>
+      <stop offset="1" stop-color="#bea8cf"/>
+    </radialGradient>
+    <radialGradient id="wisteriaB" cx="42%" cy="35%" r="72%">
+      <stop offset="0" stop-color="#fff9ee"/>
+      <stop offset=".56" stop-color="#f0d1cb"/>
+      <stop offset="1" stop-color="#d3b5dc"/>
+    </radialGradient>
+    <radialGradient id="leafSoft" cx="45%" cy="40%" r="65%">
+      <stop offset="0" stop-color="#eef4d7"/>
+      <stop offset="1" stop-color="#aec59a"/>
+    </radialGradient>
+    <filter id="airShadow" x="-12%" y="-18%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="7" stdDeviation="8" flood-color="#9a835d" flood-opacity=".1"/>
+    </filter>
+    <path id="dropPetal" d="M0-15C9-13 15-5 13 4 10 14 0 20-8 15-16 10-15-8 0-15Z"/>
+    <path id="smallLeaf" d="M0-18C15-12 19 5 4 17-12 11-16-8 0-18Z"/>
+  </defs>
+
+  <g fill="none" stroke-linecap="round">
+    <path d="M81 203C171 138 258 158 332 196 423 242 511 241 602 184 700 121 812 116 899 168" stroke="url(#skyStroke)" stroke-width="38" opacity=".55"/>
+    <path d="M141 267C237 205 327 221 404 255 494 295 575 287 656 237 724 195 804 180 884 208" stroke="#c8e2e8" stroke-width="13" opacity=".2"/>
+    <path d="M167 145C245 104 326 111 397 154 480 204 575 204 666 151 738 109 814 94 879 118" stroke="#d6e9ec" stroke-width="8" opacity=".26"/>
+    <path d="M259 320C350 274 438 277 513 311 592 347 691 330 777 273" stroke="#e9ddc6" stroke-width="3" opacity=".34"/>
+  </g>
+
+  <g opacity=".64">
+    <path d="M178 221C218 182 270 184 302 217 345 181 408 195 431 240 477 219 532 230 559 272 604 251 661 265 686 303" fill="none" stroke="url(#cloudWash)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M454 107C493 73 544 82 570 118 612 93 662 111 676 153 711 145 749 162 765 197" fill="none" stroke="#e8f3f3" stroke-width="19" stroke-linecap="round" stroke-linejoin="round" opacity=".44"/>
+  </g>
+
+  <g fill="none" stroke="url(#vine)" stroke-linecap="round" opacity=".75">
+    <path d="M342 53C346 97 336 127 344 172 351 211 336 246 316 285" stroke-width="2.4"/>
+    <path d="M425 47C418 92 428 128 416 171 405 210 413 245 431 286" stroke-width="2.2"/>
+    <path d="M501 34C489 86 495 132 484 177 475 216 478 253 495 310" stroke-width="2.7"/>
+    <path d="M581 54C589 99 578 137 590 179 600 217 594 248 574 295" stroke-width="2.3"/>
+    <path d="M657 69C668 114 657 149 666 188 674 224 666 256 643 300" stroke-width="2.1"/>
+  </g>
+
+  <g filter="url(#airShadow)">
+    <g transform="translate(342 71)">
+      <ellipse cx="-13" cy="32" rx="8" ry="17" fill="url(#wisteriaA)" transform="rotate(18 -13 32)"/>
+      <ellipse cx="10" cy="58" rx="9" ry="18" fill="url(#wisteriaB)" transform="rotate(-24 10 58)"/>
+      <ellipse cx="-7" cy="91" rx="8" ry="16" fill="url(#wisteriaA)" transform="rotate(12 -7 91)" opacity=".88"/>
+      <ellipse cx="8" cy="124" rx="6.5" ry="14" fill="url(#wisteriaB)" transform="rotate(-16 8 124)" opacity=".72"/>
+      <ellipse cx="-11" cy="158" rx="5" ry="11" fill="#ead8e9" transform="rotate(24 -11 158)" opacity=".52"/>
+    </g>
+    <g transform="translate(424 59)">
+      <ellipse cx="9" cy="33" rx="8.5" ry="18" fill="url(#wisteriaB)" transform="rotate(-20 9 33)"/>
+      <ellipse cx="-10" cy="68" rx="9" ry="19" fill="url(#wisteriaA)" transform="rotate(18 -10 68)"/>
+      <ellipse cx="7" cy="105" rx="7.5" ry="16" fill="url(#wisteriaA)" transform="rotate(-10 7 105)" opacity=".83"/>
+      <ellipse cx="-5" cy="145" rx="6" ry="13" fill="#e3c9e1" transform="rotate(17 -5 145)" opacity=".63"/>
+      <ellipse cx="13" cy="182" rx="4.5" ry="10" fill="#f2d8d0" transform="rotate(-22 13 182)" opacity=".48"/>
+    </g>
+    <g transform="translate(500 48)">
+      <ellipse cx="-10" cy="30" rx="10" ry="20" fill="url(#wisteriaA)" transform="rotate(13 -10 30)"/>
+      <ellipse cx="12" cy="65" rx="10" ry="20" fill="url(#wisteriaB)" transform="rotate(-18 12 65)"/>
+      <ellipse cx="-7" cy="105" rx="9" ry="18" fill="url(#wisteriaA)" transform="rotate(9 -7 105)" opacity=".9"/>
+      <ellipse cx="11" cy="145" rx="7.2" ry="15" fill="url(#wisteriaB)" transform="rotate(-12 11 145)" opacity=".74"/>
+      <ellipse cx="-6" cy="185" rx="5.4" ry="12" fill="#e7d1e7" transform="rotate(16 -6 185)" opacity=".56"/>
+      <ellipse cx="8" cy="224" rx="4.2" ry="9" fill="#f1d6cf" transform="rotate(-20 8 224)" opacity=".43"/>
+    </g>
+    <g transform="translate(582 69)">
+      <ellipse cx="8" cy="30" rx="8" ry="17" fill="url(#wisteriaB)" transform="rotate(-15 8 30)"/>
+      <ellipse cx="-12" cy="63" rx="9" ry="18" fill="url(#wisteriaA)" transform="rotate(20 -12 63)"/>
+      <ellipse cx="7" cy="99" rx="7" ry="15" fill="#e8d4e9" transform="rotate(-14 7 99)" opacity=".78"/>
+      <ellipse cx="-4" cy="134" rx="5.5" ry="12" fill="#f0d5cf" transform="rotate(14 -4 134)" opacity=".58"/>
+      <ellipse cx="9" cy="166" rx="4.4" ry="9.5" fill="#e8d6e9" transform="rotate(-24 9 166)" opacity=".44"/>
+    </g>
+    <g transform="translate(657 84)">
+      <ellipse cx="-7" cy="28" rx="7.5" ry="16" fill="url(#wisteriaA)" transform="rotate(17 -7 28)"/>
+      <ellipse cx="10" cy="62" rx="7.5" ry="16" fill="url(#wisteriaB)" transform="rotate(-18 10 62)"/>
+      <ellipse cx="-6" cy="96" rx="6" ry="13" fill="#e5cfe6" transform="rotate(13 -6 96)" opacity=".68"/>
+      <ellipse cx="6" cy="130" rx="4.8" ry="10" fill="#efd3ce" transform="rotate(-22 6 130)" opacity=".46"/>
+    </g>
+  </g>
+
+  <g opacity=".78">
+    <use href="#smallLeaf" x="305" y="91" fill="url(#leafSoft)" transform="rotate(-32 305 91) scale(.72)"/>
+    <use href="#smallLeaf" x="389" y="70" fill="url(#leafSoft)" transform="rotate(21 389 70) scale(.62)"/>
+    <use href="#smallLeaf" x="540" y="62" fill="url(#leafSoft)" transform="rotate(-18 540 62) scale(.68)"/>
+    <use href="#smallLeaf" x="621" y="80" fill="url(#leafSoft)" transform="rotate(28 621 80) scale(.58)"/>
+    <use href="#smallLeaf" x="699" y="106" fill="url(#leafSoft)" transform="rotate(-20 699 106) scale(.52)"/>
+  </g>
+
+  <g opacity=".72">
+    <use href="#dropPetal" x="214" y="113" fill="#f1d2ca" transform="rotate(-57 214 113) scale(.62)"/>
+    <use href="#dropPetal" x="746" y="89" fill="#ead9ee" transform="rotate(42 746 89) scale(.58)"/>
+    <use href="#dropPetal" x="818" y="236" fill="#f4d8cf" transform="rotate(-21 818 236) scale(.5)"/>
+    <use href="#dropPetal" x="675" y="338" fill="#e8d5ed" transform="rotate(69 675 338) scale(.48)"/>
+    <use href="#dropPetal" x="295" y="308" fill="#f5d9d0" transform="rotate(18 295 308) scale(.45)"/>
+    <use href="#dropPetal" x="136" y="264" fill="#e8d9ec" transform="rotate(-12 136 264) scale(.42)"/>
+  </g>
+
+  <g fill="#d5bc6d" opacity=".46">
+    <circle cx="331" cy="119" r="3"/>
+    <circle cx="504" cy="82" r="3.5"/>
+    <circle cx="610" cy="132" r="2.6"/>
+    <circle cx="734" cy="183" r="2.4"/>
+    <circle cx="419" cy="250" r="2.8"/>
+    <circle cx="565" cy="324" r="2.2"/>
+  </g>
+</svg>

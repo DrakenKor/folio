@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 360" role="img" aria-labelledby="title desc">
+  <title id="title">Nara deer with lantern accents</title>
+  <desc id="desc">A delicate line-art young deer with soft Kasuga-taisha lantern hints for an airy Nara pamphlet.</desc>
+  <defs>
+    <linearGradient id="lineFade" x1="90" y1="56" x2="330" y2="305" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b7a889"/>
+      <stop offset="0.48" stop-color="#8f9c78"/>
+      <stop offset="1" stop-color="#d39b75"/>
+    </linearGradient>
+    <linearGradient id="lanternWash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7dfb5"/>
+      <stop offset="1" stop-color="#e8b785"/>
+    </linearGradient>
+    <filter id="softInk" x="-8%" y="-8%" width="116%" height="116%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.35" result="blur"/>
+      <feOffset dy="0.35" result="offset"/>
+      <feMerge>
+        <feMergeNode in="offset"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .line {
+        fill: none;
+        stroke: url(#lineFade);
+        stroke-width: 3.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: url(#softInk);
+      }
+
+      .fine {
+        fill: none;
+        stroke: #b9aa90;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .moss {
+        fill: #a9b68c;
+      }
+
+      .clay {
+        fill: #d9a47d;
+      }
+
+      .paper {
+        fill: #fff7e9;
+      }
+    </style>
+  </defs>
+
+  <g opacity="0.96">
+    <path class="line" d="M135 238c-16-7-30-18-38-34-8-17-6-35 7-48 17-18 44-17 65-9 11 4 22 10 35 11 26 2 46-17 73-16 23 1 43 17 50 39 7 21 1 44-11 62"/>
+    <path class="line" d="M119 176c-13 11-19 25-17 40 2 16 13 28 29 34 20 8 43 5 64 1 23-5 47-9 69-2 14 5 26 14 36 25"/>
+    <path class="line" d="M166 151c-5 20-8 42-9 65-1 20 1 42 8 62"/>
+    <path class="line" d="M278 154c5 24 4 47-3 69-6 19-16 37-29 54"/>
+    <path class="line" d="M158 275c-9 13-16 26-21 41"/>
+    <path class="line" d="M181 278c-3 15-4 29-2 43"/>
+    <path class="line" d="M241 278c5 13 9 27 10 42"/>
+    <path class="line" d="M268 275c9 12 16 26 21 41"/>
+
+    <path class="line" d="M117 157c-9-18-7-39 6-52 12-12 32-11 45 1 10 9 15 23 14 38"/>
+    <path class="line" d="M131 119c-14-18-27-38-32-59"/>
+    <path class="fine" d="M112 80c-12-7-21-16-28-28"/>
+    <path class="fine" d="M103 69c7-11 9-23 7-35"/>
+    <path class="line" d="M163 112c11-19 18-39 21-60"/>
+    <path class="fine" d="M175 76c12-8 21-18 27-30"/>
+    <path class="fine" d="M183 65c-7-9-10-20-9-33"/>
+    <path class="line" d="M125 123c-17-8-32-6-45 7 11 5 23 7 35 4"/>
+    <path class="line" d="M163 122c14-11 29-13 44-6-9 9-19 15-32 17"/>
+    <path class="fine" d="M141 144c7 3 14 3 21 0"/>
+    <circle cx="132" cy="134" r="3.2" fill="#736e5d"/>
+    <path class="fine" d="M143 153c4 4 9 6 15 5"/>
+
+    <g opacity="0.72">
+      <circle class="paper" cx="212" cy="107" r="18"/>
+      <path class="fine" d="M196 106h33M202 96h21M202 117h21"/>
+      <path class="fine" d="M204 96l-5 10 5 11M221 96l5 10-5 11"/>
+      <path class="fine" d="M211 86v-8M205 78h14"/>
+      <path class="fine" d="M211 125v9"/>
+      <circle class="clay" cx="211" cy="135" r="3.3"/>
+    </g>
+
+    <g opacity="0.64">
+      <path class="fine" d="M305 93h34M311 83h22M311 107h22"/>
+      <path class="fine" d="M313 83l-6 12 6 12M331 83l6 12-6 12"/>
+      <path class="fine" d="M322 74v-9M314 65h16"/>
+      <path class="fine" d="M322 115v10"/>
+      <circle class="moss" cx="322" cy="128" r="3"/>
+    </g>
+
+    <g opacity="0.58">
+      <path class="fine" d="M79 235c12-7 26-11 42-11M293 238c19-5 36-5 51 0"/>
+      <circle class="moss" cx="73" cy="236" r="3"/>
+      <circle class="clay" cx="351" cy="239" r="3.2"/>
+      <circle class="moss" cx="323" cy="224" r="2.2"/>
+      <circle class="clay" cx="94" cy="219" r="2.2"/>
+    </g>
+  </g>
+</svg>

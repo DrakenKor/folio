@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 150" role="img" aria-labelledby="title desc">
+  <title id="title">Nara lantern border motif</title>
+  <desc id="desc">A repeatable horizontal border with stone lantern silhouettes, soft Nara park hills, and leaf dots.</desc>
+  <defs>
+    <linearGradient id="hillMist" x1="0" y1="18" x2="0" y2="138" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#dbe5c8" stop-opacity="0.68"/>
+      <stop offset="1" stop-color="#edf1dc" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="stoneInk" x1="0" y1="38" x2="0" y2="132" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a99a84"/>
+      <stop offset="1" stop-color="#7f7b69"/>
+    </linearGradient>
+    <symbol id="stoneLantern" viewBox="-28 0 56 92">
+      <path d="M-18 41h36l-6 8h-24z" fill="#b8aa90" opacity="0.78"/>
+      <path d="M-13 29h26l10 12h-46z" fill="url(#stoneInk)" opacity="0.78"/>
+      <path d="M-10 12h20l4 17h-28z" fill="#cbb99a" opacity="0.68"/>
+      <path d="M-17 12h34l-7-8h-20z" fill="#9a927d" opacity="0.62"/>
+      <path d="M-6 49h12l4 31h-20z" fill="#9e987f" opacity="0.58"/>
+      <path d="M-17 80h34l5 7h-44z" fill="#8d8874" opacity="0.55"/>
+      <path d="M-7 20h14M-9 25h18" fill="none" stroke="#fff5df" stroke-width="1.2" stroke-linecap="round" opacity="0.62"/>
+    </symbol>
+    <style>
+      .hairline {
+        fill: none;
+        stroke: #cdbf9f;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .leaf {
+        fill: #a7b487;
+        opacity: 0.72;
+      }
+
+      .leaf-warm {
+        fill: #d7a57f;
+        opacity: 0.66;
+      }
+    </style>
+  </defs>
+
+  <g opacity="0.98">
+    <path d="M0 88C76 51 136 49 211 80c73 31 148 27 223-12 63-33 127-36 194-9 69 28 129 25 193-7 54-27 98-31 139-19v117H0z" fill="url(#hillMist)"/>
+    <path d="M0 101C94 68 167 68 242 100c73 30 147 28 220-7 73-36 143-33 209 7 62 38 143 38 224-1 23-11 45-17 65-19v70H0z" fill="#eef2dc" opacity="0.52"/>
+    <path class="hairline" d="M0 88C76 51 136 49 211 80c73 31 148 27 223-12 63-33 127-36 194-9 69 28 129 25 193-7 54-27 98-31 139-19"/>
+    <path class="hairline" opacity="0.48" d="M0 101C94 68 167 68 242 100c73 30 147 28 220-7 73-36 143-33 209 7 62 38 143 38 224-1 23-11 45-17 65-19"/>
+
+    <g opacity="0.9">
+      <use href="#stoneLantern" x="0" y="43" width="58" height="96" transform="translate(-30 0) scale(0.84)"/>
+      <use href="#stoneLantern" x="112" y="37" width="58" height="96" transform="scale(0.9)"/>
+      <use href="#stoneLantern" x="326" y="45" width="58" height="96" transform="scale(0.78)"/>
+      <use href="#stoneLantern" x="535" y="31" width="58" height="96" transform="scale(0.98)"/>
+      <use href="#stoneLantern" x="768" y="45" width="58" height="96" transform="scale(0.8)"/>
+      <use href="#stoneLantern" x="960" y="43" width="58" height="96" transform="translate(-19 0) scale(0.84)"/>
+    </g>
+
+    <g>
+      <ellipse class="leaf" cx="77" cy="68" rx="3.4" ry="6.3" transform="rotate(-35 77 68)"/>
+      <circle class="leaf-warm" cx="146" cy="91" r="2.8"/>
+      <ellipse class="leaf" cx="221" cy="55" rx="3" ry="5.7" transform="rotate(29 221 55)"/>
+      <circle class="leaf-warm" cx="294" cy="83" r="2.5"/>
+      <ellipse class="leaf" cx="417" cy="62" rx="3.2" ry="6.1" transform="rotate(-23 417 62)"/>
+      <circle class="leaf-warm" cx="470" cy="96" r="2.6"/>
+      <ellipse class="leaf" cx="642" cy="57" rx="3.4" ry="6.5" transform="rotate(36 642 57)"/>
+      <circle class="leaf-warm" cx="707" cy="89" r="2.7"/>
+      <ellipse class="leaf" cx="856" cy="59" rx="3.1" ry="5.9" transform="rotate(-31 856 59)"/>
+      <circle class="leaf-warm" cx="927" cy="85" r="2.5"/>
+    </g>
+
+    <path class="hairline" opacity="0.58" d="M34 125c57 7 116 7 176 0M268 125c76 7 151 7 226 0M563 125c101 7 203 7 306 0"/>
+  </g>
+</svg>
