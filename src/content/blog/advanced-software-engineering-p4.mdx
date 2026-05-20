@@ -1,0 +1,769 @@
+---
+title: "APIs that don't fall over"
+description: "Rate limits, timeouts, retries, circuit breakers, and the controls that keep APIs available under pressure."
+date: "2026-05-19"
+tags: ["APIs", "Reliability", "Rate Limiting", "Scale"]
+---
+
+Most API outages start the same way. A dependency gets slow, requests pile up, clients retry, workers block, and connection pools fill. The database still has CPU. The app still has memory. Dashboards look half-normal until the queueing delay becomes the user-visible behavior.
+
+Adding more servers at this point often makes things worse. More servers mean more concurrent calls to the slow dependency, more retries, and more database connections.
+
+This post covers the controls that prevent this pattern.
+
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 420"
+      role="img"
+      aria-labelledby="api-reliability-svg-title api-reliability-svg-desc"
+      shapeRendering="geometricPrecision"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <title id="api-reliability-svg-title">API reliability controls from admission to degradation</title>
+      <desc id="api-reliability-svg-desc">
+        {"Diagram showing requests passing through admission control, deadlines, retry budgets, bulkheads, circuit breakers, graceful degradation, and operational metrics."}
+      </desc>
+      <defs>
+        <linearGradient id="api-reliability-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#07111a" />
+          <stop offset="100%" stopColor="#0a1724" />
+        </linearGradient>
+        <pattern id="api-reliability-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#dbeafe" strokeWidth="0.5" opacity="0.07" />
+        </pattern>
+        <pattern id="api-reliability-grid-major" width="96" height="96" patternUnits="userSpaceOnUse">
+          <path d="M 96 0 L 0 0 0 96" fill="none" stroke="#dbeafe" strokeWidth="1" opacity="0.11" />
+        </pattern>
+        <linearGradient id="api-reliability-panel" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#0f2636" />
+          <stop offset="100%" stopColor="#091823" />
+        </linearGradient>
+        <filter id="api-reliability-shadow" x="-10%" y="-10%" width="120%" height="130%">
+          <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#020617" floodOpacity="0.32" />
+        </filter>
+        <marker id="api-reliability-arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
+        </marker>
+        <marker id="api-reliability-arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#67e8f9" />
+        </marker>
+        <marker id="api-reliability-arrow-yellow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24" />
+        </marker>
+        <marker id="api-reliability-arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
+        </marker>
+      </defs>
+
+      <rect width="720" height="420" rx="18" fill="url(#api-reliability-bg)" />
+      <rect width="720" height="420" fill="url(#api-reliability-grid-minor)" />
+      <rect width="720" height="420" fill="url(#api-reliability-grid-major)" />
+
+      <text x="42" y="44" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        {"API reliability control chain"}
+      </text>
+      <text x="42" y="69" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+        {"admit less, bound work, fail fast, and preserve the core product path"}
+      </text>
+
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M 24 158 L 48 158" stroke="#10b981" strokeWidth="2" markerEnd="url(#api-reliability-arrow-green)" />
+        <path d="M 186 158 L 208 158" stroke="#67e8f9" strokeWidth="2" markerEnd="url(#api-reliability-arrow-cyan)" />
+        <path d="M 348 158 L 370 158" stroke="#67e8f9" strokeWidth="2" markerEnd="url(#api-reliability-arrow-cyan)" />
+        <path d="M 510 158 L 532 158" stroke="#67e8f9" strokeWidth="2" markerEnd="url(#api-reliability-arrow-cyan)" />
+        <path d="M 600 208 C 600 226 600 232 600 246" stroke="#10b981" strokeWidth="2" markerEnd="url(#api-reliability-arrow-green)" />
+      </g>
+
+      <text x="42" y="102" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">
+        {"incoming requests"}
+      </text>
+
+      <g filter="url(#api-reliability-shadow)">
+        <rect x="48" y="112" width="138" height="96" rx="8" fill="url(#api-reliability-panel)" stroke="#10b981" strokeWidth="1.5" />
+        <circle cx="70" cy="136" r="10" fill="#10b981" opacity="0.18" />
+        <text x="70" y="140" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11" fontWeight="700">1</text>
+        <text x="88" y="140" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">Admission</text>
+        <text x="64" y="166" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">caller key + cost</text>
+        <text x="64" y="186" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">429/503 early</text>
+
+        <rect x="210" y="112" width="138" height="96" rx="8" fill="url(#api-reliability-panel)" stroke="#67e8f9" strokeWidth="1.5" />
+        <circle cx="232" cy="136" r="10" fill="#67e8f9" opacity="0.18" />
+        <text x="232" y="140" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11" fontWeight="700">2</text>
+        <text x="250" y="140" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">Deadline</text>
+        <text x="226" y="166" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">800ms total budget</text>
+        <text x="226" y="186" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">timeout every hop</text>
+
+        <rect x="372" y="112" width="138" height="96" rx="8" fill="url(#api-reliability-panel)" stroke="#fbbf24" strokeWidth="1.5" />
+        <circle cx="394" cy="136" r="10" fill="#fbbf24" opacity="0.2" />
+        <text x="394" y="140" textAnchor="middle" fill="#fef3c7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11" fontWeight="700">3</text>
+        <text x="412" y="140" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">Retry budget</text>
+        <text x="388" y="166" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">idempotent only</text>
+        <text x="388" y="186" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">backoff + jitter</text>
+
+        <rect x="534" y="112" width="138" height="96" rx="8" fill="url(#api-reliability-panel)" stroke="#a78bfa" strokeWidth="1.5" />
+        <circle cx="556" cy="136" r="10" fill="#a78bfa" opacity="0.22" />
+        <text x="556" y="140" textAnchor="middle" fill="#ede9fe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11" fontWeight="700">4</text>
+        <text x="574" y="140" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">Bulkheads</text>
+        <text x="550" y="166" fill="#ede9fe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">max in-flight work</text>
+        <text x="550" y="186" fill="#ede9fe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">pool per route</text>
+      </g>
+
+      <g>
+        <path d="M 72 208 L 72 232 L 138 232" fill="none" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round" strokeDasharray="5 7" markerEnd="url(#api-reliability-arrow-red)" />
+        <rect x="144" y="217" width="124" height="30" rx="15" fill="#2a1218" stroke="#ef4444" strokeWidth="1" opacity="0.95" />
+        <text x="206" y="237" textAnchor="middle" fill="#fecaca" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">
+          {"shed before work"}
+        </text>
+      </g>
+
+      <rect x="48" y="246" width="624" height="92" rx="10" fill="#07131d" stroke="#67e8f9" strokeWidth="1.3" strokeDasharray="7 7" opacity="0.96" />
+      <text x="66" y="268" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" fontWeight="700">
+        {"Inside one request deadline"}
+      </text>
+
+      <g filter="url(#api-reliability-shadow)">
+        <rect x="70" y="282" width="116" height="38" rx="7" fill="#0f241f" stroke="#10b981" strokeWidth="1.3" />
+        <text x="128" y="306" textAnchor="middle" fill="#d1fae5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">core path</text>
+
+        <rect x="220" y="282" width="116" height="38" rx="7" fill="#102131" stroke="#67e8f9" strokeWidth="1.3" />
+        <text x="278" y="298" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">required deps</text>
+        <text x="278" y="314" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">DB 150ms</text>
+
+        <rect x="370" y="282" width="116" height="38" rx="7" fill="#211c0d" stroke="#fbbf24" strokeWidth="1.3" />
+        <text x="428" y="298" textAnchor="middle" fill="#fef3c7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">optional deps</text>
+        <text x="428" y="314" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">degrade cleanly</text>
+
+        <rect x="520" y="282" width="116" height="38" rx="7" fill="#241217" stroke="#ef4444" strokeWidth="1.3" />
+        <text x="578" y="298" textAnchor="middle" fill="#fee2e2" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">circuit breaker</text>
+        <text x="578" y="314" textAnchor="middle" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">open = fast fail</text>
+      </g>
+
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M 186 301 L 216 301" stroke="#10b981" strokeWidth="1.8" markerEnd="url(#api-reliability-arrow-green)" />
+        <path d="M 336 301 L 366 301" stroke="#67e8f9" strokeWidth="1.8" markerEnd="url(#api-reliability-arrow-cyan)" />
+        <path d="M 486 301 L 516 301" stroke="#fbbf24" strokeWidth="1.8" markerEnd="url(#api-reliability-arrow-yellow)" />
+        <path d="M 578 282 C 578 262 548 250 516 260" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5 7" markerEnd="url(#api-reliability-arrow-red)" />
+      </g>
+
+      <text x="512" y="259" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+        {"no slow dependency pileup"}
+      </text>
+
+      <g>
+        <text x="48" y="368" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          {"First dashboard:"}
+        </text>
+        <rect x="168" y="350" width="74" height="28" rx="14" fill="#0b1c29" stroke="#334155" />
+        <text x="205" y="369" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">in-flight</text>
+        <rect x="252" y="350" width="52" height="28" rx="14" fill="#0b1c29" stroke="#334155" />
+        <text x="278" y="369" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">p99</text>
+        <rect x="314" y="350" width="74" height="28" rx="14" fill="#0b1c29" stroke="#334155" />
+        <text x="351" y="369" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">timeouts</text>
+        <rect x="398" y="350" width="66" height="28" rx="14" fill="#0b1c29" stroke="#334155" />
+        <text x="431" y="369" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">retries</text>
+        <rect x="474" y="350" width="66" height="28" rx="14" fill="#0b1c29" stroke="#334155" />
+        <text x="507" y="369" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">rejects</text>
+        <rect x="550" y="350" width="70" height="28" rx="14" fill="#0b1c29" stroke="#334155" />
+        <text x="585" y="369" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">circuit</text>
+        <rect x="630" y="350" width="66" height="28" rx="14" fill="#0b1c29" stroke="#334155" />
+        <text x="663" y="369" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">queue</text>
+      </g>
+    </svg>
+  </figure>
+</div>
+
+## The failure is usually queueing
+
+An API does not only fail when code throws. It also fails when useful work waits behind work that will not complete in time.
+
+Slow dependency calls occupy request workers. Those workers hold memory, sockets, and database connections. New requests arrive and wait. Clients time out and retry, and the retry arrives while the first request is still running. A small increase in latency can become an outage through this mechanism.
+
+```text
+normal:
+  500 requests/sec
+  50ms service time
+  25 concurrent in-flight requests
+
+dependency slows:
+  500 requests/sec
+  2s service time
+  1000 concurrent in-flight requests
+```
+
+Same arrival rate, different service time, forty times more in-flight work.
+
+This is why adding servers does not always help. More servers increase the number of concurrent calls hitting the dependency that is already slow.
+
+<Callout title="Rule of thumb">
+  Reliability starts by limiting the amount of unfinished work in the system.
+</Callout>
+
+## Rate limiting is admission control
+
+Rate limiting decides which requests enter the system. It answers:
+
+```text
+Should this request be allowed to enter the system right now?
+```
+
+A simple token bucket gives each caller a burst allowance and a refill rate.
+
+```python
+import time
+
+
+class TokenBucket:
+    def __init__(self, capacity, refill_per_second):
+        self.capacity = capacity
+        self.refill_per_second = refill_per_second
+        self.tokens = capacity
+        self.updated_at = time.monotonic()
+
+    def consume(self, cost=1):
+        now = time.monotonic()
+        elapsed = max(0, now - self.updated_at)
+
+        self.tokens = min(
+            self.capacity,
+            self.tokens + elapsed * self.refill_per_second,
+        )
+        self.updated_at = now
+
+        if self.tokens < cost:
+            return False
+
+        self.tokens -= cost
+        return True
+```
+
+This is a teaching version. In production, the bucket needs to be shared across app instances, which usually means Redis with an atomic script, a gateway, or an edge proxy.
+
+The shape of the configuration:
+
+```text
+capacity = burst size
+refill   = sustained rate
+cost     = request weight
+```
+
+A cheap read might cost 1 token. A report export might cost 20. A login attempt might use a separate security limit. A tenant-level write limit can protect the database from one large customer.
+
+## Pick the limit key carefully
+
+The limit key decides who is isolated. Common keys:
+
+| Key | Protects against | Risk |
+| --- | --- | --- |
+| IP address | Anonymous abuse and simple scraping | NATs and mobile networks can group many users |
+| User id | One user overwhelming their own quota | Does not protect multi-user tenants |
+| API key | External integrations and partner apps | One customer can create many keys unless controlled |
+| Tenant id | One organization dominating shared resources | Large tenants may need purchased capacity |
+| Endpoint | One expensive route overwhelming internals | Does not distinguish good callers from bad callers |
+| Global | Total system overload | Can let noisy callers crowd out important traffic |
+
+A common approach is layered limits:
+
+```text
+global limit
+  tenant limit
+    user/API key limit
+      endpoint cost limit
+```
+
+Requests should not all cost the same. A `GET /status` request and a `POST /exports` request should not spend the same budget.
+
+## Fixed window, sliding window, token bucket, leaky bucket
+
+The behavior matters more than the name.
+
+| Strategy | Behavior | Use it when |
+| --- | --- | --- |
+| Fixed window | 100 requests per minute resets on the minute | Simple counters and coarse limits |
+| Sliding window | Counts recent requests across a moving interval | Fairer user-facing quotas |
+| Token bucket | Allows bursts up to capacity, then sustained refill | Most API admission control |
+| Leaky bucket | Smooths output at a steady rate | Protecting a downstream with strict throughput |
+
+Fixed windows are simple but have edge bursts. A caller can send 100 requests at `12:00:59` and 100 more at `12:01:00`.
+
+Token buckets are a reasonable default because real traffic is bursty. They allow short bursts without allowing unbounded pressure.
+
+## Timeouts are part of the contract
+
+Every network call needs a timeout. This includes the public API, internal HTTP calls, database queries, Redis calls, search calls, queue publish calls, and object storage calls. Anything that waits on another system needs a deadline.
+
+Without a timeout, the dependency decides how long the worker lives.
+
+```python
+def get_profile(user_id, request_deadline):
+    remaining = request_deadline - time.monotonic()
+
+    if remaining <= 0:
+        raise TimeoutError("request deadline exceeded")
+
+    return http.get(
+        f"https://profiles.internal/users/{user_id}",
+        timeout=min(0.150, remaining),
+    )
+```
+
+A timeout budget makes the constraint explicit:
+
+```text
+public request deadline: 800ms
+  auth:                  50ms
+  database:             150ms
+  profile service:      150ms
+  recommendation call:  200ms
+  rendering/marshal:     50ms
+  slack:                200ms
+```
+
+If the outer request times out at 800ms, an inner call waiting 2 seconds cannot help the user.
+
+## Retries are load multipliers
+
+Retries are useful when the failure is temporary and the operation is safe to repeat. Otherwise they add load without adding reliability.
+
+One retry at three layers multiplies load:
+
+```text
+client retries 2x
+  gateway retries 2x
+    service retries 2x
+
+one user request can become 8 downstream attempts
+```
+
+This is called a retry storm.
+
+A retry budget contains it:
+
+```python
+import random
+import time
+
+
+def call_with_retries(fn, deadline, max_attempts=3, base_delay=0.025):
+    last_error = None
+
+    for attempt in range(max_attempts):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("deadline exceeded") from last_error
+
+        try:
+            return fn(timeout=remaining)
+        except TemporaryError as error:
+            last_error = error
+
+        if attempt == max_attempts - 1:
+            break
+
+        delay = min(base_delay * (2 ** attempt), 0.250)
+        jitter = random.uniform(0, delay)
+        time.sleep(min(jitter, max(0, deadline - time.monotonic())))
+
+    raise last_error
+```
+
+Synchronized retries are themselves a burst. Backoff spreads retries out over time, and jitter makes that spread uneven so the dependency has room to recover.
+
+<Callout type="warning" title="Warning">
+  Do not retry non-idempotent writes unless the write path has an idempotency key or another dedupe boundary.
+</Callout>
+
+## Circuit breakers fail fast
+
+A circuit breaker stops calling a dependency that is already failing. It has three states:
+
+```text
+closed:    calls flow normally
+open:      calls fail fast
+half-open: a few probe calls test recovery
+```
+
+Simplified:
+
+```python
+import time
+
+
+class CircuitBreaker:
+    def __init__(self, failure_threshold, reset_after_seconds):
+        self.failure_threshold = failure_threshold
+        self.reset_after_seconds = reset_after_seconds
+        self.failure_count = 0
+        self.opened_at = None
+
+    def call(self, fn):
+        if self.opened_at is not None:
+            elapsed = time.monotonic() - self.opened_at
+            if elapsed < self.reset_after_seconds:
+                raise ServiceUnavailable("circuit open")
+
+            return self._half_open_call(fn)
+
+        try:
+            result = fn()
+            self.failure_count = 0
+            return result
+        except Exception:
+            self.failure_count += 1
+            if self.failure_count >= self.failure_threshold:
+                self.opened_at = time.monotonic()
+            raise
+
+    def _half_open_call(self, fn):
+        try:
+            result = fn()
+            self.failure_count = 0
+            self.opened_at = None
+            return result
+        except Exception:
+            self.opened_at = time.monotonic()
+            raise
+```
+
+This code is intentionally small. Real breakers need rolling windows, error rates, probe limits, and metrics. The principle is the same: once a dependency is unhealthy, stop spending request threads on it.
+
+## Choosing the numbers
+
+The patterns are well known. The harder part is choosing specific numbers and deciding what the product does when those numbers take effect:
+
+- What status code is returned?
+- What does the user see?
+- Which endpoint is protected first?
+- Which customer is allowed to burst?
+- Which dependency is optional?
+- Which write is safe to retry?
+
+These are architecture decisions, not implementation details.
+
+## Bulkheads and concurrency limits
+
+Rate limits control arrival. Concurrency limits control in-flight work. Both are needed.
+
+If an endpoint can spend 2 seconds waiting on a dependency, even a modest request rate can consume every worker. A concurrency limit caps the number of concurrent calls.
+
+```python
+class ConcurrencyLimiter:
+    def __init__(self, max_in_flight):
+        self.semaphore = Semaphore(max_in_flight)
+
+    def call(self, fn):
+        if not self.semaphore.acquire(blocking=False):
+            raise ServiceUnavailable("too many in-flight requests")
+
+        try:
+            return fn()
+        finally:
+            self.semaphore.release()
+```
+
+Use separate pools for separate classes of work:
+
+```text
+checkout pool:       small, protected, high priority
+search pool:         medium, user-facing
+export pool:         small, background
+analytics pool:      best effort
+admin report pool:   isolated
+```
+
+This is a bulkhead. One flooded endpoint should not consume the capacity the rest of the product depends on.
+
+## Graceful degradation
+
+Not every dependency needs to take the API down with it.
+
+- If recommendations are unavailable, return the page without recommendations.
+- If the personalization service is slow, return the default ranking.
+- If a profile badge service fails, omit the badge.
+- If a search cluster is unhealthy, return cached results with a stale marker.
+
+The goal is to preserve the core product path when optional pieces fail.
+
+```python
+def get_home_feed(user_id, deadline):
+    feed = db.get_recent_feed_items(user_id, timeout=0.120)
+
+    try:
+        recommendations = recommender.get_items(
+            user_id,
+            timeout=min(0.080, deadline - time.monotonic()),
+        )
+    except (TimeoutError, ServiceUnavailable):
+        recommendations = []
+
+    return {
+        "feed": feed,
+        "recommendations": recommendations,
+    }
+```
+
+The design question to ask:
+
+```text
+What can we remove and still serve something useful?
+```
+
+## Load shedding
+
+Load shedding is rejecting work on purpose to keep the system available for the rest of the traffic.
+
+Good load shedding rejects early:
+
+1. Before expensive authentication fanout if possible.
+2. Before opening database transactions.
+3. Before calling slow dependencies.
+4. Before accepting background jobs that cannot be processed.
+
+Bad load shedding rejects after most of the work has been done.
+
+When the system is overloaded, a fast `429` or `503` with `Retry-After` is more useful than a 30-second timeout that prompts the client to retry blindly.
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 3
+Content-Type: application/json
+
+{"error":"rate_limited","retry_after_seconds":3}
+```
+
+## Status codes are control signals
+
+Clients need clear, distinct signals to behave well.
+
+| Code | Meaning in this context | Client behavior |
+| --- | --- | --- |
+| `408` | Request timed out before completion | Usually safe to retry only if operation is idempotent |
+| `409` | Conflicting command or reused idempotency key with different body | Do not blindly retry |
+| `425` | Too early for unsafe replay | Retry later if protocol supports it |
+| `429` | Caller exceeded a limit | Wait according to `Retry-After` |
+| `500` | Unexpected server error | Retry only with budget and idempotency |
+| `502` | Bad upstream response | Retry cautiously |
+| `503` | Service unavailable or circuit open | Retry later with backoff |
+| `504` | Gateway timeout | Retry cautiously; original work may still be running |
+
+Ambiguous errors lead to poorly behaved clients, which create extra load. Clear errors are part of reliability.
+
+## The retry matrix
+
+Before adding a retry, decide if it is safe:
+
+| Operation | Retry? | Why |
+| --- | --- | --- |
+| `GET /profile/123` | Usually yes | Read is naturally safe if bounded |
+| `POST /payments` without idempotency key | No | Duplicate charge risk |
+| `POST /payments` with idempotency key | Yes, carefully | Server can dedupe the command |
+| Queue publish after DB commit without outbox | No simple retry is enough | Can create lost or duplicate effects |
+| Search index update from event handler | Yes | Handler should be idempotent |
+| Email send | Usually no direct retry without dedupe | Duplicate emails hurt trust |
+
+Retry policy depends on operation semantics, not the HTTP method. `PUT` can be unsafe if implemented poorly, and `POST` can be safe with an idempotency key.
+
+## Metrics that help
+
+The metrics worth putting on the first dashboard for an API:
+
+| Metric | Why it matters |
+| --- | --- |
+| Request rate by endpoint and caller | Shows who is creating load |
+| In-flight requests | Exposes queueing before CPU does |
+| p50, p95, p99 latency | Shows tail pain |
+| Timeout count by dependency | Shows where budget is spent |
+| Retry attempts by caller and dependency | Finds retry storms |
+| Rate-limit rejects | Shows protected pressure |
+| Circuit breaker state | Shows fast-fail behavior |
+| Queue lag and age | Shows async backlog |
+| Saturation by pool | Shows bulkhead pressure |
+| Error rate by status code | Separates overload, bugs, dependency failure, and client misuse |
+
+CPU alone is not enough. An API can be unresponsive at low CPU if every worker is waiting on I/O.
+
+## Practical sequence
+
+A workable order to apply these controls:
+
+1. Define the core product path.
+2. Put deadlines around every downstream call.
+3. Limit in-flight work per route and dependency.
+4. Add caller-aware rate limits.
+5. Retry only idempotent operations, inside a deadline, with jitter.
+6. Use circuit breakers for dependencies that fail slowly.
+7. Decide which pieces can degrade.
+8. Return clear status codes that teach clients what to do.
+9. Watch in-flight work, tail latency, retries, and rejects.
+
+A service mesh diagram is not the place to start. The starting questions are simpler:
+
+```text
+How many requests are allowed in?
+How long can they run?
+How many can wait?
+What happens when dependency X is slow?
+What should the client do next?
+```
+
+If those answers are missing, the API does not yet have a reliability story.
+
+## Endpoint checklist
+
+For any important API endpoint, fill in:
+
+| Question | Example answer |
+| --- | --- |
+| Endpoint | `POST /exports` |
+| Caller key | `tenant_id` and `user_id` |
+| Cost | 20 tokens per export request |
+| Burst limit | 10 requests per tenant |
+| Sustained limit | 2 requests per minute per tenant |
+| Public deadline | 1 second for enqueue response |
+| Downstream timeouts | DB 150ms, queue publish 150ms |
+| Retry policy | Queue publish retry 2x with jitter inside deadline |
+| Idempotency | Required `Idempotency-Key` header |
+| Concurrency limit | 5 active export starts per tenant |
+| Degraded response | Return existing export if duplicate key is reused |
+| Overload response | `429` with `Retry-After` |
+| Dashboard | rate, rejects, in-flight, p99, queue lag, duplicate keys |
+
+Then ask:
+
+```text
+If this endpoint gets 10x traffic for five minutes, what protects the rest of the system?
+```
+
+If the only answer is autoscaling, the checklist is incomplete. Autoscaling adds capacity; it is not admission control.
+
+## Summary
+
+1. API failures are often queueing failures before they are code failures.
+2. Rate limits control which work enters the system.
+3. Concurrency limits control how much work can be in flight.
+4. Every downstream call needs a timeout and should respect the request deadline.
+5. Retries multiply load; use budgets, backoff, jitter, and idempotency.
+6. Circuit breakers fail fast when a dependency is already unhealthy.
+7. Graceful degradation preserves the core product path.
+8. Load shedding is better than letting every request time out slowly.
+9. Status codes and `Retry-After` headers are part of the reliability contract.
+10. Watch in-flight work, p99 latency, retry attempts, rate-limit rejects, and queue lag.
+
+---
+
+## Pop quiz
+
+<Quiz
+  title="API reliability controls"
+  description="A randomized review of rate limits, timeouts, retries, circuit breakers, and load shedding."
+  questionCount={4}
+  randomizeChoices={true}>
+  <QuizQuestion
+    id="queueing-failure"
+    prompt="A dependency slows from 50ms to 2 seconds while request rate stays flat. What is the immediate API risk?"
+    explanation="Longer service time increases in-flight work. Workers, sockets, and connection pools can fill even if arrival rate and CPU stay similar.">
+    <QuizChoice>The API is automatically safe because request rate did not increase</QuizChoice>
+    <QuizChoice correct>In-flight requests grow, causing queueing, pool exhaustion, and timeouts</QuizChoice>
+    <QuizChoice>The database must become faster because CPU is low</QuizChoice>
+    <QuizChoice>All clients will stop retrying by default</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="token-bucket"
+    prompt="What do capacity and refill rate mean in a token bucket?"
+    explanation="Capacity controls burst size. Refill rate controls sustained throughput. Request cost decides how many tokens one operation spends.">
+    <QuizChoice>Capacity is p99 latency, and refill rate is memory usage</QuizChoice>
+    <QuizChoice correct>Capacity is burst allowance, and refill rate is sustained request allowance</QuizChoice>
+    <QuizChoice>Capacity is the number of database rows, and refill rate is index count</QuizChoice>
+    <QuizChoice>Capacity is only useful for background jobs, not APIs</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="rate-limit-key"
+    prompt="Why does the rate-limit key matter?"
+    explanation="The key defines the isolation boundary. IP, user, API key, tenant, endpoint, and global limits protect different resources and have different fairness tradeoffs.">
+    <QuizChoice>It only changes the text in the error response</QuizChoice>
+    <QuizChoice correct>It decides who is isolated and which noisy caller or resource is controlled</QuizChoice>
+    <QuizChoice>It guarantees all requests are processed in order</QuizChoice>
+    <QuizChoice>It removes the need for timeouts</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="inner-timeout"
+    prompt="If a public request deadline is 800ms, why is a 2-second internal dependency timeout dangerous?"
+    explanation="The dependency call cannot help the original user after the outer deadline. It keeps workers occupied and worsens queueing.">
+    <QuizChoice correct>The inner call can continue consuming capacity after the user-facing request is already doomed</QuizChoice>
+    <QuizChoice>Longer internal timeouts always make APIs more reliable</QuizChoice>
+    <QuizChoice>The operating system automatically cancels the call at 800ms</QuizChoice>
+    <QuizChoice>Timeouts only matter for frontend code</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="retry-storm"
+    prompt="A client, gateway, and service each retry twice. What is the main risk?"
+    explanation="Retries multiply across layers. One logical request can turn into many downstream attempts, increasing load exactly when the system is weak.">
+    <QuizChoice>Retries reduce downstream load by default</QuizChoice>
+    <QuizChoice correct>One logical request can multiply into many attempts and create a retry storm</QuizChoice>
+    <QuizChoice>Every retry becomes idempotent automatically</QuizChoice>
+    <QuizChoice>The dependency receives fewer calls because there are more layers</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="jitter"
+    prompt="Why add jitter to exponential backoff?"
+    explanation="Backoff delays retries, and jitter prevents many callers from retrying at the exact same time. That gives a recovering dependency room to breathe.">
+    <QuizChoice>To make successful requests slower for no reason</QuizChoice>
+    <QuizChoice>To guarantee exactly-once delivery</QuizChoice>
+    <QuizChoice correct>To avoid synchronized retry bursts from many callers</QuizChoice>
+    <QuizChoice>To replace rate limiting entirely</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="retry-non-idempotent-write"
+    prompt="When is retrying a non-idempotent write unsafe?"
+    explanation="Without an idempotency key or dedupe boundary, a retry can create duplicate state, duplicate charges, duplicate emails, or duplicate side effects.">
+    <QuizChoice correct>When the write lacks an idempotency key or dedupe boundary</QuizChoice>
+    <QuizChoice>Only when the write uses JSON</QuizChoice>
+    <QuizChoice>Never; all HTTP writes are safe to retry</QuizChoice>
+    <QuizChoice>Only when the response body is larger than 1 MB</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="circuit-open"
+    prompt="What should happen when a circuit breaker is open?"
+    explanation="An open circuit fails fast instead of spending workers and sockets on a dependency that is already unhealthy. Later, half-open probes can test recovery.">
+    <QuizChoice>Every request should keep calling the dependency until it succeeds</QuizChoice>
+    <QuizChoice correct>Calls should fail fast until the reset window allows limited recovery probes</QuizChoice>
+    <QuizChoice>The service should disable all rate limits</QuizChoice>
+    <QuizChoice>The database should automatically increase connection count</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="bulkhead"
+    prompt="What does a bulkhead or concurrency limit protect against?"
+    explanation="Bulkheads isolate capacity so one flooded route, tenant, or dependency does not consume all workers needed by the rest of the product.">
+    <QuizChoice>It makes every request globally ordered</QuizChoice>
+    <QuizChoice correct>It prevents one class of work from consuming all in-flight capacity</QuizChoice>
+    <QuizChoice>It removes the need for authentication</QuizChoice>
+    <QuizChoice>It makes slow dependencies faster</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="load-shedding"
+    prompt="Why is a fast `429` or `503` often better than letting overloaded requests time out slowly?"
+    explanation="Fast rejection preserves capacity and gives clients a clear control signal. Slow timeouts waste workers and often trigger blind retries.">
+    <QuizChoice>Because users prefer errors with no retry guidance</QuizChoice>
+    <QuizChoice>Because slow timeouts reduce in-flight work</QuizChoice>
+    <QuizChoice correct>Because early rejection preserves capacity and can tell clients when to retry</QuizChoice>
+    <QuizChoice>Because `429` means the request definitely succeeded</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="graceful-degradation"
+    prompt="A recommendation service is unavailable, but the main feed can still load. What is the best reliability move?"
+    explanation="Optional dependencies should degrade when possible. Preserve the core product path and omit or default noncritical parts.">
+    <QuizChoice>Fail the whole feed response because one optional dependency failed</QuizChoice>
+    <QuizChoice correct>Return the feed without recommendations or with a default fallback</QuizChoice>
+    <QuizChoice>Retry recommendations forever inside the request</QuizChoice>
+    <QuizChoice>Open more database connections for recommendations</QuizChoice>
+  </QuizQuestion>
+</Quiz>

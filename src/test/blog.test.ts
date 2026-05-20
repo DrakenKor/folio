@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createBlogDataFromSources } from '../lib/blog-core'
 import { matchesSelectedBlogTags } from '../lib/blog-helpers'
@@ -149,5 +151,27 @@ Body copy.
         }
       ])
     ).toThrow(/Duplicate blog slug/)
+  })
+
+  it('keeps SVG text blocks from being parsed as markdown paragraphs', () => {
+    const contentDirectory = path.join(process.cwd(), 'src', 'content', 'blog')
+    const unsafeSvgTextBlockPattern =
+      /<(text|desc)\b[^>]*>\n(?:[ \t]*\n)*[ \t]+(?![{<])\S[^\n]*/g
+    const failures: string[] = []
+
+    for (const fileName of fs
+      .readdirSync(contentDirectory)
+      .filter((name) => name.endsWith('.mdx'))) {
+      const source = fs
+        .readFileSync(path.join(contentDirectory, fileName), 'utf8')
+        .replace(/```[\s\S]*?```/g, '')
+
+      for (const match of source.matchAll(unsafeSvgTextBlockPattern)) {
+        const lineNumber = source.slice(0, match.index).split('\n').length + 1
+        failures.push(`${fileName}:${lineNumber}`)
+      }
+    }
+
+    expect(failures).toEqual([])
   })
 })

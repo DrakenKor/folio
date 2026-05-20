@@ -26,7 +26,7 @@ If the write path is vague, the architecture is vague.
       style={{ display: 'block', width: '100%', height: 'auto' }}>
       <title id="write-path-svg-title">Synchronous and asynchronous write paths</title>
       <desc id="write-path-svg-desc">
-        Animated comparison between a blocking write chain and an asynchronous queue-based write path with parallel workers.
+        {"Animated comparison between a blocking write chain and an asynchronous queue-based write path with parallel workers."}
       </desc>
       <defs>
         <linearGradient id="write-path-bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -60,10 +60,10 @@ If the write path is vague, the architecture is vague.
       <line x1="42" y1="210" x2="678" y2="210" stroke="#dbeafe" strokeWidth="1" opacity="0.25" />
 
       <text x="46" y="44" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
-        Blocking
+        {"Blocking"}
       </text>
       <text x="46" y="244" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
-        Async
+        {"Async"}
       </text>
 
       <g opacity="0">
@@ -97,19 +97,19 @@ If the write path is vague, the architecture is vague.
 
         <text x="82" y="172" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">Timer</text>
         <text x="145" y="172" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" opacity="0">
-          50ms
+          {"50ms"}
           <animate attributeName="opacity" values="0;1;0;0;0" keyTimes="0;0.16;0.3;0.9;1" dur="8s" repeatCount="indefinite" />
         </text>
         <text x="145" y="172" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" opacity="0">
-          150ms
+          {"150ms"}
           <animate attributeName="opacity" values="0;0;1;0;0" keyTimes="0;0.3;0.46;0.9;1" dur="8s" repeatCount="indefinite" />
         </text>
         <text x="145" y="172" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" opacity="0">
-          200ms
+          {"200ms"}
           <animate attributeName="opacity" values="0;0;0;1;0" keyTimes="0;0.46;0.62;0.9;1" dur="8s" repeatCount="indefinite" />
         </text>
         <text x="145" y="172" fill="#ef4444" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
-          Total: 450ms
+          {"Total: 450ms"}
           <animate attributeName="opacity" values="0;0;0;1;1;0" keyTimes="0;0.62;0.78;0.86;0.95;1" dur="8s" repeatCount="indefinite" />
         </text>
       </g>
@@ -157,11 +157,11 @@ If the write path is vague, the architecture is vague.
 
         <text x="82" y="382" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">Response</text>
         <text x="168" y="382" fill="#10b981" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="14" fontWeight="700">
-          15ms
+          {"15ms"}
           <animate attributeName="opacity" values="0.45;1;0.45" dur="2s" repeatCount="indefinite" />
         </text>
         <text x="430" y="382" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
-          workers processing in parallel
+          {"workers processing in parallel"}
         </text>
       </g>
     </svg>

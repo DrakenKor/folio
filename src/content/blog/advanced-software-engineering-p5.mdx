@@ -1,0 +1,825 @@
+---
+title: "Caching: trading freshness for speed"
+description: "Caches make reads fast by letting the system be wrong in controlled ways. Keys, TTLs, invalidation, and stampede protection explored."
+date: "2026-05-20"
+tags: ["Caching", "Performance", "Redis", "Scale"]
+---
+
+Caching is a common technique for reducing latency: put Redis in front of the database, put a CDN in front of the app, or put a memoized function in front of expensive code. Latency drops and load on the source of truth decreases.
+
+The tradeoffs show up in specific failure modes: a user updates their profile and sees the old name for five minutes, a hot key expires and 20,000 requests hit the database at the same time, or a private response gets cached under a public key. These are the cases where caching becomes an architectural concern rather than a simple optimization.
+
+A cache is not just a faster place to put data. It is an agreement about how stale, shared, and recoverable a value is allowed to be.
+
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 420"
+      role="img"
+      aria-labelledby="cache-svg-title cache-svg-desc"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <title id="cache-svg-title">Cache layers and stampede protection</title>
+      <desc id="cache-svg-desc">
+        {"Animated cache rings show fast cache hits, a cache miss reaching the database, an expiry stampede, and lock protection during refill."}
+      </desc>
+      <defs>
+        <linearGradient id="cache-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#07111a" />
+          <stop offset="100%" stopColor="#0a1724" />
+        </linearGradient>
+        <pattern id="cache-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#dbeafe" strokeWidth="0.5" opacity="0.08" />
+        </pattern>
+        <pattern id="cache-grid-major" width="96" height="96" patternUnits="userSpaceOnUse">
+          <path d="M 96 0 L 0 0 0 96" fill="none" stroke="#dbeafe" strokeWidth="1" opacity="0.12" />
+        </pattern>
+        <filter id="cache-soft-glow">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <marker id="cache-arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
+        </marker>
+        <marker id="cache-arrow-yellow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24" />
+        </marker>
+        <marker id="cache-arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
+        </marker>
+      </defs>
+
+      <rect width="720" height="420" rx="18" fill="url(#cache-bg)" />
+      <rect width="720" height="420" fill="url(#cache-grid-minor)" />
+      <rect width="720" height="420" fill="url(#cache-grid-major)" />
+
+      <text x="46" y="44" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        {"Cache layers are freshness boundaries"}
+      </text>
+      <text x="46" y="69" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+        {"fast when the answer is nearby, costly when every layer misses together"}
+      </text>
+
+      <g transform="translate(360 218)">
+        <circle r="166" fill="none" stroke="#67e8f9" strokeWidth="1.8" opacity="0.75">
+          <animate attributeName="opacity" values="0.75;0.2;0.2;0.85;0.75" keyTimes="0;0.45;0.6;0.82;1" dur="12s" repeatCount="indefinite" />
+          <animate attributeName="strokeDasharray" values="0 1;0 1;8 8;0 1;0 1" keyTimes="0;0.45;0.6;0.82;1" dur="12s" repeatCount="indefinite" />
+        </circle>
+        <circle r="112" fill="none" stroke="#10b981" strokeWidth="2" opacity="0.85">
+          <animate attributeName="opacity" values="0.85;0.85;0.24;0.35;0.9;0.85" keyTimes="0;0.38;0.52;0.68;0.84;1" dur="12s" repeatCount="indefinite" />
+          <animate attributeName="strokeDasharray" values="0 1;0 1;7 9;7 9;0 1;0 1" keyTimes="0;0.38;0.52;0.68;0.84;1" dur="12s" repeatCount="indefinite" />
+        </circle>
+        <circle r="58" fill="none" stroke="#fbbf24" strokeWidth="2.4" opacity="0.95" filter="url(#cache-soft-glow)" />
+        <circle r="34" fill="#fbbf24" opacity="0.12" />
+
+        <text x="-132" y="-138" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">Client cache</text>
+        <text x="-85" y="-84" fill="#d1fae5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">CDN/App cache</text>
+        <text x="-26" y="5" textAnchor="middle" fill="#fef3c7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">DB</text>
+      </g>
+
+      <g>
+        <circle cx="360" cy="92" r="15" fill="none" stroke="#dbeafe" strokeWidth="1.5" />
+        <path d="M 360 107 L 360 132 M 344 122 L 376 122" stroke="#dbeafe" strokeWidth="1.5" strokeLinecap="round" />
+        <text x="390" y="98" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">user</text>
+      </g>
+
+      <path d="M 360 116 C 328 138 301 150 263 158" fill="none" stroke="#10b981" strokeWidth="2" markerEnd="url(#cache-arrow-green)" opacity="0">
+        <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.08;0.24;0.34;1" dur="12s" repeatCount="indefinite" />
+      </path>
+      <text x="190" y="150" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" opacity="0">
+        {"hit: 5ms"}
+        <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.08;0.24;0.34;1" dur="12s" repeatCount="indefinite" />
+      </text>
+
+      <path d="M 360 116 C 420 160 420 210 360 276" fill="none" stroke="#fbbf24" strokeWidth="2" markerEnd="url(#cache-arrow-yellow)" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.27;0.34;0.46;0.56;1" dur="12s" repeatCount="indefinite" />
+      </path>
+      <text x="438" y="205" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" opacity="0">
+        {"miss: 500ms"}
+        <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.27;0.34;0.46;0.56;1" dur="12s" repeatCount="indefinite" />
+      </text>
+
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;0;0;1;1;0;0" keyTimes="0;0.48;0.54;0.62;0.72;0.82;1" dur="12s" repeatCount="indefinite" />
+        <path d="M 100 156 C 200 190 260 220 360 276" fill="none" stroke="#ef4444" strokeWidth="1.6" markerEnd="url(#cache-arrow-red)" opacity="0.9" />
+        <path d="M 118 210 C 210 214 266 232 360 276" fill="none" stroke="#ef4444" strokeWidth="1.6" markerEnd="url(#cache-arrow-red)" opacity="0.75" />
+        <path d="M 124 264 C 218 238 280 244 360 276" fill="none" stroke="#ef4444" strokeWidth="1.6" markerEnd="url(#cache-arrow-red)" opacity="0.75" />
+        <path d="M 620 158 C 520 190 462 224 360 276" fill="none" stroke="#ef4444" strokeWidth="1.6" markerEnd="url(#cache-arrow-red)" opacity="0.75" />
+        <path d="M 604 238 C 514 232 452 246 360 276" fill="none" stroke="#ef4444" strokeWidth="1.6" markerEnd="url(#cache-arrow-red)" opacity="0.75" />
+        <text x="84" y="304" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">stampede after expiry</text>
+      </g>
+
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;0;0;0;1;1;0" keyTimes="0;0.62;0.7;0.74;0.82;0.94;1" dur="12s" repeatCount="indefinite" />
+        <rect x="304" y="172" width="112" height="72" rx="10" fill="#07111a" stroke="#10b981" strokeWidth="2" filter="url(#cache-soft-glow)" />
+        <path d="M 332 203 L 332 193 C 332 178 388 178 388 193 L 388 203" fill="none" stroke="#bbf7d0" strokeWidth="2" strokeLinecap="round" />
+        <rect x="326" y="202" width="68" height="30" rx="5" fill="none" stroke="#bbf7d0" strokeWidth="2" />
+        <text x="360" y="258" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">one loader, others wait</text>
+      </g>
+
+      <g>
+        <text x="512" y="320" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">State</text>
+        <text x="568" y="320" fill="#10b981" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"warm"}
+          <animate attributeName="opacity" values="1;1;0;0;0;0" keyTimes="0;0.32;0.42;0.7;0.9;1" dur="12s" repeatCount="indefinite" />
+        </text>
+        <text x="568" y="320" fill="#fbbf24" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"miss"}
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.32;0.4;0.52;0.62;1" dur="12s" repeatCount="indefinite" />
+        </text>
+        <text x="568" y="320" fill="#ef4444" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"herd"}
+          <animate attributeName="opacity" values="0;0;0;1;1;0;0" keyTimes="0;0.52;0.58;0.64;0.74;0.84;1" dur="12s" repeatCount="indefinite" />
+        </text>
+        <text x="568" y="320" fill="#10b981" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"refill"}
+          <animate attributeName="opacity" values="0;0;0;0;1;1;0" keyTimes="0;0.72;0.76;0.8;0.86;0.96;1" dur="12s" repeatCount="indefinite" />
+        </text>
+      </g>
+    </svg>
+  </figure>
+</div>
+
+## Start with the stale promise
+
+The first caching question is not "what should we put in Redis?" but rather:
+
+```text
+How wrong is this value allowed to be, and for how long?
+```
+
+This is the stale promise. A product logo can be stale for a day, a user display name for a minute, and a home feed for a few seconds. A checkout price should not be stale unless it is revalidated before purchase, and a bank balance might be cached for display but cannot be used by the ledger to decide whether money can move.
+
+<Callout title="Rule of thumb">
+  Cache data only after naming the freshness promise, the invalidation owner, and the fallback when the cache is empty.
+</Callout>
+
+Caching without a stale promise produces correctness that is incidental rather than designed, and tends to surface when two screens disagree.
+
+## The cache is a read model
+
+A cache is a derived read model with a short memory, which means the same questions from the database post apply:
+
+1. What is the read path?
+2. What key identifies the answer?
+3. How much stale data is acceptable?
+4. What writes make the answer wrong?
+5. Can the answer be rebuilt?
+6. What happens when many callers rebuild it at once?
+
+The last question is the one most often skipped. A cache improves the normal path but can make the failure path significantly worse: if a hot key serves 10,000 QPS and the cached value expires, every request can become a database request unless something stops the herd.
+
+## Cache layers
+
+Caching is not one thing. The layer decides who shares the value and who owns invalidation.
+
+| Layer | Typical latency | Good for | Main risk |
+| --- | ---: | --- | --- |
+| Browser or mobile cache | 0-10ms | Static assets, user-local state, repeated reads | Hard to revoke quickly |
+| CDN or edge cache | 10-80ms | Public pages, images, API responses with clear variance | Caching private data by mistake |
+| App process memory | sub-ms | Small hot config, per-instance memoization | Inconsistent across instances |
+| Redis or Memcached | 1-5ms inside region | Shared hot reads, sessions, expensive aggregates | Hot keys, stampedes, serialization cost |
+| Database buffer/cache | varies | Indexed reads and repeated pages | Treating it like an explicit product cache |
+
+Use the highest layer that can safely answer the request. A static image belongs on a CDN. A public product catalog page belongs on a CDN with purge or a short TTL. An authenticated account dashboard belongs in an application cache keyed by tenant and user permissions. An expensive analytics number should be precomputed, stored, and given an age.
+
+The closer the cache is to the user, the faster it is, and the harder it is to coordinate.
+
+## Cache keys are data models
+
+The key is the schema.
+
+Bad key:
+
+```text
+profile:123
+```
+
+Better key:
+
+```text
+profile:v3:tenant:88:user:123:viewer:456:locale:en-US
+```
+
+The second key looks unwieldy because it reflects all the dimensions that change the answer. If the response varies by tenant, viewer permissions, locale, feature flag, or API version, the key must include that dimension. Without those dimensions, the cache mixes answers rather than storing one.
+
+Common key dimensions:
+
+| Dimension | Include it when |
+| --- | --- |
+| Version | The serialized shape or meaning can change |
+| Tenant id | Data is scoped to an organization |
+| User id | Response is personalized |
+| Viewer id or role | Permissions affect visible fields |
+| Locale | Text, currency, dates, or formatting changes |
+| Page and sort | Lists are paginated or ordered |
+| Feature flag cohort | Experiments change the response |
+
+Versioned keys are the simplest deploy-time invalidation strategy:
+
+```python
+CACHE_VERSION = 3
+
+
+def profile_cache_key(tenant_id, user_id, viewer_id, locale):
+    return (
+        f"profile:v{CACHE_VERSION}:"
+        f"tenant:{tenant_id}:"
+        f"user:{user_id}:"
+        f"viewer:{viewer_id}:"
+        f"locale:{locale}"
+    )
+```
+
+When the representation changes, bump the version and old values expire naturally. This is a simple and effective approach to deploy-time invalidation.
+
+## TTL is not invalidation
+
+TTL is a fuse. It guarantees the cache entry dies eventually, but it does not guarantee the entry is correct until then. If a user changes their display name and the cached profile has a 10-minute TTL, the old name can remain visible for 10 minutes unless the write path invalidates it. That may be acceptable, but it should be a product decision.
+
+There are three basic choices:
+
+| Strategy | What happens | Use it when |
+| --- | --- | --- |
+| TTL only | Data expires after time passes | Staleness is harmless and writes are hard to track |
+| Invalidate on write | Delete affected keys after canonical write | User-visible freshness matters |
+| Update on write | Write DB and cache together | Read-after-write matters and write latency can afford it |
+
+A reasonable default is TTL plus invalidate on write: TTL protects against missed invalidations, and invalidation protects the user from waiting for TTL.
+
+## Cache-aside
+
+Cache-aside is the common pattern:
+
+```text
+read:
+  check cache
+  if hit, return
+  if miss, load from source of truth
+  write cache
+  return
+
+write:
+  update source of truth
+  delete affected cache keys
+```
+
+Here is the small version:
+
+```python
+def get_profile(user_id):
+    key = f"profile:v1:user:{user_id}"
+
+    cached = cache.get_json(key)
+    if cached is not None:
+        return cached
+
+    profile = db.get_profile(user_id)
+    cache.set_json(key, profile, ttl_seconds=300)
+    return profile
+```
+
+This works for cold or low-traffic keys, but a hot key that is missing requires stampede protection. A production version looks like this:
+
+```python
+import random
+import time
+
+
+def ttl_with_jitter(base_seconds, jitter_ratio=0.15):
+    spread = base_seconds * jitter_ratio
+    return int(base_seconds + random.uniform(-spread, spread))
+
+
+def get_profile(user_id):
+    key = f"profile:v2:user:{user_id}"
+    stale_key = f"{key}:stale"
+    lock_key = f"lock:{key}"
+
+    cached = cache.get_json(key)
+    if cached is not None:
+        return cached
+
+    lock_acquired = cache.set_nx(lock_key, "1", ttl_seconds=10)
+
+    if not lock_acquired:
+        stale = cache.get_json(stale_key)
+        if stale is not None:
+            return stale
+
+        time.sleep(0.050)
+        cached = cache.get_json(key)
+        if cached is not None:
+            return cached
+
+        return db.get_profile(user_id)
+
+    try:
+        profile = db.get_profile(user_id)
+        cache.set_json(key, profile, ttl_seconds=ttl_with_jitter(300))
+        cache.set_json(stale_key, profile, ttl_seconds=1800)
+        return profile
+    finally:
+        cache.delete(lock_key)
+```
+
+This code is still simplified. In a real Redis implementation, the lock should have a unique token so one caller does not delete another caller's lock after a timeout.
+
+The general shape is:
+
+1. One request rebuilds the missing value.
+2. Other requests use stale data or wait briefly.
+3. TTL jitter prevents many keys from expiring at the same second.
+4. The database is the fallback, not the first victim.
+
+<Callout type="warning" title="Warning">
+  A cache miss is not free. At scale, a miss is the most expensive read path because it does cache work and source-of-truth work.
+</Callout>
+
+## The stampede calculation
+
+The arithmetic is straightforward:
+
+```text
+hot key traffic:       8,000 requests/sec
+database read time:    250ms
+cache entry expires:   now
+
+concurrent DB reads = 8,000 x 0.250 = 2,000
+```
+
+One expired key can create 2,000 concurrent database reads. If the query holds a connection for 250ms, the connection pool is exhausted, unrelated endpoints start waiting, clients begin retrying, and the failure cascades into territory covered by the API reliability post. This is why "just add a five minute TTL" is not enough on its own.
+
+## Stampede defenses
+
+Useful defenses:
+
+| Defense | Idea | Tradeoff |
+| --- | --- | --- |
+| Single-flight lock | One caller rebuilds while others wait | Lock bugs can block refresh |
+| Stale-while-revalidate | Serve old value while one caller refreshes | Users may see stale data |
+| TTL jitter | Spread expirations over time | Values expire less predictably |
+| Probabilistic early refresh | Refresh before expiry under load | More cache writes |
+| Prewarming | Fill cache before traffic arrives | Needs deployment or job discipline |
+| Negative caching | Cache "not found" briefly | Can hide newly created data for the TTL |
+
+Probabilistic early refresh looks like this:
+
+```python
+import random
+
+
+def should_refresh_early(ttl_remaining, original_ttl):
+    age_ratio = 1.0 - (ttl_remaining / original_ttl)
+    return random.random() < max(0.0, age_ratio ** 3)
+```
+
+Early in the TTL, refresh is unlikely. Near the end, one of the readers is likely to refresh before the key fully expires. This is not needed everywhere; use it for hot keys where an expiry cliff is dangerous.
+
+## Write-through, write-behind, and friends
+
+The pattern names matter less than where the acknowledgment boundary sits.
+
+| Pattern | Read path | Write path | Risk |
+| --- | --- | --- | --- |
+| Cache-aside | App checks cache, then DB | App writes DB, then deletes cache | Miss stampede and stale reads |
+| Read-through | Cache loads from DB on miss | App writes DB, cache loads later | Cache library owns more behavior |
+| Write-through | App writes cache and DB before success | User waits for both | Higher write latency |
+| Write-behind | App writes cache, DB is updated later | Fast write response | Data loss if cache fails before flush |
+| Refresh-ahead | Cache refreshes before expiry | Background refresh | Extra work for unused keys |
+
+For most product systems, cache-aside is a reasonable default. Write-through is useful when read-after-write matters and the write rate is manageable. Write-behind is risky for canonical data but can work for metrics, counters, or logs where loss and replay rules are explicit. Avoid letting the cache become the only place the truth exists unless the system is intentionally designed as an in-memory store with its own durability story.
+
+## Invalidation is part of the write path
+
+The write path post described the flow as:
+
+```text
+command -> fact -> effects -> projections
+```
+
+Cache invalidation is one of those effects, which means it needs the same seriousness as search indexing or notifications.
+
+For a profile update:
+
+```python
+def update_profile(user_id, display_name):
+    with db.transaction() as tx:
+        tx.update_profile(
+            user_id=user_id,
+            display_name=display_name,
+        )
+        tx.insert_outbox_event(
+            event_type="profile.updated",
+            aggregate_id=user_id,
+            payload={"user_id": user_id},
+        )
+
+    return {"status": "updated"}
+```
+
+Then a worker invalidates derived keys:
+
+```python
+def handle_profile_updated(event):
+    user_id = event.payload["user_id"]
+
+    cache.delete(f"profile:v2:user:{user_id}")
+    cache.delete(f"profile:v2:user:{user_id}:stale")
+    cache.delete(f"feed_header:v4:user:{user_id}")
+```
+
+Invalidation can be synchronous if freshness is critical, but with many derived keys, doing it inside the user request can turn a simple update into a slow integration path. The choice comes back to the freshness promise.
+
+## Delete usually beats update
+
+On writes, deleting the cached value is often simpler than updating it because one write can affect many read shapes. Changing a display name may affect the user's profile, their posts, comment rows, notification previews, search snippets, and team member lists. Updating all of those cache entries correctly is difficult, while deleting the known keys and letting reads rebuild is generally safer.
+
+The catch is key discovery: if the affected keys cannot be named, they cannot be invalidated precisely. That leaves three options:
+
+1. Use shorter TTLs.
+2. Use versioned namespace keys.
+3. Maintain an index of dependent keys.
+
+Namespace versioning is a practical middle ground:
+
+```python
+def get_profile_namespace(user_id):
+    version = cache.get_int(f"profile_namespace:user:{user_id}") or 1
+    return f"profile:v{version}:user:{user_id}"
+
+
+def invalidate_profile_namespace(user_id):
+    cache.incr(f"profile_namespace:user:{user_id}")
+```
+
+Instead of deleting every possible profile key, increment the namespace version. New reads use new keys, and old keys expire later. This trades memory for simpler invalidation.
+
+## What I notice
+
+Caching bugs are often ambiguity bugs. The team knows a value is cached, but nobody knows:
+
+1. Whether the cached value is public or personalized.
+2. Whether the key includes permissions.
+3. Which write invalidates it.
+4. Whether stale data is acceptable.
+5. What happens when the cache is cold.
+
+The cache makes the system faster by hiding work, which also makes it easier to hide ownership. The remedy is to document the contract alongside the cache itself.
+
+## HTTP caching is a contract too
+
+CDN and browser caches use headers as their API.
+
+For a public static asset:
+
+```http
+Cache-Control: public, max-age=31536000, immutable
+```
+
+This works when the filename is content-hashed:
+
+```text
+/assets/app.7f3a21c.css
+```
+
+If the content changes, the URL changes.
+
+For an authenticated API response:
+
+```http
+Cache-Control: private, max-age=30
+Vary: Authorization, Accept-Language
+```
+
+`private` tells shared caches not to store the response, and `Vary` tells them which request headers change the answer.
+
+For sensitive data:
+
+```http
+Cache-Control: no-store
+```
+
+Vague headers around private content should be avoided. The most severe class of cache bug is not stale data; it is one user seeing another user's data because the cache key ignored identity.
+
+## Negative caching
+
+Caching misses can also help. If a crawler requests the same nonexistent product id 10,000 times, the database should not have to prove absence 10,000 times.
+
+```python
+def get_product(product_id):
+    key = f"product:v1:{product_id}"
+    cached = cache.get_json(key)
+
+    if cached == {"missing": True}:
+        return None
+
+    if cached is not None:
+        return cached
+
+    product = db.get_product(product_id)
+    if product is None:
+        cache.set_json(key, {"missing": True}, ttl_seconds=30)
+        return None
+
+    cache.set_json(key, product, ttl_seconds=300)
+    return product
+```
+
+Keep negative TTLs short. If the product is created one second after the miss is cached, users may keep seeing "not found" until the negative entry expires. Negative caching is a tool for reducing pressure, not a substitute for the source of truth.
+
+## Hot keys
+
+A cache can be healthy overall and still fail on one key. Examples:
+
+```text
+global leaderboard
+homepage config
+latest exchange rate
+celebrity profile
+tenant with 80 percent of traffic
+```
+
+A single Redis key can become the bottleneck even if the cluster has plenty of total capacity.
+
+Symptoms:
+
+1. High p99 on one endpoint.
+2. Redis CPU or network spikes on one shard.
+3. One key dominates command stats.
+4. Database spikes whenever that key expires.
+
+Mitigations:
+
+1. Replicate the value under several keys and pick one randomly for reads.
+2. Cache locally in each app process for a very short TTL.
+3. Precompute the value and push updates.
+4. Split the value into smaller pieces if reads do not need the whole object.
+5. Give the key stronger stampede protection than normal keys.
+
+Local memory caching is often the right choice for small, frequently accessed data. Even a two-second per-process cache can remove significant Redis pressure, with the tradeoff that every app instance has a slightly different view of the world.
+
+## Counters are special
+
+Counters look cache-friendly: likes, views, followers, notifications. They are also where correctness arguments become slippery.
+
+If the number is decorative, approximate is fine:
+
+```text
+1,204 likes
+about 1.2K views
+```
+
+If the number controls access or money, approximate is not fine:
+
+```text
+remaining credits
+available inventory
+account balance
+```
+
+For decorative counters, batch writes:
+
+```python
+def record_view(post_id):
+    cache.incr(f"views_buffer:post:{post_id}")
+
+
+def flush_view_counts(limit=1000):
+    for key, count in cache.scan_counts("views_buffer:post:*", limit=limit):
+        post_id = key.rsplit(":", 1)[1]
+        db.increment_post_views(post_id, count)
+        cache.delete(key)
+```
+
+This reduces database write pressure but creates a loss window: if Redis loses the buffer before flush, those views disappear. This is acceptable for views and unacceptable for payments.
+
+## When not to cache
+
+Caching should not be a reflex. Avoid caching when:
+
+1. The read is already cheap and low volume.
+2. The value changes constantly.
+3. The key would need too many personalization dimensions.
+4. The response contains sensitive data and the cache layer is shared.
+5. The miss path is more dangerous than the hit path is useful.
+6. The team cannot name the invalidation trigger.
+
+The simplest cache is the one that is not added. Sometimes the right fix is an index, a smaller response, pagination, a read model, or a better query. Caching is a pressure valve rather than a substitute for modeling the data correctly.
+
+## Metrics that actually help
+
+Hit rate is useful but not sufficient on its own. A more complete set of metrics:
+
+| Metric | Why it matters |
+| --- | --- |
+| Hit rate by key family | Shows whether the cache is doing useful work |
+| Miss rate by key family | Shows source-of-truth pressure |
+| Miss latency | Shows how expensive cold reads are |
+| Stampede lock wait time | Shows herd pressure |
+| Stale responses served | Shows how often degraded freshness happens |
+| Invalidation count | Shows write-driven churn |
+| Evictions | Shows memory pressure or bad sizing |
+| Hot key distribution | Shows whether one key dominates |
+| Serialized payload size | Shows network and memory cost |
+| Source-of-truth QPS saved | Shows the actual value of the cache |
+
+Hit rate can be misleading on its own: a cache with 99 percent hit rate can still cause problems if the 1 percent misses all happen on one hot path with expensive queries.
+
+## What I think
+
+The practical sequence is:
+
+1. Fix the obvious query or data model first.
+2. Name the stale promise.
+3. Choose the highest safe cache layer.
+4. Design the key like a schema.
+5. Add TTL with jitter.
+6. Invalidate on writes that break the promise.
+7. Protect hot misses with single-flight or stale-while-revalidate.
+8. Measure misses, not just hits.
+9. Keep a repair path back to the source of truth.
+
+Caching is reasonable to underengineer only when the contract is small and explicit:
+
+```text
+This value may be 60 seconds stale.
+This write invalidates it.
+This key includes tenant and viewer.
+One caller rebuilds it.
+Others get stale data.
+```
+
+That is a design. Without something like it, the cache is operating on assumptions rather than guarantees.
+
+## Tutorial checklist
+
+For any cache, fill this out:
+
+| Question | Example answer |
+| --- | --- |
+| Cached value | User profile card |
+| Source of truth | `users` and `profile_settings` tables |
+| Cache layer | Redis plus 2-second app memory for hot users |
+| Key | `profile:v2:tenant:{tenant_id}:user:{user_id}:viewer:{viewer_id}:locale:{locale}` |
+| Freshness promise | Up to 60 seconds stale, except self-view after edit |
+| TTL | 300 seconds with 15 percent jitter |
+| Write invalidation | `profile.updated` event deletes profile and feed header keys |
+| Stampede defense | Single-flight Redis lock and stale fallback |
+| Negative cache | Missing users cached for 30 seconds |
+| Sensitive fields | Email hidden unless viewer has permission, included in key by viewer |
+| Metrics | hit rate, miss latency, stale served, lock waits, hot keys |
+| Repair path | Delete namespace version or flush key family |
+
+Then ask:
+
+```text
+If this cache is empty during peak traffic, what breaks first?
+```
+
+If the answer is "the database," the cache is not just an optimization; it is part of capacity planning.
+
+## Summary
+
+1. Caching is an agreement about acceptable staleness.
+2. A cache key is a data model; include every dimension that changes the answer.
+3. TTL is a safety fuse, not a complete invalidation strategy.
+4. Cache-aside is a good default, but hot misses need stampede protection.
+5. Serve stale data intentionally when it is better than taking down the source of truth.
+6. Invalidation belongs in the write path.
+7. Delete or version cached values on writes unless updating every affected key is truly simple.
+8. CDN and browser caching depend on precise `Cache-Control` and `Vary` headers.
+9. Do not cache sensitive or highly personalized data without a precise isolation key.
+10. Measure misses, hot keys, stale responses, lock waits, evictions, and source-of-truth load saved.
+
+---
+
+## Pop quiz
+
+<Quiz
+  title="Caching for scale"
+  description="A randomized review of cache keys, TTLs, invalidation, stampede protection, and stale data promises."
+  questionCount={4}
+  randomizeChoices={true}>
+  <QuizQuestion
+    id="stale-promise"
+    prompt="What is the first question to ask before adding a cache?"
+    explanation="Caching starts with the freshness contract. You need to know how wrong a value can be, for how long, and what write invalidates it.">
+    <QuizChoice>Which cloud provider has the largest Redis instance?</QuizChoice>
+    <QuizChoice correct>How stale the value is allowed to be, and for how long</QuizChoice>
+    <QuizChoice>Whether every table can be cached forever</QuizChoice>
+    <QuizChoice>How to remove all database reads from the product</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="key-dimensions"
+    prompt="Why is `profile:123` often a weak cache key?"
+    explanation="If the response varies by tenant, viewer permissions, locale, API version, or feature flag, those dimensions must be represented in the key.">
+    <QuizChoice correct>It may omit dimensions like tenant, viewer, permissions, locale, or version that change the answer</QuizChoice>
+    <QuizChoice>It is too long for Redis to store</QuizChoice>
+    <QuizChoice>It makes every profile strongly consistent by default</QuizChoice>
+    <QuizChoice>It prevents TTLs from working</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="ttl-not-invalidation"
+    prompt="Why is TTL alone not a complete invalidation strategy?"
+    explanation="TTL guarantees eventual expiry, but a value can become wrong immediately after a write and remain visible until the TTL ends.">
+    <QuizChoice>TTL deletes the database row instead of the cache entry</QuizChoice>
+    <QuizChoice correct>A write can make the cached value wrong before the TTL expires</QuizChoice>
+    <QuizChoice>TTL only works for static images, never application data</QuizChoice>
+    <QuizChoice>TTL prevents cache entries from expiring</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="cache-aside"
+    prompt="What does the cache-aside pattern usually do on a read miss?"
+    explanation="The application checks the cache first. On a miss, it loads from the source of truth, stores the result in cache, and returns it.">
+    <QuizChoice>Return an error even if the database has the value</QuizChoice>
+    <QuizChoice correct>Load from the source of truth, store the value in cache, and return it</QuizChoice>
+    <QuizChoice>Write to the cache only and skip the database forever</QuizChoice>
+    <QuizChoice>Invalidate every key in the system before reading</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="stampede"
+    prompt="A hot key receives 8,000 QPS, the database read takes 250ms, and the cache entry expires. What is the stampede risk?"
+    explanation="Concurrent database reads can be estimated as QPS times service time: 8,000 x 0.250 = 2,000 concurrent reads.">
+    <QuizChoice>Only one database read can happen because caches serialize misses automatically</QuizChoice>
+    <QuizChoice correct>About 2,000 concurrent database reads can appear if every request rebuilds the value</QuizChoice>
+    <QuizChoice>The key becomes permanently fresh</QuizChoice>
+    <QuizChoice>The database receives zero traffic because the key expired</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="single-flight"
+    prompt="What is the goal of a single-flight lock around cache refill?"
+    explanation="A single-flight lock lets one caller rebuild the missing value while other callers wait briefly or use stale data.">
+    <QuizChoice>To make every request bypass the cache</QuizChoice>
+    <QuizChoice correct>To allow one caller to rebuild while others avoid hitting the source of truth</QuizChoice>
+    <QuizChoice>To make stale data impossible in distributed systems</QuizChoice>
+    <QuizChoice>To remove the need for a source of truth</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="ttl-jitter"
+    prompt="Why add jitter to cache TTLs?"
+    explanation="Jitter spreads expirations over time so many related keys do not expire at the exact same second and create a burst.">
+    <QuizChoice>To ensure every key expires at exactly midnight</QuizChoice>
+    <QuizChoice correct>To prevent synchronized expirations from creating a traffic spike</QuizChoice>
+    <QuizChoice>To make cached values more private</QuizChoice>
+    <QuizChoice>To guarantee read-after-write consistency</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="delete-vs-update"
+    prompt="Why is deleting a cache entry on write often simpler than updating it?"
+    explanation="One write can affect many read shapes. Deleting or versioning known keys lets future reads rebuild from the source of truth.">
+    <QuizChoice correct>Because one write may affect many cached read shapes, and rebuilding on demand is often safer</QuizChoice>
+    <QuizChoice>Because deleting the cache also deletes the source-of-truth row</QuizChoice>
+    <QuizChoice>Because updates never work in Redis</QuizChoice>
+    <QuizChoice>Because deleted cache entries cannot miss later</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="http-private"
+    prompt="Which header direction is safest for sensitive data that should not be stored by shared caches?"
+    explanation="Sensitive responses should use `Cache-Control: no-store` when they should not be cached, or `private` when only a browser cache may store them.">
+    <QuizChoice>`Cache-Control: public, max-age=31536000`</QuizChoice>
+    <QuizChoice correct>`Cache-Control: no-store`</QuizChoice>
+    <QuizChoice>`Cache-Control: immutable` for all authenticated responses</QuizChoice>
+    <QuizChoice>Omit cache headers so every cache guesses correctly</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="negative-cache"
+    prompt="What is the main caution with negative caching?"
+    explanation="Caching a miss reduces repeated source-of-truth reads, but if the object is created shortly afterward, users may see `not found` until the negative TTL expires.">
+    <QuizChoice>It can only cache successful responses</QuizChoice>
+    <QuizChoice correct>It can hide newly created data until the short negative TTL expires</QuizChoice>
+    <QuizChoice>It guarantees the object will never exist</QuizChoice>
+    <QuizChoice>It removes the need for rate limiting</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="counter-correctness"
+    prompt="Why can view counts be buffered in cache more safely than account balances?"
+    explanation="View counts are usually decorative and approximate. Account balances control money movement and require source-of-truth correctness.">
+    <QuizChoice>Because balances are always smaller numbers than view counts</QuizChoice>
+    <QuizChoice correct>Because approximate or lossy counts may be acceptable for views, but balances control correctness</QuizChoice>
+    <QuizChoice>Because Redis automatically audits view counts</QuizChoice>
+    <QuizChoice>Because account balances never change</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="cache-metrics"
+    prompt="Why is hit rate alone an incomplete cache metric?"
+    explanation="A high hit rate can hide dangerous misses, hot keys, expensive cold reads, lock waits, evictions, or source-of-truth spikes.">
+    <QuizChoice correct>A cache can have high hit rate while misses on hot paths still overload the source of truth</QuizChoice>
+    <QuizChoice>Hit rate only applies to browser caches, not Redis</QuizChoice>
+    <QuizChoice>Hit rate proves all cached data is fresh</QuizChoice>
+    <QuizChoice>Hit rate replaces the need to measure p99 latency</QuizChoice>
+  </QuizQuestion>
+</Quiz>

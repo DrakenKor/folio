@@ -16,7 +16,7 @@ Scaling decisions should start with arithmetic analysis. Four fundamental metric
       style={{ display: 'block', width: '100%', height: 'auto' }}>
       <title id="orders-svg-title">Orders of magnitude scale comparison</title>
       <desc id="orders-svg-desc">
-        Animated bars compare user-count milestones against a single-server limit line, showing how much room exists before distribution is required.
+        {"Animated bars compare user-count milestones against a single-server limit line, showing how much room exists before distribution is required."}
       </desc>
       <defs>
         <linearGradient id="orders-bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -51,10 +51,10 @@ Scaling decisions should start with arithmetic analysis. Four fundamental metric
       <rect width="720" height="420" fill="url(#orders-grid-major)" />
 
       <text x="44" y="48" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
-        Actual load vs assumed scale
+        {"Actual load vs assumed scale"}
       </text>
       <text x="44" y="73" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
-        user growth follows logarithmic, not linear, load patterns
+        {"user growth follows logarithmic, not linear, load patterns"}
       </text>
 
       <g filter="url(#orders-soft-glow)">
@@ -63,7 +63,7 @@ Scaling decisions should start with arithmetic analysis. Four fundamental metric
         </line>
       </g>
       <text x="500" y="94" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" opacity="0">
-        Single server limit
+        {"Single server limit"}
         <animate attributeName="opacity" values="0;0.95;0.95;0" keyTimes="0;0.18;0.86;1" dur="12s" repeatCount="indefinite" />
       </text>
 
@@ -78,7 +78,7 @@ Scaling decisions should start with arithmetic analysis. Four fundamental metric
           <animate attributeName="opacity" values="0;1;0" dur="4s" repeatCount="indefinite" />
         </circle>
         <text x="36" y="392" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
-          1K users
+          {"1K users"}
           <animate attributeName="opacity" values="0.5;1;0.5" dur="5s" repeatCount="indefinite" />
         </text>
       </g>
@@ -94,7 +94,7 @@ Scaling decisions should start with arithmetic analysis. Four fundamental metric
           <animate attributeName="opacity" values="0;1;0" dur="4.8s" repeatCount="indefinite" />
         </circle>
         <text x="36" y="392" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
-          10K users
+          {"10K users"}
           <animate attributeName="opacity" values="0.5;1;0.5" dur="5.8s" repeatCount="indefinite" />
         </text>
       </g>
@@ -110,7 +110,7 @@ Scaling decisions should start with arithmetic analysis. Four fundamental metric
           <animate attributeName="opacity" values="0;1;0" dur="5.6s" repeatCount="indefinite" />
         </circle>
         <text x="36" y="392" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
-          100K users
+          {"100K users"}
           <animate attributeName="opacity" values="0.5;1;0.5" dur="6.4s" repeatCount="indefinite" />
         </text>
       </g>
@@ -126,7 +126,7 @@ Scaling decisions should start with arithmetic analysis. Four fundamental metric
           <animate attributeName="opacity" values="0;1;0" dur="6.4s" repeatCount="indefinite" />
         </circle>
         <text x="36" y="392" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
-          1M users
+          {"1M users"}
           <animate attributeName="opacity" values="0.5;1;0.5" dur="7.2s" repeatCount="indefinite" />
         </text>
       </g>
@@ -142,7 +142,7 @@ Scaling decisions should start with arithmetic analysis. Four fundamental metric
           <animate attributeName="opacity" values="0;1;0" dur="7.2s" repeatCount="indefinite" />
         </circle>
         <text x="36" y="392" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
-          10M users
+          {"10M users"}
           <animate attributeName="opacity" values="0.5;1;0.5" dur="8s" repeatCount="indefinite" />
         </text>
       </g>
