@@ -5,7 +5,7 @@ date: "2026-05-18"
 tags: ["Architecture", "Writes", "Event Streaming", "Scale"]
 ---
 
-Most architecture diagrams lie by omission.
+Most architecture diagrams leave out the part that matters.
 
 They show boxes. API, database, queue, worker, cache, search. Sometimes they show arrows.
 
@@ -209,9 +209,9 @@ def create_post(user_id, content):
 
 It is easy to read.
 
-It is also a latency trap. The user waits for the database, cache, search, notifications, analytics, and every network hop behind those calls.
+It also adds latency. The user waits for the database, cache, search, notifications, analytics, and every network hop behind those calls.
 
-It is a failure trap too:
+And it is fragile under partial failure:
 
 1. The post insert succeeds.
 2. Search indexing times out.
@@ -233,7 +233,7 @@ The user thinks they are creating a post.
 
 The system is doing six things.
 
-When p99 latency spikes, database is seen as the default culprit because that is the obvious stateful component. But the real issue is that the request path became an integration path.
+When p99 latency rises, the database tends to get blamed first, because it is the obvious stateful component. More often the real issue is that the request path has quietly become an integration path.
 
 The fix is to name the critical path.
 
@@ -410,11 +410,11 @@ def handle_post_created(event):
 
 The important part is the handler name. Search indexing, feed projection, notifications, and analytics are different effects. Each needs its own dedupe boundary.
 
-## A queue is not a magic durability machine
+## A queue does not remove the hard decisions
 
 Queues help when work can happen later.
 
-They do not remove decisions.
+They do not remove decisions, though.
 
 You still need to decide:
 
@@ -423,33 +423,33 @@ You still need to decide:
 | Is enqueue durable? | Returning after an in-memory enqueue is not a durable success. |
 | Can events be duplicated? | Assume yes unless proven otherwise. |
 | Can events arrive out of order? | Assume yes across partitions, retries, and separate topics. |
-| What is the retry policy? | Infinite hot retries can take down dependencies. |
+| What is the retry policy? | Tight retry loops can overwhelm a struggling dependency. |
 | Where do poison messages go? | Bad payloads need a dead-letter path. |
 | What is the max acceptable lag? | Async work still has a product freshness budget. |
 
-The queue turns one failure mode into another.
+A queue trades one failure mode for another.
 
 Without a queue, a spike makes users wait.
 
-With a queue, a spike makes lag grow.
+With a queue, a spike makes lag grow instead.
 
-That is often a good trade, but only if lag is visible and bounded.
+That is often a reasonable trade, but only if the lag is visible and bounded.
 
 ## Backpressure
 
 Backpressure is the system saying: "I cannot accept work at this rate and still keep my promises."
 
-Ignoring backpressure creates dishonest success.
+Ignoring it means returning success for work that is not really keeping up.
 
-Imagine this:
+Consider the arithmetic:
 
 1. The API accepts 20,000 writes per second.
 2. Workers can process 5,000 events per second.
 3. The queue grows by 15,000 events per second.
 4. Notification lag reaches 45 minutes.
-5. Users complain that the product is broken even though the API is returning `200`.
+5. From the user's side the product feels broken, even though the API is returning `200`.
 
-The write path needs a policy before this happens.
+It helps to decide on a policy before reaching that point.
 
 Possible policies:
 

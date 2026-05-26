@@ -1,0 +1,827 @@
+---
+title: "Consistency has a cost"
+description: "Strong consistency is useful when correctness depends on one current answer. Many product paths can tolerate bounded lag if the promise is explicit."
+date: "2026-05-21"
+tags: ["Distributed Systems", "Consistency", "CAP", "Scale"]
+---
+
+Consistency bugs usually look small at first.
+
+A user changes their display name and sees the old value on another screen. A follower count goes down and then up. A search result includes a deleted post for a few seconds. An inventory number says one item is left, but checkout fails.
+
+Those cases do not all need the same fix.
+
+The useful question is narrower:
+
+```text
+What promise does this read need from the write that came before it?
+```
+
+Sometimes the answer is "the latest value, always." Sometimes it is "the user's own write should be visible to them." Sometimes it is "within a few seconds is fine." The architecture should follow that promise, not a general preference for strong or eventual consistency.
+
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 480"
+      role="img"
+      aria-label="Strong and eventual replication paths"
+      aria-describedby="consistency-svg-desc"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <desc id="consistency-svg-desc">
+        {"Animated replicas compare a strong write that waits for confirmation with an eventual write that returns before followers catch up."}
+      </desc>
+      <defs>
+        <linearGradient id="consistency-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#07111a" />
+          <stop offset="100%" stopColor="#0a1724" />
+        </linearGradient>
+        <pattern id="consistency-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#dbeafe" strokeWidth="0.5" opacity="0.08" />
+        </pattern>
+        <pattern id="consistency-grid-major" width="96" height="96" patternUnits="userSpaceOnUse">
+          <path d="M 96 0 L 0 0 0 96" fill="none" stroke="#dbeafe" strokeWidth="1" opacity="0.12" />
+        </pattern>
+        <linearGradient id="consistency-cylinder" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#123044" />
+          <stop offset="55%" stopColor="#0b1d2a" />
+          <stop offset="100%" stopColor="#07131d" />
+        </linearGradient>
+        <filter id="consistency-soft-glow">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <marker id="consistency-arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#67e8f9" />
+        </marker>
+        <marker id="consistency-arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
+        </marker>
+        <marker id="consistency-arrow-yellow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24" />
+        </marker>
+      </defs>
+
+      <rect width="720" height="480" rx="18" fill="url(#consistency-bg)" />
+      <rect width="720" height="480" fill="url(#consistency-grid-minor)" />
+      <rect width="720" height="480" fill="url(#consistency-grid-major)" />
+
+      <text x="42" y="44" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        {"Consistency is a coordination choice"}
+      </text>
+      <text x="42" y="69" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+        {"the same write can return after agreement, or return before replicas converge"}
+      </text>
+
+      <line x1="42" y1="242" x2="678" y2="242" stroke="#dbeafe" strokeWidth="1" opacity="0.22" />
+      <text x="46" y="100" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="15" fontWeight="700">
+        {"Strong path"}
+      </text>
+      <text x="46" y="270" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="15" fontWeight="700">
+        {"Eventual path"}
+      </text>
+
+      <g transform="translate(142 8)">
+        <g transform="translate(0 118)">
+          <ellipse cx="0" cy="0" rx="48" ry="16" fill="#123044" stroke="#67e8f9" strokeWidth="1.6" />
+          <rect x="-48" y="0" width="96" height="64" fill="url(#consistency-cylinder)" stroke="#67e8f9" strokeWidth="1.6" />
+          <ellipse cx="0" cy="64" rx="48" ry="16" fill="#07131d" stroke="#67e8f9" strokeWidth="1.6" />
+          <text x="0" y="39" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">Leader</text>
+        </g>
+        <g transform="translate(192 118)">
+          <ellipse cx="0" cy="0" rx="48" ry="16" fill="#123044" stroke="#67e8f9" strokeWidth="1.6" />
+          <rect x="-48" y="0" width="96" height="64" fill="url(#consistency-cylinder)" stroke="#67e8f9" strokeWidth="1.6" />
+          <ellipse cx="0" cy="64" rx="48" ry="16" fill="#07131d" stroke="#67e8f9" strokeWidth="1.6" />
+          <text x="0" y="39" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">Replica A</text>
+        </g>
+        <g transform="translate(384 118)">
+          <ellipse cx="0" cy="0" rx="48" ry="16" fill="#123044" stroke="#67e8f9" strokeWidth="1.6" />
+          <rect x="-48" y="0" width="96" height="64" fill="url(#consistency-cylinder)" stroke="#67e8f9" strokeWidth="1.6" />
+          <ellipse cx="0" cy="64" rx="48" ry="16" fill="#07131d" stroke="#67e8f9" strokeWidth="1.6" />
+          <text x="0" y="39" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">Replica B</text>
+        </g>
+
+        <path d="M 20 116 C 76 94 116 94 172 116" fill="none" stroke="#67e8f9" strokeWidth="1.8" markerEnd="url(#consistency-arrow-cyan)" opacity="0">
+          <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.14;0.34;0.42;1" dur="12s" repeatCount="indefinite" />
+        </path>
+        <path d="M 20 150 C 154 180 248 180 364 150" fill="none" stroke="#67e8f9" strokeWidth="1.8" markerEnd="url(#consistency-arrow-cyan)" opacity="0">
+          <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.16;0.36;0.44;1" dur="12s" repeatCount="indefinite" />
+        </path>
+        <circle r="5" fill="#fbbf24" filter="url(#consistency-soft-glow)">
+          <animateMotion dur="12s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.1;0.28;1" path="M -100 150 L 0 150" />
+          <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.1;0.26;0.34;1" dur="12s" repeatCount="indefinite" />
+        </circle>
+        <circle r="4" fill="#67e8f9" filter="url(#consistency-soft-glow)">
+          <animateMotion dur="12s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.16;0.32;1" path="M 20 116 C 76 94 116 94 172 116" />
+          <animate attributeName="opacity" values="0;0;1;0;0" keyTimes="0;0.14;0.24;0.36;1" dur="12s" repeatCount="indefinite" />
+        </circle>
+        <circle r="4" fill="#67e8f9" filter="url(#consistency-soft-glow)">
+          <animateMotion dur="12s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.18;0.36;1" path="M 20 150 C 154 180 248 180 364 150" />
+          <animate attributeName="opacity" values="0;0;1;0;0" keyTimes="0;0.16;0.28;0.4;1" dur="12s" repeatCount="indefinite" />
+        </circle>
+        <text x="490" y="146" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"wait: 450ms"}
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.28;0.36;0.48;0.56;1" dur="12s" repeatCount="indefinite" />
+        </text>
+        <text x="96" y="214" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" opacity="0">
+          {"all replicas agree before success"}
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.28;0.36;0.52;0.62;1" dur="12s" repeatCount="indefinite" />
+        </text>
+      </g>
+
+      <g transform="translate(142 184)">
+        <g transform="translate(0 118)">
+          <ellipse cx="0" cy="0" rx="48" ry="16" fill="#123044" stroke="#10b981" strokeWidth="1.6" />
+          <rect x="-48" y="0" width="96" height="64" fill="url(#consistency-cylinder)" stroke="#10b981" strokeWidth="1.6" />
+          <ellipse cx="0" cy="64" rx="48" ry="16" fill="#07131d" stroke="#10b981" strokeWidth="1.6" />
+          <text x="0" y="39" textAnchor="middle" fill="#d1fae5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">value 100</text>
+        </g>
+        <g transform="translate(192 118)">
+          <ellipse cx="0" cy="0" rx="48" ry="16" fill="#123044" stroke="#10b981" strokeWidth="1.6" opacity="0.65" />
+          <rect x="-48" y="0" width="96" height="64" fill="url(#consistency-cylinder)" stroke="#10b981" strokeWidth="1.6" opacity="0.65" />
+          <ellipse cx="0" cy="64" rx="48" ry="16" fill="#07131d" stroke="#10b981" strokeWidth="1.6" opacity="0.65" />
+          <text x="0" y="39" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" opacity="0">
+            {"value 95"}
+            <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.46;0.54;0.68;0.78;1" dur="12s" repeatCount="indefinite" />
+          </text>
+          <text x="0" y="39" textAnchor="middle" fill="#d1fae5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" opacity="0">
+            {"value 100"}
+            <animate attributeName="opacity" values="0;0;0;1;1;0" keyTimes="0;0.66;0.72;0.82;0.94;1" dur="12s" repeatCount="indefinite" />
+          </text>
+        </g>
+        <g transform="translate(384 118)">
+          <ellipse cx="0" cy="0" rx="48" ry="16" fill="#123044" stroke="#10b981" strokeWidth="1.6" opacity="0.65" />
+          <rect x="-48" y="0" width="96" height="64" fill="url(#consistency-cylinder)" stroke="#10b981" strokeWidth="1.6" opacity="0.65" />
+          <ellipse cx="0" cy="64" rx="48" ry="16" fill="#07131d" stroke="#10b981" strokeWidth="1.6" opacity="0.65" />
+          <text x="0" y="39" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" opacity="0">
+            {"value 95"}
+            <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.46;0.54;0.74;0.84;1" dur="12s" repeatCount="indefinite" />
+          </text>
+          <text x="0" y="39" textAnchor="middle" fill="#d1fae5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" opacity="0">
+            {"value 100"}
+            <animate attributeName="opacity" values="0;0;0;0;1;1" keyTimes="0;0.72;0.78;0.82;0.9;1" dur="12s" repeatCount="indefinite" />
+          </text>
+        </g>
+
+        <path d="M 20 150 C 76 128 116 128 172 150" fill="none" stroke="#10b981" strokeWidth="1.7" strokeDasharray="5 7" markerEnd="url(#consistency-arrow-green)" opacity="0">
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.42;0.5;0.72;0.82;1" dur="12s" repeatCount="indefinite" />
+        </path>
+        <path d="M 20 164 C 154 194 248 194 364 164" fill="none" stroke="#10b981" strokeWidth="1.7" strokeDasharray="5 7" markerEnd="url(#consistency-arrow-green)" opacity="0">
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.44;0.52;0.78;0.88;1" dur="12s" repeatCount="indefinite" />
+        </path>
+        <circle r="5" fill="#fbbf24" filter="url(#consistency-soft-glow)">
+          <animateMotion dur="12s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.38;0.48;1" path="M -100 150 L 0 150" />
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.36;0.44;0.54;0.62;1" dur="12s" repeatCount="indefinite" />
+        </circle>
+        <text x="490" y="146" fill="#10b981" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"return: 15ms"}
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.44;0.5;0.66;0.76;1" dur="12s" repeatCount="indefinite" />
+        </text>
+        <text x="96" y="216" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" opacity="0">
+          {"replicas catch up after the user response"}
+          <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.52;0.62;0.94;1" dur="12s" repeatCount="indefinite" />
+        </text>
+      </g>
+
+      <g>
+        <text x="520" y="444" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">State</text>
+        <text x="576" y="444" fill="#67e8f9" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"agree"}
+          <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.28;0.46;0.56;1" dur="12s" repeatCount="indefinite" />
+        </text>
+        <text x="576" y="444" fill="#fbbf24" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"lag"}
+          <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.48;0.58;0.78;0.9" dur="12s" repeatCount="indefinite" />
+        </text>
+        <text x="576" y="444" fill="#10b981" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"converged"}
+          <animate attributeName="opacity" values="0;0;0;1;1" keyTimes="0;0.72;0.82;0.9;1" dur="12s" repeatCount="indefinite" />
+        </text>
+      </g>
+    </svg>
+  </figure>
+</div>
+
+## Start with the read promise
+
+Consistency is not one setting for the whole system. It is a promise made by a read path.
+
+Examples:
+
+| Promise | Meaning | Common fit |
+| --- | --- | --- |
+| Strong consistency | A read observes the latest committed write | Balances, locks, inventory, uniqueness |
+| Read-your-writes | The writer sees their own update immediately | Profile edits, drafts, settings |
+| Monotonic reads | A user does not go backward after seeing a newer value | Timelines, document versions |
+| Bounded staleness | Data can lag by a known amount | Search, feeds, counters |
+| Eventual consistency | Replicas or projections converge later | Analytics, rankings, social counts |
+
+It is easy to reach for strong consistency everywhere because it feels safer, or eventual consistency everywhere because it feels scalable.
+
+Both are vague without the product promise behind them.
+
+<Callout title="Rule of thumb">
+  Choose consistency per invariant. If a stale read can corrupt money, access, ownership, or uniqueness, coordinate. If it only makes a display temporarily old, set a lag budget.
+</Callout>
+
+## The display name bug
+
+A common bug:
+
+```text
+1. User updates display name from "Mina" to "Mina K."
+2. API writes the leader database.
+3. Profile page reads from a replica.
+4. Replica is 800ms behind.
+5. User sees the old name and retries the update.
+```
+
+The write worked. The read promise failed.
+
+There are several fixes, with different costs:
+
+| Fix | Cost | When it fits |
+| --- | --- | --- |
+| Read from leader after write | More leader load | The writer must see the latest value |
+| Sticky session to same replica | More routing state | Replicas can preserve session order |
+| Return updated value from write response | Less follow-up read | UI only needs the changed fields |
+| Show "saving" until projection catches up | Product accepts pending state | Derived views update asynchronously |
+| Wait for replica apply before success | Higher write latency | Read-after-write must work from replicas |
+
+Do not start with "we need stronger consistency." Start with "which read went stale, for whom, and for how long?"
+
+## CAP, but only the useful part
+
+The simplified CAP theorem line is usually "consistency, availability, partition tolerance: pick two."
+
+The practical version is smaller:
+
+```text
+When the network is unreliable, should this operation reject work or serve a possibly stale answer?
+```
+
+Network partitions are not always dramatic. A replica can be behind. A region can lose a link. A queue consumer can pause. A deployment can route traffic unevenly. In those cases, the system chooses.
+
+For an account balance write, reject or wait.
+
+For a follower count read, serve the stale count.
+
+For a permission check, read the authoritative source or fail closed.
+
+For a recommendation module, return an empty list or cached result.
+
+CAP is useful when it pushes this decision into the design. It is less useful as a slogan.
+
+## Strong consistency is coordination
+
+Strong consistency means the system coordinates before answering.
+
+Coordination has concrete costs:
+
+1. Extra network round trips.
+2. More time spent holding locks or transactions open.
+3. Lower availability during replica or region problems.
+4. More pressure on the leader or quorum.
+5. More complicated failover behavior.
+
+That does not make strong consistency bad. It makes it expensive enough to reserve for invariants.
+
+For example, moving credits between accounts should coordinate:
+
+```python
+def transfer_credits(from_account_id, to_account_id, amount):
+    with db.transaction() as tx:
+        debited = tx.execute(
+            """
+            UPDATE accounts
+            SET balance = balance - %(amount)s
+            WHERE id = %(from_account_id)s
+              AND balance >= %(amount)s
+            """,
+            {
+                "from_account_id": from_account_id,
+                "amount": amount,
+            },
+        )
+
+        if debited.row_count != 1:
+            raise InsufficientFunds()
+
+        tx.execute(
+            """
+            UPDATE accounts
+            SET balance = balance + %(amount)s
+            WHERE id = %(to_account_id)s
+            """,
+            {
+                "to_account_id": to_account_id,
+                "amount": amount,
+            },
+        )
+
+        tx.insert_ledger_entry(
+            from_account_id=from_account_id,
+            to_account_id=to_account_id,
+            amount=amount,
+        )
+```
+
+The transaction is not an implementation detail. It is the consistency boundary.
+
+This path should not read from a stale projection to decide whether money can move. A stale read here is not a UI issue. It can create incorrect state.
+
+## Eventual consistency is a lag budget
+
+Eventual consistency should not mean "we hope it catches up."
+
+It should mean:
+
+```text
+This derived value may lag the source of truth by up to N seconds.
+If lag exceeds N, the product changes behavior.
+```
+
+For a public profile card, the source of truth might be `users`, while search, feed headers, and mention previews update from an event.
+
+```python
+def update_profile(user_id, display_name):
+    with db.transaction() as tx:
+        version = tx.next_profile_version(user_id)
+        tx.update_user_profile(
+            user_id=user_id,
+            display_name=display_name,
+            version=version,
+        )
+        tx.insert_outbox_event(
+            event_type="profile.updated",
+            aggregate_id=user_id,
+            payload={
+                "user_id": user_id,
+                "version": version,
+            },
+        )
+
+    return {
+        "user_id": user_id,
+        "display_name": display_name,
+        "version": version,
+    }
+```
+
+Workers update derived views:
+
+```python
+def handle_profile_updated(event):
+    user_id = event.payload["user_id"]
+    version = event.payload["version"]
+
+    profile = db.get_user_profile(user_id)
+
+    search.upsert_user(
+        user_id=user_id,
+        display_name=profile.display_name,
+        source_version=version,
+    )
+
+    cache.delete(f"profile_card:v3:user:{user_id}")
+```
+
+Search may lag. The profile edit response does not need to wait for search if the product can tolerate that lag.
+
+The important part is measuring it.
+
+## Read-your-writes without making everything strong
+
+Many product paths only need the writer to see their own latest write. Everyone else can see it later.
+
+A simple pattern is to return a version from the write and carry it into the next read:
+
+```python
+def update_settings(user_id, settings):
+    version = db.update_settings(
+        user_id=user_id,
+        settings=settings,
+    )
+
+    return {
+        "settings": settings,
+        "version": version,
+    }
+
+
+def get_settings(user_id, min_version=None):
+    if min_version is None:
+        return replicas.any().get_settings(user_id)
+
+    replica = replicas.find_one_with_version_at_least(
+        user_id=user_id,
+        version=min_version,
+        timeout_ms=80,
+    )
+
+    if replica is not None:
+        return replica.get_settings(user_id)
+
+    return db.leader().get_settings(user_id)
+```
+
+This keeps normal reads cheap. Only reads that require a known version pay the leader or waiting cost.
+
+That is a useful pattern because most traffic is not immediately after a write.
+
+## Quorums
+
+Quorum systems make the read/write tradeoff explicit.
+
+With `N` replicas:
+
+```text
+W = number of replicas that must confirm a write
+R = number of replicas that must answer a read
+```
+
+If `W + R > N`, the read and write sets overlap. In the simple case, that overlap lets the read observe the latest write.
+
+For `N = 3`:
+
+| W | R | Shape |
+| ---: | ---: | --- |
+| 1 | 1 | Fast, but stale reads are easy |
+| 2 | 1 | Writes wait for a majority, reads can still be stale |
+| 1 | 2 | Writes are fast, reads compare more replicas |
+| 2 | 2 | Read and write quorums overlap |
+| 3 | 1 | Writes are slow, reads are cheap |
+
+Teaching version:
+
+```python
+def quorum_intersects(replica_count, write_confirmations, read_confirmations):
+    return write_confirmations + read_confirmations > replica_count
+
+
+assert quorum_intersects(3, 2, 2)
+assert not quorum_intersects(3, 1, 1)
+```
+
+The real systems are more complicated. Clocks, leader terms, hinted handoff, read repair, partitions, and stale replicas all matter. But the arithmetic is still useful: stronger reads and writes require more agreement, and more agreement costs latency and availability.
+
+## Replication lag is a product metric
+
+If a feature depends on eventual consistency, replica lag is not just an infrastructure metric.
+
+It is part of the product behavior.
+
+Useful metrics:
+
+| Metric | Why it matters |
+| --- | --- |
+| Replica apply lag | Shows how far followers are behind the leader |
+| Projection lag | Shows how far read models are behind events |
+| Queue age of oldest event | Shows whether async work is still inside its promise |
+| Stale reads served | Shows how often users see old data by design |
+| Read fallback to leader | Shows cost of read-your-writes paths |
+| Conflict count | Shows when multi-writer assumptions are failing |
+| Repair job changes | Shows how often convergence needs help |
+
+Lag should have an SLO if users can observe it:
+
+```text
+profile projection p99 lag < 5 seconds
+search indexing p95 lag < 30 seconds
+analytics dashboard lag < 10 minutes
+```
+
+Without a lag target, eventual consistency has no operating boundary.
+
+## Conflicts are design problems
+
+Conflicts happen when two writers can update related state without a single authority.
+
+The easiest conflict strategy is to avoid conflicts:
+
+1. One owner for each entity.
+2. One partition key for ordered updates.
+3. One writer for a field when possible.
+4. Optimistic concurrency for user-edited documents.
+
+Optimistic concurrency is often enough:
+
+```sql
+UPDATE documents
+SET body = $1,
+    version = version + 1,
+    updated_at = now()
+WHERE id = $2
+  AND version = $3;
+```
+
+If zero rows update, the client edited an old version. The product can ask them to reload, merge, or choose between versions.
+
+Last-write-wins is acceptable for some low-value fields:
+
+```text
+display theme
+sort preference
+temporary draft title
+```
+
+It is a poor default for fields where intent matters:
+
+```text
+account balance
+inventory reservation
+document body
+permission grant
+seat assignment
+```
+
+For counters and sets with multiple writers, use a known conflict-free approach or a database feature that already implements the merge semantics. Hand-rolling CRDTs is rarely where I would start unless the product genuinely needs offline multi-writer edits.
+
+## What I notice
+
+Consistency discussions often mix three different questions:
+
+1. Can the system store the correct fact?
+2. Can every reader see that fact immediately?
+3. Can the product tolerate some readers seeing an older fact?
+
+Those are separate.
+
+A system can have a strongly consistent source of truth and eventually consistent read models. That is common and practical.
+
+A user profile might be strongly written to `users`, then eventually projected to search, feed headers, notifications, and caches. That does not make the system sloppy. It means each read path has a different promise.
+
+The part that causes bugs is not eventual consistency by itself. The bugs come from forgetting which reads are eventual.
+
+## Make pending states explicit
+
+Async systems create intermediate states. The product should name them.
+
+Examples:
+
+| Operation | Better state model |
+| --- | --- |
+| Video upload | `uploaded`, `processing`, `ready`, `failed` |
+| Search indexing | `saved`, `indexing`, `searchable` |
+| Payment | `authorized`, `captured`, `settled`, `failed` |
+| Import job | `queued`, `running`, `completed`, `failed` |
+| Profile update | `saved`, `visible_in_search_soon` if search lag matters |
+
+This does not mean every UI needs extra labels. It means the backend should not call a projection complete before it is complete.
+
+If the write is accepted but derived work is delayed, the API response should say that.
+
+```json
+{
+  "status": "saved",
+  "search_status": "indexing",
+  "profile_version": 42
+}
+```
+
+Precise state names reduce retry loops, support tickets, and incorrect client assumptions.
+
+## Strong where the invariant lives
+
+A useful split:
+
+| Data | Consistency level I would start with |
+| --- | --- |
+| Ledger entries | Strong transaction around double-entry invariant |
+| Available inventory | Strong reservation or single-writer partition |
+| Unique username | Strong uniqueness constraint |
+| Permission checks | Strong or fail closed for sensitive actions |
+| Idempotency keys | Strong insert/read in the command transaction |
+| Profile display name | Strong source of truth, eventual projections |
+| Feed item delivery | Eventual, with repair and replay |
+| Search index | Eventual, with lag metric |
+| View count | Eventual or approximate |
+| Analytics dashboard | Eventual, often batched |
+
+Do not make the search index strongly consistent with the profile table unless the product actually needs search to update before the profile edit returns. Usually it does not.
+
+Do not make inventory eventual if the product sells scarce items and overselling is unacceptable. Usually it cannot.
+
+## Repair is part of eventual consistency
+
+Eventual consistency needs a repair path. Otherwise "eventual" means "unless an event was dropped."
+
+Common repair tools:
+
+1. Outbox replay from a durable source.
+2. Periodic reconciliation from source of truth to projection.
+3. Dead-letter queues for poison events.
+4. Version checks on projections.
+5. Idempotent handlers that can run more than once.
+
+Example reconciliation:
+
+```python
+def repair_profile_projection(batch_size=500):
+    stale_profiles = db.find_profiles_newer_than_search(batch_size)
+
+    for profile in stale_profiles:
+        search.upsert_user(
+            user_id=profile.user_id,
+            display_name=profile.display_name,
+            source_version=profile.version,
+        )
+```
+
+The repair job should be boring. It compares source version to projection version and updates missing or old projections.
+
+If a derived system cannot be repaired from the source of truth, it is not just a projection. It is another source of truth, and the consistency story needs to be treated more seriously.
+
+## Multi-region makes the tradeoff visible
+
+Inside one region, strong consistency can be cheap enough for many paths.
+
+Across regions, the cost becomes easier to see.
+
+A write that must coordinate between Tokyo, Virginia, and Frankfurt waits on speed-of-light latency, network variance, and failure handling. If every profile edit needs global agreement before returning, the user pays for that design on every edit.
+
+Common patterns:
+
+| Pattern | Fit |
+| --- | --- |
+| Single write region | Simpler correctness, higher latency for distant writers |
+| Regional reads with one write leader | Good for read-heavy products |
+| Per-tenant or per-user home region | Keeps most writes near their owner |
+| Active-active with conflict resolution | Useful when local writes must continue during partition |
+| Global strong consistency | Reserve for narrow invariants that justify the latency |
+
+The smaller the consistency boundary, the easier multi-region becomes.
+
+## What I think
+
+The practical sequence is:
+
+1. Write down the invariant.
+2. Decide which reads must observe it immediately.
+3. Put those reads on the coordinated path.
+4. Give every derived read model a lag budget.
+5. Return versions from writes.
+6. Use read-your-writes only for users who need it.
+7. Make conflict policy explicit.
+8. Measure lag and stale reads.
+9. Build repair from the source of truth.
+
+The main underengineering move is not "make everything eventual." It is "make only the invariant strong."
+
+That keeps the expensive guarantee near the data that needs it.
+
+## Tutorial checklist
+
+For any consistency-sensitive feature, fill this out:
+
+| Question | Example answer |
+| --- | --- |
+| Feature | Profile update |
+| Source of truth | `users` table |
+| Invariant | User profile version increases monotonically |
+| Strong path | Update `users` and outbox in one transaction |
+| Eventual paths | Search, feed headers, profile card cache |
+| Read-your-writes | Writer reads leader or replica with `version >= returned_version` |
+| Stale promise | Other users may see old display name for up to 5 seconds |
+| Conflict policy | Last-write-wins for display name, versioned writes for bio |
+| Lag metric | p99 profile projection lag |
+| Failure behavior | Show saved profile immediately; search catches up later |
+| Repair path | Reconcile projection version from `users` to search |
+| Alert | p99 projection lag above 5 seconds for 10 minutes |
+
+Then ask:
+
+```text
+If a stale read happens here, is it annoying, misleading, or incorrect?
+```
+
+Annoying can often be eventual.
+
+Misleading needs product handling.
+
+Incorrect needs coordination.
+
+## Summary
+
+1. Consistency is a read promise, not a single system-wide setting.
+2. Strong consistency is coordination, and coordination costs latency and availability.
+3. Eventual consistency should have a lag budget and repair path.
+4. Many systems use a strong source of truth with eventual read models.
+5. Read-your-writes can be targeted with versions and leader fallback.
+6. Quorums make read/write agreement explicit, but they do not remove operational complexity.
+7. Conflict resolution should follow product semantics; last-write-wins is not a safe default.
+8. Pending states should be named when derived work happens later.
+9. Measure replica lag, projection lag, stale reads, conflicts, and repair activity.
+10. Make the invariant strong, then let lower-risk projections lag intentionally.
+
+---
+
+## Pop quiz
+
+<Quiz
+  title="Consistency tradeoffs"
+  description="A randomized review of strong consistency, eventual consistency, lag budgets, quorums, and conflict handling."
+  questionCount={4}
+  randomizeChoices={true}>
+  <QuizQuestion
+    id="read-promise"
+    prompt="What is the first consistency question to ask for a read path?"
+    explanation="Consistency should be chosen based on the promise a read needs from previous writes, not as a blanket system-wide preference.">
+    <QuizChoice>Which database has the most replicas?</QuizChoice>
+    <QuizChoice correct>What promise this read needs from the write that came before it</QuizChoice>
+    <QuizChoice>How to remove every cache from the system</QuizChoice>
+    <QuizChoice>Whether all data can be stored in memory</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="strong-cost"
+    prompt="Why does strong consistency usually cost more than eventual consistency?"
+    explanation="Strong consistency requires coordination before answering, which adds round trips, waiting, locking, leader pressure, and lower availability during failures.">
+    <QuizChoice correct>It coordinates before answering, adding latency and availability tradeoffs</QuizChoice>
+    <QuizChoice>It stores less data, which makes queries slower</QuizChoice>
+    <QuizChoice>It disables indexes by default</QuizChoice>
+    <QuizChoice>It prevents transactions from working</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="display-name-stale"
+    prompt="A user updates their display name, then immediately sees the old value from a replica. What promise failed?"
+    explanation="The write may have succeeded, but the user's next read did not provide read-your-writes consistency.">
+    <QuizChoice>The database lost every replica permanently</QuizChoice>
+    <QuizChoice correct>Read-your-writes consistency</QuizChoice>
+    <QuizChoice>The value became globally immutable</QuizChoice>
+    <QuizChoice>The cache key was necessarily public</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="eventual-lag"
+    prompt="What should eventual consistency include to be operationally useful?"
+    explanation="Eventual consistency should have a named lag budget, observable metrics, and a repair path back from the source of truth.">
+    <QuizChoice>A guarantee that replicas are never stale</QuizChoice>
+    <QuizChoice correct>A lag budget, metrics, and a repair path</QuizChoice>
+    <QuizChoice>A rule that all writes return after every projection updates</QuizChoice>
+    <QuizChoice>A requirement that users manually refresh forever</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="quorum-intersection"
+    prompt="In a simple quorum model, what does `W + R > N` imply?"
+    explanation="If write and read quorum sizes sum to more than the replica count, the read and write sets overlap in the simple model.">
+    <QuizChoice>Reads and writes never contact the same replica</QuizChoice>
+    <QuizChoice correct>The read and write quorums overlap</QuizChoice>
+    <QuizChoice>The system can ignore partitions</QuizChoice>
+    <QuizChoice>All replicas can be offline</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="last-write-wins"
+    prompt="When is last-write-wins a weak default?"
+    explanation="Last-write-wins discards intent. It is risky for balances, inventory, permissions, documents, and other state where conflicts need domain-specific handling.">
+    <QuizChoice>For a temporary UI sort preference</QuizChoice>
+    <QuizChoice correct>For account balances, inventory, permissions, or document bodies</QuizChoice>
+    <QuizChoice>For a color theme preference</QuizChoice>
+    <QuizChoice>For a cached recommendation list</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="pending-state"
+    prompt="Why should async workflows expose pending states when users can observe them?"
+    explanation="If derived work happens later, naming states like queued, processing, saved, or indexing prevents clients from treating incomplete work as complete.">
+    <QuizChoice>To make the database eventually delete the source of truth</QuizChoice>
+    <QuizChoice correct>To avoid pretending derived work is complete before it has caught up</QuizChoice>
+    <QuizChoice>To prevent all retries in every system</QuizChoice>
+    <QuizChoice>To make every operation globally serialized</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="repair-path"
+    prompt="What does a repair job usually compare for an eventual projection?"
+    explanation="A practical repair job compares source-of-truth version or timestamp to projection version and updates missing or stale projected data.">
+    <QuizChoice>The user's browser size against the server CPU count</QuizChoice>
+    <QuizChoice correct>The source-of-truth version against the projection version</QuizChoice>
+    <QuizChoice>The number of regions against the number of CSS files</QuizChoice>
+    <QuizChoice>The cache TTL against the user's password length</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="strong-where"
+    prompt="Which path most likely needs strong consistency?"
+    explanation="Balances, scarce inventory, permissions, locks, uniqueness, and idempotency keys usually need coordinated correctness.">
+    <QuizChoice>A decorative view count</QuizChoice>
+    <QuizChoice>A search index update after profile edit</QuizChoice>
+    <QuizChoice correct>A ledger transaction that moves money or credits</QuizChoice>
+    <QuizChoice>An analytics dashboard that refreshes hourly</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="make-invariant-strong"
+    prompt="What is the practical underengineering move for consistency?"
+    explanation="Keep the expensive guarantee close to the invariant that needs it, then let lower-risk projections lag with a clear contract.">
+    <QuizChoice>Make every read globally serializable forever</QuizChoice>
+    <QuizChoice>Remove all source-of-truth tables</QuizChoice>
+    <QuizChoice correct>Make only the invariant strong, and let lower-risk projections lag intentionally</QuizChoice>
+    <QuizChoice>Use eventual consistency for permissions and balances by default</QuizChoice>
+  </QuizQuestion>
+</Quiz>

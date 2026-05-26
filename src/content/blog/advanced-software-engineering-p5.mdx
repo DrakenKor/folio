@@ -7,7 +7,7 @@ tags: ["Caching", "Performance", "Redis", "Scale"]
 
 Caching is a common technique for reducing latency: put Redis in front of the database, put a CDN in front of the app, or put a memoized function in front of expensive code. Latency drops and load on the source of truth decreases.
 
-The tradeoffs show up in specific failure modes: a user updates their profile and sees the old name for five minutes, a hot key expires and 20,000 requests hit the database at the same time, or a private response gets cached under a public key. These are the cases where caching becomes an architectural concern rather than a simple optimization.
+The tradeoffs show up in specific cases: a user updates their profile and sees the old name for five minutes, a hot key expires and 20,000 requests reach the database at the same time, or a private response gets cached under a public key. These are the cases where caching becomes an architectural concern rather than a simple optimization.
 
 A cache is not just a faster place to put data. It is an agreement about how stale, shared, and recoverable a value is allowed to be.
 
@@ -169,7 +169,7 @@ A cache is a derived read model with a short memory, which means the same questi
 5. Can the answer be rebuilt?
 6. What happens when many callers rebuild it at once?
 
-The last question is the one most often skipped. A cache improves the normal path but can make the failure path significantly worse: if a hot key serves 10,000 QPS and the cached value expires, every request can become a database request unless something stops the herd.
+The last question is the one most often skipped. A cache improves the normal path but can make the miss path worse: if a hot key serves 10,000 QPS and the cached value expires, every request can become a database request unless something coordinates the refill.
 
 ## Cache layers
 
@@ -281,7 +281,7 @@ def get_profile(user_id):
     return profile
 ```
 
-This works for cold or low-traffic keys, but a hot key that is missing requires stampede protection. A production version looks like this:
+This works for cold or low-traffic keys. A hot key that is missing needs some protection against many callers rebuilding at once. A production version looks like this:
 
 ```python
 import random
@@ -332,7 +332,7 @@ The general shape is:
 1. One request rebuilds the missing value.
 2. Other requests use stale data or wait briefly.
 3. TTL jitter prevents many keys from expiring at the same second.
-4. The database is the fallback, not the first victim.
+4. The database is the fallback, reached only when the cache cannot answer.
 
 <Callout type="warning" title="Warning">
   A cache miss is not free. At scale, a miss is the most expensive read path because it does cache work and source-of-truth work.
@@ -350,7 +350,7 @@ cache entry expires:   now
 concurrent DB reads = 8,000 x 0.250 = 2,000
 ```
 
-One expired key can create 2,000 concurrent database reads. If the query holds a connection for 250ms, the connection pool is exhausted, unrelated endpoints start waiting, clients begin retrying, and the failure cascades into territory covered by the API reliability post. This is why "just add a five minute TTL" is not enough on its own.
+One expired key can produce 2,000 concurrent database reads. If each query holds a connection for 250ms, the connection pool can be exhausted, unrelated endpoints start waiting, clients retry, and the effect spreads into territory covered by the API reliability post. This is why a five-minute TTL on its own does not address the miss path.
 
 ## Stampede defenses
 
@@ -376,7 +376,7 @@ def should_refresh_early(ttl_remaining, original_ttl):
     return random.random() < max(0.0, age_ratio ** 3)
 ```
 
-Early in the TTL, refresh is unlikely. Near the end, one of the readers is likely to refresh before the key fully expires. This is not needed everywhere; use it for hot keys where an expiry cliff is dangerous.
+Early in the TTL, refresh is unlikely. Near the end, one of the readers is likely to refresh before the key fully expires. This is not needed everywhere; it is worth the extra writes on hot keys where a synchronized expiry would be costly.
 
 ## Write-through, write-behind, and friends
 
@@ -459,7 +459,7 @@ Instead of deleting every possible profile key, increment the namespace version.
 
 ## What I notice
 
-Caching bugs are often ambiguity bugs. The team knows a value is cached, but nobody knows:
+What I notice is that caching bugs are often ambiguity bugs. The team knows a value is cached, but nobody is sure:
 
 1. Whether the cached value is public or personalized.
 2. Whether the key includes permissions.
@@ -502,7 +502,7 @@ For sensitive data:
 Cache-Control: no-store
 ```
 
-Vague headers around private content should be avoided. The most severe class of cache bug is not stale data; it is one user seeing another user's data because the cache key ignored identity.
+Vague headers around private content should be avoided. The cache bug that matters most is not stale data; it is one user seeing another user's data because the cache key ignored identity.
 
 ## Negative caching
 
@@ -542,7 +542,7 @@ celebrity profile
 tenant with 80 percent of traffic
 ```
 
-A single Redis key can become the bottleneck even if the cluster has plenty of total capacity.
+A single Redis key can become the bottleneck even when the cluster has plenty of total capacity.
 
 Symptoms:
 
@@ -559,11 +559,11 @@ Mitigations:
 4. Split the value into smaller pieces if reads do not need the whole object.
 5. Give the key stronger stampede protection than normal keys.
 
-Local memory caching is often the right choice for small, frequently accessed data. Even a two-second per-process cache can remove significant Redis pressure, with the tradeoff that every app instance has a slightly different view of the world.
+Local memory caching is often the right choice for small, frequently accessed data. Even a two-second per-process cache can remove a noticeable amount of Redis pressure, with the tradeoff that every app instance has a slightly different view of the world.
 
 ## Counters are special
 
-Counters look cache-friendly: likes, views, followers, notifications. They are also where correctness arguments become slippery.
+Counters look cache-friendly: likes, views, followers, notifications. They are also where correctness arguments get hard to pin down.
 
 If the number is decorative, approximate is fine:
 
@@ -594,7 +594,7 @@ def flush_view_counts(limit=1000):
         cache.delete(key)
 ```
 
-This reduces database write pressure but creates a loss window: if Redis loses the buffer before flush, those views disappear. This is acceptable for views and unacceptable for payments.
+This reduces database write pressure but creates a loss window: if Redis loses the buffer before flush, those views are gone. That is acceptable for views and not acceptable for payments.
 
 ## When not to cache
 

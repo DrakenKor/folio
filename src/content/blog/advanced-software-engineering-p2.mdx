@@ -229,7 +229,7 @@ The database question is bigger:
 4. Return the newest 100 rows.
 5. Fetch display data from related tables.
 
-`LIMIT 100` does not make this automatically cheap. If the user has 50,000 posts and 80M comments across those posts (Most prolific user in history), the planner still needs a path to find the newest 100 without doing work proportional to the full match set.
+`LIMIT 100` does not make this automatically cheap. If the user has 50,000 posts and 80M comments across them, the planner still needs a path to find the newest 100 without doing work proportional to the full match set.
 
 Indexes help:
 
@@ -599,7 +599,7 @@ Then choose the lowest-complexity design that makes the common read proportional
 
 ## Summary
 
-1. Schema design is where scale begins.
+1. Scale is shaped by the data model before it is shaped by the storage engine.
 2. Normalization is good for source-of-truth data, but hot reads often need derived models.
 3. Denormalization trades read speed for write amplification and consistency work.
 4. Index order should match filter columns, sort columns, and page limits.

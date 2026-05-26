@@ -1,0 +1,893 @@
+---
+title: "Network calls are failure boundaries"
+description: "A network call adds timeout, retry, partial failure, and reconciliation work. Treat each call as a boundary with a contract."
+date: "2026-05-22"
+tags: ["Distributed Systems", "Networking", "Reliability", "Scale"]
+---
+
+A network call looks like a function call in code. It is worth looking at how differently the two actually behave.
+
+A local function either returns, raises, or crashes the process. A network call has more states than that. The request might not leave the host. It might reach the server and time out on the way back. The server might finish the write after the caller has already given up. The response might be correct but arrive too late to matter.
+
+So a network call introduces an uncertainty boundary. Past that boundary, the caller does not always know what happened.
+
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 420"
+      role="img"
+      aria-labelledby="network-svg-title network-svg-desc"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <title id="network-svg-title">Network call failure modes</title>
+      <desc id="network-svg-desc">
+        {"Animated services show success, timeout with retry, partial failure with compensation, and circuit breaking after repeated failure."}
+      </desc>
+      <defs>
+        <linearGradient id="network-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#07111a" />
+          <stop offset="100%" stopColor="#0a1724" />
+        </linearGradient>
+        <pattern id="network-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#dbeafe" strokeWidth="0.5" opacity="0.08" />
+        </pattern>
+        <pattern id="network-grid-major" width="96" height="96" patternUnits="userSpaceOnUse">
+          <path d="M 96 0 L 0 0 0 96" fill="none" stroke="#dbeafe" strokeWidth="1" opacity="0.12" />
+        </pattern>
+        <linearGradient id="network-panel" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#102638" />
+          <stop offset="100%" stopColor="#07131d" />
+        </linearGradient>
+        <filter id="network-soft-glow">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <marker id="network-arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
+        </marker>
+        <marker id="network-arrow-yellow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24" />
+        </marker>
+        <marker id="network-arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
+        </marker>
+        <marker id="network-arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#67e8f9" />
+        </marker>
+      </defs>
+
+      <rect width="720" height="420" rx="18" fill="url(#network-bg)" />
+      <rect width="720" height="420" fill="url(#network-grid-minor)" />
+      <rect width="720" height="420" fill="url(#network-grid-major)" />
+
+      <text x="42" y="44" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        {"A network call has more than two outcomes"}
+      </text>
+      <text x="42" y="69" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+        {"success, timeout, unknown completion, compensation, and fast failure are different states"}
+      </text>
+
+      <g filter="url(#network-soft-glow)">
+        <rect x="76" y="138" width="142" height="98" rx="10" fill="url(#network-panel)" stroke="#67e8f9" strokeWidth="1.7" />
+        <rect x="502" y="138" width="142" height="98" rx="10" fill="url(#network-panel)" stroke="#67e8f9" strokeWidth="1.7" />
+      </g>
+      <text x="147" y="176" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="14" fontWeight="700">
+        {"Service A"}
+      </text>
+      <text x="147" y="202" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">
+        {"caller"}
+      </text>
+      <text x="573" y="176" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="14" fontWeight="700">
+        {"Service B"}
+      </text>
+      <text x="573" y="202" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">
+        {"dependency"}
+      </text>
+
+      <path
+        d="M 296 122 C 286 104 320 94 336 108 C 348 84 392 88 398 116 C 430 112 448 136 434 158 C 454 172 438 202 408 196 L 308 196 C 276 200 260 174 280 156 C 256 142 268 118 296 122 Z"
+        fill="#07131d"
+        stroke="#93c5fd"
+        strokeWidth="1.5"
+        strokeDasharray="7 8"
+        opacity="0.85" />
+      <text x="360" y="153" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13">
+        {"network"}
+      </text>
+      <text x="360" y="175" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">
+        {"latency + loss + unknowns"}
+      </text>
+
+      <path d="M 218 176 C 288 132 430 132 502 176" fill="none" stroke="#10b981" strokeWidth="2" markerEnd="url(#network-arrow-green)" opacity="0">
+        <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.06;0.19;0.25;1" dur="12s" repeatCount="indefinite" />
+      </path>
+      <path d="M 502 202 C 430 250 288 250 218 202" fill="none" stroke="#10b981" strokeWidth="2" markerEnd="url(#network-arrow-green)" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.1;0.18;0.26;0.32;1" dur="12s" repeatCount="indefinite" />
+      </path>
+      <circle r="5" fill="#bbf7d0" filter="url(#network-soft-glow)" opacity="0">
+        <animateMotion dur="12s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.04;0.16;1" path="M 218 176 C 288 132 430 132 502 176" />
+        <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.04;0.16;0.22;1" dur="12s" repeatCount="indefinite" />
+      </circle>
+      <circle r="5" fill="#bbf7d0" filter="url(#network-soft-glow)" opacity="0">
+        <animateMotion dur="12s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.14;0.24;1" path="M 502 202 C 430 250 288 250 218 202" />
+        <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.14;0.2;0.28;1" dur="12s" repeatCount="indefinite" />
+      </circle>
+
+      <path d="M 218 186 C 292 154 378 154 430 174" fill="none" stroke="#fbbf24" strokeWidth="2" strokeDasharray="6 8" markerEnd="url(#network-arrow-yellow)" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.28;0.35;0.45;0.5;1" dur="12s" repeatCount="indefinite" />
+      </path>
+      <circle cx="450" cy="176" r="15" fill="#211c0d" stroke="#fbbf24" strokeWidth="1.5" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.34;0.4;0.48;0.54;1" dur="12s" repeatCount="indefinite" />
+      </circle>
+      <path d="M 450 166 L 450 176 L 458 181" fill="none" stroke="#fde68a" strokeWidth="1.5" strokeLinecap="round" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.34;0.4;0.48;0.54;1" dur="12s" repeatCount="indefinite" />
+      </path>
+      <path d="M 218 214 C 296 278 426 278 502 214" fill="none" stroke="#10b981" strokeWidth="2" markerEnd="url(#network-arrow-green)" opacity="0">
+        <animate attributeName="opacity" values="0;0;0;1;1;0;0" keyTimes="0;0.38;0.46;0.52;0.6;0.66;1" dur="12s" repeatCount="indefinite" />
+      </path>
+      <text x="360" y="294" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12" opacity="0">
+        {"retry succeeds only because the command is safe to repeat"}
+        <animate attributeName="opacity" values="0;0;0;1;1;0" keyTimes="0;0.42;0.5;0.56;0.66;1" dur="12s" repeatCount="indefinite" />
+      </text>
+
+      <path d="M 218 176 C 288 132 430 132 502 176" fill="none" stroke="#ef4444" strokeWidth="2" markerEnd="url(#network-arrow-red)" opacity="0">
+        <animate attributeName="opacity" values="0;0;0;1;1;0;0" keyTimes="0;0.56;0.62;0.68;0.74;0.8;1" dur="12s" repeatCount="indefinite" />
+      </path>
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;0;0;1;1;0;0" keyTimes="0;0.62;0.68;0.76;0.84;0.9;1" dur="12s" repeatCount="indefinite" />
+        <line x1="564" y1="218" x2="584" y2="238" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
+        <line x1="584" y1="218" x2="564" y2="238" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
+        <path d="M 502 226 C 430 300 288 300 218 226" fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="5 7" markerEnd="url(#network-arrow-red)" />
+        <text x="360" y="332" textAnchor="middle" fill="#fca5a5" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          {"partial work needs compensation or reconciliation"}
+        </text>
+      </g>
+
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;0;0;0;1;1;0" keyTimes="0;0.78;0.82;0.86;0.9;0.97;1" dur="12s" repeatCount="indefinite" />
+        <path d="M 218 160 C 290 112 430 112 502 160" fill="none" stroke="#ef4444" strokeWidth="1.7" markerEnd="url(#network-arrow-red)" opacity="0.8" />
+        <path d="M 218 184 C 292 150 430 150 502 184" fill="none" stroke="#ef4444" strokeWidth="1.7" markerEnd="url(#network-arrow-red)" opacity="0.65" />
+        <path d="M 218 208 C 294 188 430 188 502 208" fill="none" stroke="#ef4444" strokeWidth="1.7" markerEnd="url(#network-arrow-red)" opacity="0.55" />
+        <rect x="336" y="198" width="48" height="48" rx="8" fill="#2a1218" stroke="#ef4444" strokeWidth="2" filter="url(#network-soft-glow)" />
+        <line x1="348" y1="222" x2="372" y2="222" stroke="#fecaca" strokeWidth="3" strokeLinecap="round" />
+        <text x="360" y="264" textAnchor="middle" fill="#fecaca" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          {"circuit open"}
+        </text>
+      </g>
+
+      <g>
+        <text x="46" y="368" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">Scenario</text>
+        <text x="126" y="368" fill="#10b981" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"success"}
+          <animate attributeName="opacity" values="1;1;0;0;0;0;0" keyTimes="0;0.25;0.3;0.5;0.7;0.9;1" dur="12s" repeatCount="indefinite" />
+        </text>
+        <text x="126" y="368" fill="#fbbf24" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"timeout + retry"}
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.28;0.36;0.58;0.66;1" dur="12s" repeatCount="indefinite" />
+        </text>
+        <text x="126" y="368" fill="#ef4444" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"partial failure"}
+          <animate attributeName="opacity" values="0;0;0;1;1;0;0" keyTimes="0;0.58;0.64;0.7;0.82;0.9;1" dur="12s" repeatCount="indefinite" />
+        </text>
+        <text x="126" y="368" fill="#ef4444" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700" opacity="0">
+          {"breaker"}
+          <animate attributeName="opacity" values="0;0;0;0;1;1;0" keyTimes="0;0.78;0.84;0.88;0.92;0.98;1" dur="12s" repeatCount="indefinite" />
+        </text>
+      </g>
+    </svg>
+  </figure>
+</div>
+
+## Start with the boundary
+
+The first question for a network call is not "which client library should we use?"
+
+It is:
+
+```text
+What does the caller know after this call returns, times out, or fails?
+```
+
+For a read, the answer might be simple. If a profile service times out, the caller can return no profile card or use stale data.
+
+For a write, the answer is harder. If a payment gateway times out, the caller might not know whether the card was charged. Retrying blindly can charge it twice. Giving up blindly can leave a paid order marked unpaid.
+
+<Callout title="Rule of thumb">
+  Treat every network call as a boundary where success, failure, timeout, and unknown completion must have separate behavior.
+</Callout>
+
+The code should not collapse all of those states into one exception branch.
+
+## Failure modes
+
+A network call can fail in ordinary ways:
+
+| Failure | What the caller knows |
+| --- | --- |
+| DNS lookup fails | The request probably did not reach the service |
+| Connection refused | The destination did not accept this connection |
+| TLS handshake fails | No application-level request completed |
+| Request write times out | The server may have received part or all of it |
+| Response read times out | The server may have completed the work |
+| Connection resets | Completion is unknown unless the protocol says otherwise |
+| `500` response | The server handled the request and reported failure |
+| `429` or `503` | The server is asking the caller to slow down or try later |
+| Malformed response | The server may be wrong, old, or incompatible |
+| Slow response | The result may be valid but no longer useful |
+
+The important column is the second one.
+
+Some failures mean "nothing happened." Some mean "something might have happened." Some mean "the other side handled it and said no." Those are different states.
+
+## Try-catch is not enough
+
+This is a common shape:
+
+```python
+def create_order(user_id, cart_id):
+    order = db.create_order(user_id=user_id, cart_id=cart_id)
+
+    try:
+        payments.charge(order.id)
+    except Exception:
+        db.cancel_order(order.id)
+        raise
+
+    return order
+```
+
+At first glance it looks careful: it catches the failure and cancels the order.
+
+A timeout from `payments.charge`, though, does not prove the charge failed. The payment service might have charged the card and failed to return the response. That leaves the local order canceled even though money may have moved.
+
+So the exception branch needs to know whether the result is known, failed, or unknown.
+
+```python
+def create_order(user_id, cart_id, idempotency_key):
+    order = db.create_order(
+        user_id=user_id,
+        cart_id=cart_id,
+        idempotency_key=idempotency_key,
+        status="payment_pending",
+    )
+
+    try:
+        charge = payments.charge(
+            request_id=idempotency_key,
+            order_id=order.id,
+            timeout=0.800,
+        )
+    except TimeoutError:
+        db.mark_order_payment_pending(order.id)
+        reconcile_payment_later(order.id)
+        return {"order_id": order.id, "status": "payment_pending"}
+
+    if charge.status == "succeeded":
+        db.mark_order_paid(order.id, charge_id=charge.id)
+        return {"order_id": order.id, "status": "paid"}
+
+    db.mark_order_payment_failed(order.id, reason=charge.reason)
+    return {"order_id": order.id, "status": "payment_failed"}
+```
+
+This version is less tidy, and closer to what actually happened. A timeout creates a pending state rather than a fake failure.
+
+## Timeouts are contracts
+
+Every network call needs a timeout, and the timeout should fit inside the caller's deadline.
+
+```python
+import time
+
+
+def call_inventory(order_id, request_deadline):
+    remaining = request_deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("request deadline exceeded")
+
+    return inventory.reserve(
+        order_id=order_id,
+        timeout=min(0.200, remaining),
+    )
+```
+
+The timeout says:
+
+```text
+This dependency has this much time to help this request.
+```
+
+If the public request has an 800ms deadline, a 5-second internal call is not buying resilience; it is doing work no one is waiting for. It keeps sockets, workers, and memory occupied after the user-facing request has already been lost.
+
+Timeouts also need to be specific. A connection timeout, request write timeout, response header timeout, and response body timeout can mean different things. Client libraries often hide those details behind one `timeout` setting. That is fine for simple paths, but important write paths should preserve enough information to decide whether completion is unknown.
+
+## Retry only when the operation allows it
+
+Retries are useful for temporary failures:
+
+1. A connection could not be opened.
+2. A dependency returned `503`.
+3. A read timed out before any state changed.
+4. A write has an idempotency key and the server can dedupe it.
+
+Retries are risky when the operation changes state and has no dedupe boundary.
+
+```text
+POST /payments without idempotency: unsafe to retry
+POST /payments with idempotency: retry can be safe
+PUT /profile/123 with version check: retry can be safe
+POST /send-email without dedupe: may send duplicates
+```
+
+HTTP method alone does not decide safety; the server's behavior does.
+
+<Callout type="warning" title="Warning">
+  Retrying a write after an unknown timeout is only safe when the server can recognize the retry as the same logical command.
+</Callout>
+
+## Idempotency keys
+
+An idempotency key gives a write a stable identity. The caller can repeat the request, and the server can return the original result instead of doing the work twice.
+
+The server should scope the key to the actor and store a hash of the request body. Reusing the same key with a different payload should be a conflict, not a surprise replay.
+
+```python
+import hashlib
+import json
+
+
+def stable_hash(payload):
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def create_payment(account_id, idempotency_key, amount_cents):
+    payload = {
+        "account_id": account_id,
+        "amount_cents": amount_cents,
+    }
+    request_hash = stable_hash(payload)
+
+    with db.transaction() as tx:
+        existing = tx.get_idempotency_record(
+            scope=account_id,
+            key=idempotency_key,
+            for_update=True,
+        )
+
+        if existing is not None:
+            if existing.request_hash != request_hash:
+                raise Conflict("idempotency key reused with different payload")
+            return existing.response
+
+        payment = tx.insert_payment(
+            account_id=account_id,
+            amount_cents=amount_cents,
+            status="pending",
+        )
+        tx.insert_idempotency_record(
+            scope=account_id,
+            key=idempotency_key,
+            request_hash=request_hash,
+            response={
+                "payment_id": payment.id,
+                "status": "pending",
+            },
+        )
+
+    return {
+        "payment_id": payment.id,
+        "status": "pending",
+    }
+```
+
+This is the database side of "safe to retry." The external charge may still need reconciliation, but the local command now has one identity, one payment row, and one response for repeated attempts.
+
+## At-least-once is normal
+
+Networked systems usually provide at-least-once behavior before they provide exactly-once behavior.
+
+The same logical command can arrive twice:
+
+1. Client sends request.
+2. Server commits the write.
+3. Response is lost.
+4. Client retries.
+5. Server receives the same command again.
+
+This is the expected shape once retries exist, rather than an unusual one.
+
+The response is to make handlers idempotent:
+
+```python
+def handle_user_created(event):
+    inserted = db.insert_processed_event(
+        event_id=event.id,
+        handler="welcome_email",
+    )
+
+    if not inserted:
+        return
+
+    email.send_welcome_message(event.payload["user_id"])
+```
+
+This simple dedupe table prevents a duplicate event from sending a duplicate welcome email. The same pattern appears in queues, webhooks, stream consumers, and cron repair jobs.
+
+## Partial failure
+
+Partial failure is when one step succeeds and a later step fails.
+
+```text
+reserve inventory: succeeded
+charge card:       succeeded
+create shipment:   failed
+send receipt:      not attempted
+```
+
+The system now has facts that cannot be erased by returning `500`.
+
+There are three common responses:
+
+| Response | Shape | Fit |
+| --- | --- | --- |
+| Transaction | Commit all local changes together | One database or one strongly coordinated boundary |
+| Compensation | Apply a follow-up action to undo or balance the prior step | Cross-service workflows |
+| Reconciliation | Mark unknown state and repair from durable records later | External systems and timeouts |
+
+Compensation is not a generic undo button. It is a business operation.
+
+Refunding a payment is not the same as pretending the payment never happened. Releasing inventory is not the same as deleting an order. Sending a correction email is not the same as never sending the first one.
+
+The compensating action should be named in the domain.
+
+```python
+def place_order(order_id):
+    inventory_reservation = inventory.reserve(order_id)
+
+    try:
+        payment = payments.authorize(order_id)
+    except Exception:
+        inventory.release(inventory_reservation.id)
+        raise
+
+    try:
+        fulfillment.create_shipment(order_id)
+    except Exception:
+        payments.void_authorization(payment.id)
+        inventory.release(inventory_reservation.id)
+        db.mark_order_failed(order_id, reason="shipment_failed")
+        return {"order_id": order_id, "status": "failed"}
+
+    db.mark_order_ready(order_id)
+    return {"order_id": order_id, "status": "ready"}
+```
+
+This example is still simplified. Real workflows need durable state between steps. If the process crashes after payment authorization and before shipment creation, a worker should resume from the saved order state.
+
+## Sagas are state machines
+
+The word saga can sound heavier than the idea.
+
+The useful version is a state machine for a multi-step workflow:
+
+```text
+order_created
+  -> inventory_reserved
+  -> payment_authorized
+  -> shipment_created
+  -> ready
+
+failure paths:
+  -> inventory_release_pending
+  -> payment_void_pending
+  -> failed
+```
+
+Each transition records what has happened. Workers can retry pending transitions, compensate failed transitions, and reconcile unknown transitions.
+
+```python
+def advance_order(order):
+    if order.state == "order_created":
+        reservation = inventory.reserve(order.id)
+        db.transition_order(
+            order.id,
+            state="inventory_reserved",
+            reservation_id=reservation.id,
+        )
+        return
+
+    if order.state == "inventory_reserved":
+        try:
+            payment = payments.authorize(order.id)
+        except TimeoutError:
+            db.transition_order(order.id, state="payment_unknown")
+            return
+
+        db.transition_order(
+            order.id,
+            state="payment_authorized",
+            payment_id=payment.id,
+        )
+        return
+
+    if order.state == "payment_unknown":
+        payment = payments.lookup_by_order_id(order.id)
+        if payment is None:
+            db.transition_order(order.id, state="payment_retryable")
+        elif payment.status == "authorized":
+            db.transition_order(
+                order.id,
+                state="payment_authorized",
+                payment_id=payment.id,
+            )
+```
+
+The state machine makes crash recovery possible because the current state is durable.
+
+The endpoint does not need to hold a request open while the whole workflow completes.
+
+## Correlation IDs
+
+Once a request crosses services, local logs are not enough. A correlation ID gives the request one name across boundaries.
+
+```python
+def handle_request(request):
+    correlation_id = (
+        request.headers.get("X-Request-ID")
+        or generate_request_id()
+    )
+
+    response = profiles.get_user(
+        request.user_id,
+        headers={"X-Request-ID": correlation_id},
+        timeout=0.150,
+    )
+
+    logger.info(
+        "profile_lookup_completed",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": request.user_id,
+            "status": response.status_code,
+            "duration_ms": response.duration_ms,
+        },
+    )
+```
+
+The ID should be passed through HTTP headers, queue messages, background jobs, and logs. It should appear in error reports and traces.
+
+Useful fields around a network call:
+
+| Field | Why it matters |
+| --- | --- |
+| `correlation_id` | Groups work from one logical request |
+| `span_id` and `parent_span_id` | Reconstructs the call tree |
+| `caller` and `dependency` | Shows which boundary failed |
+| `operation` | Separates `reserve_inventory` from `get_inventory` |
+| `attempt` | Shows retry behavior |
+| `timeout_ms` | Shows configured budget |
+| `duration_ms` | Shows actual cost |
+| `result` | Separates success, timeout, rejected, and unknown |
+| `idempotency_key` | Connects retries to one logical command |
+
+Without these fields, an incident becomes a search problem.
+
+## Distributed tracing
+
+Tracing is structured timing for network calls.
+
+It answers:
+
+```text
+Where did the request spend time?
+Which dependency failed?
+Which retry attempt succeeded?
+Which service returned after the user-facing deadline?
+```
+
+For small systems, logs with correlation IDs may be enough. For larger systems, traces become the fastest way to see the actual path. A trace should show the caller span, dependency spans, attempts, timeouts, and error statuses.
+
+A trace is not a substitute for design; it is how the design becomes observable.
+
+If the trace shows three retries across three layers, the retry policy is not centralized enough. If it shows optional dependencies on the critical path, graceful degradation is not implemented. If it shows a request continuing after the deadline, cancellation is not being propagated.
+
+## Service mesh, carefully
+
+A service mesh or sidecar can apply cross-cutting network behavior:
+
+1. Timeouts.
+2. Retries.
+3. Circuit breakers.
+4. Load balancing.
+5. Mutual TLS.
+6. Metrics and tracing.
+
+That can be useful. It also creates a risk: infrastructure retries a request that the application did not design to be retried.
+
+The mesh does not know whether `POST /payments` is idempotent unless the application contract makes that clear. It does not know whether a stale fallback is acceptable. It does not know whether a timeout means "safe to retry" or "completion unknown."
+
+Use infrastructure for mechanical enforcement. Keep semantics in the application.
+
+```text
+mesh:
+  connection timeout
+  per-route deadline
+  circuit breaker
+  retry safe reads
+
+application:
+  idempotency key
+  conflict detection
+  pending states
+  compensation
+  reconciliation
+```
+
+The split is worth keeping deliberate.
+
+## When to give up
+
+Every call needs an answer for giving up.
+
+Giving up can mean:
+
+| Situation | Better behavior |
+| --- | --- |
+| Optional read times out | Omit the module or serve stale data |
+| Required read times out | Return a clear error before the outer deadline |
+| Idempotent write receives `503` | Retry with budget and jitter |
+| Non-idempotent write times out | Mark unknown and reconcile |
+| Dependency is failing broadly | Open circuit and fail fast |
+| Workflow step is stuck | Move to pending repair state and alert |
+
+Giving up is part of the contract rather than a failure in itself.
+
+The least useful version is waiting until every deadline expires and then returning an ambiguous `500`. That leaves the caller with no useful control signal, which usually encourages blind retries.
+
+## What I notice
+
+Network bugs are often classification bugs.
+
+The code catches `Exception`, logs "dependency failed," and returns an error. But the real state might be:
+
+1. The request never reached the dependency.
+2. The dependency rejected it.
+3. The dependency completed it and the response was lost.
+4. The dependency is still working.
+5. The dependency completed an older version of the command.
+6. The caller timed out but left work running.
+
+Those states need different recovery behavior.
+
+The hard part is not writing retry code. The hard part is giving each outcome a name and deciding what the product should do next.
+
+## Design the call contract
+
+For each cross-service call, write down:
+
+| Question | Example answer |
+| --- | --- |
+| Operation | `payments.authorize` |
+| Caller | `orders-api` |
+| Dependency | `payments-service` |
+| Deadline | 800ms inside a 1.2s public request |
+| Retry policy | 2 attempts on `503` and connect failure, jittered, inside deadline |
+| Idempotency | Required `Idempotency-Key`, scoped to order id |
+| Timeout meaning | Unknown completion; do not assume failure |
+| Fallback | Mark order `payment_pending` |
+| Reconciliation | Lookup payment by order id every minute until resolved |
+| Compensation | Void authorization if shipment cannot be created |
+| Circuit behavior | Open after error-rate threshold; new orders remain pending |
+| Observability | Correlation ID, attempt count, duration, result, idempotency key |
+
+Then ask:
+
+```text
+If the response never arrives, what does the caller know?
+```
+
+That one question usually exposes whether the call has been designed or only implemented.
+
+## Metrics that help
+
+The first dashboard for network boundaries should include:
+
+| Metric | Why it matters |
+| --- | --- |
+| Request rate by dependency and operation | Shows where calls are concentrated |
+| Success, failure, timeout, and unknown counts | Separates outcomes that need different behavior |
+| p50, p95, p99 duration | Shows tail latency and budget pressure |
+| Attempt count | Shows retry amplification |
+| Retry success rate | Shows whether retries are useful or only adding load |
+| Deadline exceeded count | Shows work continuing too long |
+| Circuit breaker state | Shows fast-fail behavior |
+| In-flight calls by dependency | Shows queueing and pool pressure |
+| Pending reconciliation age | Shows unresolved unknown writes |
+| Compensation count | Shows cross-service workflow failures |
+
+Average latency is not enough. A dependency can look healthy at p50 and still break the product at p99.
+
+Unknown completions deserve their own metric. They are where correctness work accumulates.
+
+## What I think
+
+The practical sequence is:
+
+1. Remove unnecessary network calls from the critical path.
+2. Put a deadline on every remaining call.
+3. Classify failures into failed, rejected, timeout, and unknown.
+4. Retry only operations with a clear idempotency or read-only contract.
+5. Add idempotency keys to important commands.
+6. Make pending states explicit for unknown write completion.
+7. Use compensation for business-level undo, not generic rollback.
+8. Pass correlation IDs through every boundary.
+9. Watch attempts, timeouts, unknowns, and pending reconciliation age.
+10. Let infrastructure enforce mechanics, but keep semantics in application code.
+
+The underengineering move is to make fewer calls and make the remaining calls explicit.
+
+A small number of well-defined boundaries is easier to operate than a dense graph of implicit assumptions.
+
+## Tutorial checklist
+
+For any cross-service write, fill this out:
+
+| Question | Example answer |
+| --- | --- |
+| Command | `POST /orders/{id}/authorize-payment` |
+| Idempotency scope | `(order_id, idempotency_key)` |
+| Request hash | Stored with the idempotency record |
+| Known success | Payment authorization id returned and stored |
+| Known failure | Gateway returns declined or validation error |
+| Unknown completion | Timeout or connection reset after request write |
+| Retryable cases | Connect failure, `503`, `429` after `Retry-After`, only inside deadline |
+| Non-retryable cases | Conflict, validation error, reused key with different body |
+| Pending state | `payment_pending_reconciliation` |
+| Reconciliation source | Gateway lookup by order id or idempotency key |
+| Compensation | Void authorization if order cannot proceed |
+| Observability | `correlation_id`, `order_id`, `attempt`, `timeout_ms`, `result` |
+| Alert | Pending reconciliation p95 age above 10 minutes |
+
+Then ask:
+
+```text
+Can the same request arrive twice without creating two facts?
+```
+
+If not, retries are not safe yet.
+
+## Summary
+
+1. A network call is a failure boundary, not a local function call.
+2. Timeout, failure, rejection, and unknown completion are different outcomes.
+3. Every call needs a deadline that fits inside the caller's deadline.
+4. Retries are load multipliers and should require idempotency or read-only semantics.
+5. Idempotency keys give one logical command a stable identity.
+6. Partial failures need transactions, compensation, or reconciliation.
+7. Sagas are durable state machines for cross-service workflows.
+8. Correlation IDs and traces make boundaries observable.
+9. Service mesh behavior is useful for mechanics, but application semantics still matter.
+10. Design the call contract before relying on the call.
+
+---
+
+## Pop quiz
+
+<Quiz
+  title="Network call reliability"
+  description="A randomized review of network failure modes, timeouts, retries, idempotency, partial failure, and observability."
+  questionCount={4}
+  randomizeChoices={true}>
+  <QuizQuestion
+    id="network-boundary"
+    prompt="Why is a network call different from a local function call?"
+    explanation="A network call can leave the caller uncertain about whether the remote side received, processed, or completed the operation.">
+    <QuizChoice>It always runs faster than local code</QuizChoice>
+    <QuizChoice correct>It introduces uncertainty about remote receipt, completion, and response delivery</QuizChoice>
+    <QuizChoice>It cannot return errors</QuizChoice>
+    <QuizChoice>It automatically makes writes idempotent</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="timeout-unknown"
+    prompt="A payment request times out while reading the response. What should the caller assume?"
+    explanation="A response timeout does not prove the payment failed. The remote service may have completed the operation, so the local state should usually become pending reconciliation.">
+    <QuizChoice>The card definitely was not charged</QuizChoice>
+    <QuizChoice correct>Completion is unknown and needs idempotency, lookup, or reconciliation</QuizChoice>
+    <QuizChoice>The caller should immediately create a second unrelated payment</QuizChoice>
+    <QuizChoice>The database should delete the order permanently</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="retry-safety"
+    prompt="When is retrying a write generally safe?"
+    explanation="A write is safe to retry when the server can recognize repeated attempts as the same logical command, usually with an idempotency key or equivalent dedupe boundary.">
+    <QuizChoice>Whenever the HTTP method is `POST`</QuizChoice>
+    <QuizChoice correct>When the write has an idempotency key or dedupe boundary</QuizChoice>
+    <QuizChoice>Whenever the client receives no response body</QuizChoice>
+    <QuizChoice>Only when the request is larger than 1 MB</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="idempotency-hash"
+    prompt="Why store a request hash with an idempotency key?"
+    explanation="The hash lets the server detect when a client accidentally reuses the same key for a different payload and return a conflict instead of replaying the wrong result.">
+    <QuizChoice>To make the response render faster in the browser</QuizChoice>
+    <QuizChoice correct>To detect reuse of the same key with a different payload</QuizChoice>
+    <QuizChoice>To remove the need for database transactions</QuizChoice>
+    <QuizChoice>To guarantee every network packet arrives in order</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="partial-failure"
+    prompt="Inventory reservation succeeds, payment authorization succeeds, and shipment creation fails. What kind of problem is this?"
+    explanation="Some steps succeeded and a later step failed. That is a partial failure, which usually needs compensation, durable workflow state, or reconciliation.">
+    <QuizChoice>A compile-time type error</QuizChoice>
+    <QuizChoice correct>A partial failure that needs compensation or workflow recovery</QuizChoice>
+    <QuizChoice>A cache hit</QuizChoice>
+    <QuizChoice>A guarantee that all state was rolled back automatically</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="compensation"
+    prompt="Why is compensation not the same as a database rollback?"
+    explanation="Across services, prior steps may already be externally visible. Compensation is a domain action, such as voiding an authorization or releasing inventory.">
+    <QuizChoice>Because compensation only changes log formatting</QuizChoice>
+    <QuizChoice correct>Because it is a follow-up business action for already-visible work</QuizChoice>
+    <QuizChoice>Because it can only run inside one SQL transaction</QuizChoice>
+    <QuizChoice>Because it makes all remote systems strongly consistent forever</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="saga-state"
+    prompt="What is the useful way to think about a saga?"
+    explanation="A saga is a durable state machine for a multi-step workflow, with transitions, retries, compensation, and repair paths.">
+    <QuizChoice>A way to hide every error from logs</QuizChoice>
+    <QuizChoice correct>A durable state machine for a multi-step cross-service workflow</QuizChoice>
+    <QuizChoice>A replacement for all idempotency keys</QuizChoice>
+    <QuizChoice>A cache eviction algorithm</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="correlation-id"
+    prompt="What does a correlation ID provide?"
+    explanation="A correlation ID gives one logical request the same identifier across services, logs, queues, and traces.">
+    <QuizChoice>A guarantee that the dependency cannot fail</QuizChoice>
+    <QuizChoice correct>A shared identifier for following one logical request across boundaries</QuizChoice>
+    <QuizChoice>A replacement for authentication</QuizChoice>
+    <QuizChoice>A way to make retries free</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="service-mesh-semantics"
+    prompt="What is the main caution when configuring retries in a service mesh?"
+    explanation="The mesh can enforce mechanics, but it does not know whether an application write is safe to retry unless the route contract makes that explicit.">
+    <QuizChoice>The mesh can only retry CSS files</QuizChoice>
+    <QuizChoice correct>The mesh may retry operations whose application semantics are not retry-safe</QuizChoice>
+    <QuizChoice>The mesh prevents all timeouts by default</QuizChoice>
+    <QuizChoice>The mesh removes the need for observability</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="give-up"
+    prompt="What is the best response when a non-idempotent write has unknown completion?"
+    explanation="For unknown completion, pretending the write failed can be wrong. A pending state plus reconciliation is usually safer.">
+    <QuizChoice>Blindly retry forever with no key</QuizChoice>
+    <QuizChoice correct>Mark the operation pending and reconcile from a durable source</QuizChoice>
+    <QuizChoice>Return success for all future requests</QuizChoice>
+    <QuizChoice>Delete every related record immediately</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="network-metrics"
+    prompt="Why should unknown completions have their own metric?"
+    explanation="Unknown completions are where reconciliation and correctness work accumulate. Mixing them into generic failures hides operational risk.">
+    <QuizChoice>Because unknown completions are always harmless</QuizChoice>
+    <QuizChoice correct>Because they need reconciliation and should not be hidden inside generic error counts</QuizChoice>
+    <QuizChoice>Because metrics can replace idempotency</QuizChoice>
+    <QuizChoice>Because p50 latency shows every correctness problem</QuizChoice>
+  </QuizQuestion>
+</Quiz>

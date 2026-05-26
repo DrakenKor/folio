@@ -5,11 +5,11 @@ date: "2026-05-19"
 tags: ["APIs", "Reliability", "Rate Limiting", "Scale"]
 ---
 
-Most API outages start the same way. A dependency gets slow, requests pile up, clients retry, workers block, and connection pools fill. The database still has CPU. The app still has memory. Dashboards look half-normal until the queueing delay becomes the user-visible behavior.
+A lot of API outages follow a similar path. A dependency gets slow, requests accumulate, clients retry, workers block, and connection pools fill. The database still has CPU to spare. The app still has memory. The dashboards look roughly normal for a while, until the queueing delay itself becomes what the user experiences.
 
-Adding more servers at this point often makes things worse. More servers mean more concurrent calls to the slow dependency, more retries, and more database connections.
+Adding more servers at this point tends to make things worse rather than better. More servers mean more concurrent calls to the slow dependency, more retries, and more database connections.
 
-This post covers the controls that prevent this pattern.
+This post looks at the controls that interrupt that pattern.
 
 <div style={{ margin: '1.75rem 0 2rem' }}>
   <figure>
@@ -174,9 +174,9 @@ This post covers the controls that prevent this pattern.
 
 ## The failure is usually queueing
 
-An API does not only fail when code throws. It also fails when useful work waits behind work that will not complete in time.
+An API does not only fail when code throws. It also fails when useful work waits behind work that will not finish in time.
 
-Slow dependency calls occupy request workers. Those workers hold memory, sockets, and database connections. New requests arrive and wait. Clients time out and retry, and the retry arrives while the first request is still running. A small increase in latency can become an outage through this mechanism.
+Slow dependency calls occupy request workers. Those workers hold memory, sockets, and database connections. New requests arrive and wait. Clients time out and retry, and the retry arrives while the first request is still running. Through this mechanism, a small increase in latency can grow into an outage.
 
 ```text
 normal:
@@ -324,7 +324,7 @@ If the outer request times out at 800ms, an inner call waiting 2 seconds cannot 
 
 Retries are useful when the failure is temporary and the operation is safe to repeat. Otherwise they add load without adding reliability.
 
-One retry at three layers multiplies load:
+What is easy to miss is how retries compound across layers. One retry at three layers multiplies the load:
 
 ```text
 client retries 2x
@@ -366,7 +366,7 @@ def call_with_retries(fn, deadline, max_attempts=3, base_delay=0.025):
     raise last_error
 ```
 
-Synchronized retries are themselves a burst. Backoff spreads retries out over time, and jitter makes that spread uneven so the dependency has room to recover.
+Synchronized retries are themselves a burst. Backoff spreads retries out over time, and jitter makes that spread uneven, which leaves the dependency room to recover.
 
 <Callout type="warning" title="Warning">
   Do not retry non-idempotent writes unless the write path has an idempotency key or another dedupe boundary.
@@ -424,11 +424,11 @@ class CircuitBreaker:
             raise
 ```
 
-This code is intentionally small. Real breakers need rolling windows, error rates, probe limits, and metrics. The principle is the same: once a dependency is unhealthy, stop spending request threads on it.
+This code is intentionally small. Real breakers need rolling windows, error rates, probe limits, and metrics. The principle stays the same: once a dependency is unhealthy, there is little point spending request threads on it.
 
 ## Choosing the numbers
 
-The patterns are well known. The harder part is choosing specific numbers and deciding what the product does when those numbers take effect:
+The patterns are well known. The harder part is choosing specific numbers, and deciding what the product does when those numbers take effect:
 
 - What status code is returned?
 - What does the user see?
@@ -474,7 +474,7 @@ This is a bulkhead. One flooded endpoint should not consume the capacity the res
 
 ## Graceful degradation
 
-Not every dependency needs to take the API down with it.
+Not every dependency needs to bring the API down with it.
 
 - If recommendations are unavailable, return the page without recommendations.
 - If the personalization service is slow, return the default ranking.
@@ -520,7 +520,7 @@ Good load shedding rejects early:
 
 Bad load shedding rejects after most of the work has been done.
 
-When the system is overloaded, a fast `429` or `503` with `Retry-After` is more useful than a 30-second timeout that prompts the client to retry blindly.
+When the system is overloaded, a fast `429` or `503` with `Retry-After` tends to be more useful than a 30-second timeout, which often prompts the client to retry blindly.
 
 ```http
 HTTP/1.1 429 Too Many Requests
@@ -570,7 +570,7 @@ The metrics worth putting on the first dashboard for an API:
 | --- | --- |
 | Request rate by endpoint and caller | Shows who is creating load |
 | In-flight requests | Exposes queueing before CPU does |
-| p50, p95, p99 latency | Shows tail pain |
+| p50, p95, p99 latency | Shows the latency tail |
 | Timeout count by dependency | Shows where budget is spent |
 | Retry attempts by caller and dependency | Finds retry storms |
 | Rate-limit rejects | Shows protected pressure |
@@ -605,7 +605,7 @@ What happens when dependency X is slow?
 What should the client do next?
 ```
 
-If those answers are missing, the API does not yet have a reliability story.
+If those answers are missing, the API does not yet have a reliability story, whatever the architecture diagram says.
 
 ## Endpoint checklist
 
@@ -689,9 +689,9 @@ If the only answer is autoscaling, the checklist is incomplete. Autoscaling adds
 
   <QuizQuestion
     id="inner-timeout"
-    prompt="If a public request deadline is 800ms, why is a 2-second internal dependency timeout dangerous?"
-    explanation="The dependency call cannot help the original user after the outer deadline. It keeps workers occupied and worsens queueing.">
-    <QuizChoice correct>The inner call can continue consuming capacity after the user-facing request is already doomed</QuizChoice>
+    prompt="If a public request deadline is 800ms, why is a 2-second internal dependency timeout a problem?"
+    explanation="The dependency call cannot help the original user after the outer deadline passes. It keeps workers occupied and adds to queueing.">
+    <QuizChoice correct>The inner call can keep consuming capacity after the user-facing request has already timed out</QuizChoice>
     <QuizChoice>Longer internal timeouts always make APIs more reliable</QuizChoice>
     <QuizChoice>The operating system automatically cancels the call at 800ms</QuizChoice>
     <QuizChoice>Timeouts only matter for frontend code</QuizChoice>
@@ -710,7 +710,7 @@ If the only answer is autoscaling, the checklist is incomplete. Autoscaling adds
   <QuizQuestion
     id="jitter"
     prompt="Why add jitter to exponential backoff?"
-    explanation="Backoff delays retries, and jitter prevents many callers from retrying at the exact same time. That gives a recovering dependency room to breathe.">
+    explanation="Backoff delays retries, and jitter prevents many callers from retrying at the same instant. That leaves a recovering dependency some room.">
     <QuizChoice>To make successful requests slower for no reason</QuizChoice>
     <QuizChoice>To guarantee exactly-once delivery</QuizChoice>
     <QuizChoice correct>To avoid synchronized retry bursts from many callers</QuizChoice>
