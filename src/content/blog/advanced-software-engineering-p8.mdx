@@ -1,0 +1,848 @@
+---
+title: "Logs are data too"
+description: "Structured logs turn operational facts into queryable records. The shape, volume, retention, and identifiers matter as much as the messages."
+date: "2026-05-28"
+tags: ["Logging", "Event Streaming", "Observability", "Scale"]
+---
+
+Logs usually start as notes left by the program.
+
+One line when a request starts. One line when it fails. A few values placed into a string because someone might need them later.
+
+That works for one process on one host. It becomes weaker as soon as there are many services, many hosts, queues, retries, and deploy versions. At that point the log is not just text. It is data created by the running system.
+
+The useful question is:
+
+```text
+Could we query this record during an incident without already knowing the answer?
+```
+
+If the answer is no, the log may still be comforting. It is just not very operational.
+
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 420"
+      role="img"
+      aria-labelledby="logs-svg-title logs-svg-desc"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <title id="logs-svg-title">Log streams and aggregation</title>
+      <desc id="logs-svg-desc">
+        {"Animated services emit structured log events into a central aggregator where sampling, query, and retention make the records usable."}
+      </desc>
+      <defs>
+        <linearGradient id="logs-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#07111a" />
+          <stop offset="100%" stopColor="#0a1724" />
+        </linearGradient>
+        <pattern id="logs-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#dbeafe" strokeWidth="0.5" opacity="0.08" />
+        </pattern>
+        <pattern id="logs-grid-major" width="96" height="96" patternUnits="userSpaceOnUse">
+          <path d="M 96 0 L 0 0 0 96" fill="none" stroke="#dbeafe" strokeWidth="1" opacity="0.12" />
+        </pattern>
+        <linearGradient id="logs-panel" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#102638" />
+          <stop offset="100%" stopColor="#07131d" />
+        </linearGradient>
+        <linearGradient id="logs-store" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#12352f" />
+          <stop offset="52%" stopColor="#0b241f" />
+          <stop offset="100%" stopColor="#06130f" />
+        </linearGradient>
+        <filter id="logs-soft-glow">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <marker id="logs-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#67e8f9" />
+        </marker>
+      </defs>
+
+      <rect width="720" height="420" rx="18" fill="url(#logs-bg)" />
+      <rect width="720" height="420" fill="url(#logs-grid-minor)" />
+      <rect width="720" height="420" fill="url(#logs-grid-major)" />
+
+      <text x="42" y="44" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        {"Logs become useful when they behave like records"}
+      </text>
+      <text x="42" y="69" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+        {"services emit structured events, aggregation makes them queryable, retention keeps the cost bounded"}
+      </text>
+
+      <g filter="url(#logs-soft-glow)">
+        <rect x="52" y="104" width="116" height="58" rx="9" fill="url(#logs-panel)" stroke="#67e8f9" strokeWidth="1.6" />
+        <rect x="52" y="190" width="116" height="58" rx="9" fill="url(#logs-panel)" stroke="#67e8f9" strokeWidth="1.6" />
+        <rect x="52" y="276" width="116" height="58" rx="9" fill="url(#logs-panel)" stroke="#67e8f9" strokeWidth="1.6" />
+      </g>
+
+      <text x="110" y="129" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+        {"api"}
+      </text>
+      <text x="110" y="148" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+        {"request logs"}
+      </text>
+      <text x="110" y="215" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+        {"worker"}
+      </text>
+      <text x="110" y="234" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+        {"job logs"}
+      </text>
+      <text x="110" y="301" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+        {"billing"}
+      </text>
+      <text x="110" y="320" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+        {"audit logs"}
+      </text>
+
+      <path d="M 170 133 C 235 122 280 124 340 158" fill="none" stroke="#67e8f9" strokeWidth="1.5" strokeDasharray="5 8" markerEnd="url(#logs-arrow)" opacity="0.55" />
+      <path d="M 170 219 C 236 214 284 204 340 204" fill="none" stroke="#67e8f9" strokeWidth="1.5" strokeDasharray="5 8" markerEnd="url(#logs-arrow)" opacity="0.55" />
+      <path d="M 170 305 C 232 286 284 270 340 248" fill="none" stroke="#67e8f9" strokeWidth="1.5" strokeDasharray="5 8" markerEnd="url(#logs-arrow)" opacity="0.55" />
+
+      <g>
+        <rect x="185" y="128" width="12" height="6" rx="2" fill="#10b981">
+          <animate attributeName="x" values="185;342;185" keyTimes="0;0.72;1" dur="4.8s" repeatCount="indefinite" />
+          <animate attributeName="y" values="128;158;128" keyTimes="0;0.72;1" dur="4.8s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.74;1" dur="4.8s" repeatCount="indefinite" />
+        </rect>
+        <rect x="205" y="137" width="12" height="6" rx="2" fill="#10b981">
+          <animate attributeName="x" values="205;348;205" keyTimes="0;0.72;1" dur="5.4s" begin="0.8s" repeatCount="indefinite" />
+          <animate attributeName="y" values="137;171;137" keyTimes="0;0.72;1" dur="5.4s" begin="0.8s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.16;0.74;1" dur="5.4s" begin="0.8s" repeatCount="indefinite" />
+        </rect>
+        <rect x="184" y="215" width="12" height="6" rx="2" fill="#fbbf24">
+          <animate attributeName="x" values="184;344;184" keyTimes="0;0.72;1" dur="5s" begin="0.3s" repeatCount="indefinite" />
+          <animate attributeName="y" values="215;204;215" keyTimes="0;0.72;1" dur="5s" begin="0.3s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.74;1" dur="5s" begin="0.3s" repeatCount="indefinite" />
+        </rect>
+        <rect x="204" y="222" width="12" height="6" rx="2" fill="#10b981">
+          <animate attributeName="x" values="204;350;204" keyTimes="0;0.72;1" dur="4.4s" begin="1.1s" repeatCount="indefinite" />
+          <animate attributeName="y" values="222;211;222" keyTimes="0;0.72;1" dur="4.4s" begin="1.1s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.74;1" dur="4.4s" begin="1.1s" repeatCount="indefinite" />
+        </rect>
+        <rect x="186" y="301" width="12" height="6" rx="2" fill="#ef4444">
+          <animate attributeName="x" values="186;342;186" keyTimes="0;0.72;1" dur="5.8s" begin="0.6s" repeatCount="indefinite" />
+          <animate attributeName="y" values="301;248;301" keyTimes="0;0.72;1" dur="5.8s" begin="0.6s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.74;1" dur="5.8s" begin="0.6s" repeatCount="indefinite" />
+        </rect>
+      </g>
+
+      <g>
+        <rect x="260" y="117" width="44" height="178" rx="9" fill="#07131d" stroke="#93c5fd" strokeWidth="1.2" opacity="0.7" />
+        <line x1="282" y1="136" x2="282" y2="276" stroke="#93c5fd" strokeWidth="1" strokeDasharray="4 8" opacity="0.45" />
+        <text x="282" y="102" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">
+          {"sample"}
+        </text>
+        <text x="282" y="316" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10" opacity="0">
+          {"1000 events/s to 10 stored"}
+          <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.58;0.66;0.86;1" dur="12s" repeatCount="indefinite" />
+        </text>
+        <g opacity="0">
+          <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.58;0.66;0.86;1" dur="12s" repeatCount="indefinite" />
+          <rect x="244" y="168" width="10" height="5" rx="2" fill="#10b981" />
+          <rect x="244" y="182" width="10" height="5" rx="2" fill="#10b981" />
+          <rect x="244" y="196" width="10" height="5" rx="2" fill="#10b981" />
+          <rect x="244" y="210" width="10" height="5" rx="2" fill="#10b981" />
+          <rect x="244" y="224" width="10" height="5" rx="2" fill="#10b981" />
+          <rect x="310" y="196" width="10" height="5" rx="2" fill="#10b981" />
+        </g>
+      </g>
+
+      <g filter="url(#logs-soft-glow)">
+        <ellipse cx="410" cy="142" rx="72" ry="24" fill="#12352f" stroke="#10b981" strokeWidth="1.6" />
+        <rect x="338" y="142" width="144" height="132" fill="url(#logs-store)" stroke="#10b981" strokeWidth="1.6" />
+        <ellipse cx="410" cy="274" rx="72" ry="24" fill="#06130f" stroke="#10b981" strokeWidth="1.6" />
+        <ellipse cx="410" cy="142" rx="72" ry="24" fill="none" stroke="#bbf7d0" strokeWidth="1" opacity="0.35" />
+      </g>
+      <text x="410" y="188" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="14" fontWeight="700">
+        {"aggregator"}
+      </text>
+      <text x="410" y="211" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">
+        {"index + store"}
+      </text>
+      <text x="410" y="238" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">
+        {"correlation_id"}
+        <animate attributeName="opacity" values="0.45;1;0.45" dur="4s" repeatCount="indefinite" />
+      </text>
+
+      <g>
+        <rect x="536" y="102" width="138" height="198" rx="10" fill="url(#logs-panel)" stroke="#93c5fd" strokeWidth="1.3" />
+        <rect x="552" y="123" width="106" height="27" rx="6" fill="#07131d" stroke="#67e8f9" strokeWidth="1" />
+        <circle cx="564" cy="136" r="5" fill="none" stroke="#67e8f9" strokeWidth="1.5" />
+        <line x1="568" y1="140" x2="575" y2="147" stroke="#67e8f9" strokeWidth="1.5" strokeLinecap="round" />
+        <text x="585" y="140" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"error:true"}
+        </text>
+        <rect x="552" y="169" width="106" height="16" rx="4" fill="#08251d" stroke="#10b981" strokeWidth="0.8" opacity="0.88" />
+        <rect x="552" y="194" width="106" height="16" rx="4" fill="#2a220d" stroke="#fbbf24" strokeWidth="0.8" opacity="0.92">
+          <animate attributeName="opacity" values="0.45;1;0.45" dur="3.4s" repeatCount="indefinite" />
+        </rect>
+        <rect x="552" y="219" width="106" height="16" rx="4" fill="#2a1218" stroke="#ef4444" strokeWidth="0.8" opacity="0.92">
+          <animate attributeName="opacity" values="0.35;1;0.35" dur="2.8s" begin="0.4s" repeatCount="indefinite" />
+        </rect>
+        <rect x="552" y="244" width="106" height="16" rx="4" fill="#08251d" stroke="#10b981" strokeWidth="0.8" opacity="0.75" />
+        <text x="556" y="180" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="9">
+          {"INFO post.created"}
+        </text>
+        <text x="556" y="205" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="9">
+          {"WARN retry.scheduled"}
+        </text>
+        <text x="556" y="230" fill="#fecaca" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="9">
+          {"ERROR charge.failed"}
+        </text>
+        <text x="556" y="255" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="9">
+          {"INFO job.finished"}
+        </text>
+      </g>
+
+      <g>
+        <text x="48" y="374" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          {"retention"}
+        </text>
+        <rect x="128" y="362" width="118" height="18" rx="5" fill="#0f2b31" stroke="#67e8f9" strokeWidth="0.8" />
+        <rect x="252" y="362" width="118" height="18" rx="5" fill="#132816" stroke="#10b981" strokeWidth="0.8" />
+        <rect x="376" y="362" width="118" height="18" rx="5" fill="#241f12" stroke="#fbbf24" strokeWidth="0.8" />
+        <text x="187" y="375" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"hot: 7d"}
+        </text>
+        <text x="311" y="375" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"warm: 30d"}
+        </text>
+        <text x="435" y="375" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"cold: 365d"}
+        </text>
+        <circle r="4" fill="#f8fafc">
+          <animateMotion dur="12s" repeatCount="indefinite" path="M 139 371 L 236 371 L 263 371 L 360 371 L 387 371 L 484 371" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.9;1" dur="12s" repeatCount="indefinite" />
+        </circle>
+      </g>
+    </svg>
+  </figure>
+</div>
+
+## Start with the record
+
+A log line is a record. The message is one field in that record.
+
+Useful fields tend to be boring:
+
+| Field | Why it matters |
+| --- | --- |
+| `timestamp` | Orders events approximately and supports time windows |
+| `level` | Separates expected information from operator action |
+| `event` | Names the fact that happened |
+| `service` | Identifies the component that emitted the record |
+| `environment` | Separates production, staging, and development |
+| `version` | Connects behavior to a deployed build |
+| `correlation_id` | Follows one request or workflow across boundaries |
+| `actor_id` | Identifies the user, service, or job taking the action |
+| `aggregate_id` | Identifies the domain object being changed |
+| `attempt` | Shows retries without guessing from repeated messages |
+| `duration_ms` | Makes latency queryable |
+| `result` | Makes success, failure, timeout, and skipped paths explicit |
+| `error_class` | Groups failures by type instead of by prose |
+
+The fields are the interface. If the only stable part of a log is the sentence, querying it becomes string archaeology.
+
+<Callout title="Rule of thumb">
+  Write logs as records first and messages second. Put anything you will filter, group, alert on, or join across services into a named field.
+</Callout>
+
+## Messages are not enough
+
+This is easy to write:
+
+```python
+logger.info(f"User {user_id} created post {post_id} in {duration_ms}ms")
+```
+
+It is also easy to read locally. The problem appears later. To count post creation latency by service version, a log system now has to parse a sentence that was written for a human.
+
+This shape is quieter and more useful:
+
+```python
+logger.info(
+    "post_created",
+    extra={
+        "event": "post.created",
+        "service": "posts-api",
+        "version": app_version,
+        "environment": environment,
+        "correlation_id": request.headers.get("X-Request-ID"),
+        "user_id": user_id,
+        "post_id": post_id,
+        "content_length": len(content),
+        "duration_ms": duration_ms,
+        "result": "success",
+    },
+)
+```
+
+The sentence can still exist. It should not be the only place the data lives.
+
+## Event names
+
+An event name should be stable enough to query for months.
+
+Good event names are usually:
+
+1. Specific.
+2. Lowercase.
+3. Past tense for facts.
+4. Consistent across services.
+5. Not packed with variable data.
+
+For example:
+
+| Better | Weaker |
+| --- | --- |
+| `post.created` | `created post 928173` |
+| `payment.authorization_failed` | `payment bad` |
+| `job.retry_scheduled` | `retrying maybe` |
+| `cache.stampede_blocked` | `lock worked` |
+| `request.deadline_exceeded` | `too slow` |
+
+The event name should answer "what kind of thing happened?" The fields should answer "to which object, under which request, with which result?"
+
+## Correlation IDs
+
+A correlation ID gives one logical operation one name as it crosses services, queues, workers, and storage systems.
+
+At the edge, generate one if the caller did not send one:
+
+```python
+def get_correlation_id(request):
+    incoming = request.headers.get("X-Request-ID")
+    if incoming:
+        return incoming[:128]
+
+    return uuid.uuid4().hex
+```
+
+Then pass it through every boundary:
+
+```python
+def create_post(request):
+    correlation_id = get_correlation_id(request)
+
+    post = db.insert_post(
+        user_id=request.user.id,
+        content=request.json["content"],
+    )
+
+    queue.publish(
+        "post.created",
+        {
+            "post_id": post.id,
+            "user_id": request.user.id,
+            "correlation_id": correlation_id,
+        },
+    )
+
+    logger.info(
+        "post_created",
+        extra={
+            "event": "post.created",
+            "post_id": post.id,
+            "user_id": request.user.id,
+            "correlation_id": correlation_id,
+        },
+    )
+
+    return {"post_id": post.id}
+```
+
+Without the ID, each service has a local story. With the ID, the workflow has a shared thread.
+
+## Logs, metrics, and traces
+
+These three tools overlap, but they are not the same thing.
+
+| Tool | Shape | Good for |
+| --- | --- | --- |
+| Log | Event record | Explaining what happened in one case |
+| Metric | Numeric time series | Watching rates, latency, saturation, and SLOs |
+| Trace | Causal span graph | Following one request through many services |
+
+A useful incident often needs all three:
+
+1. Metric shows `payment.authorization_failed` increased.
+2. Trace shows failures cluster behind one dependency call.
+3. Logs show the dependency returned `429` after a rollout changed request volume.
+
+The log gives detail. The metric gives scope. The trace gives shape.
+
+## Levels are an operating contract
+
+Log levels should mean something stable.
+
+| Level | Meaning | Example |
+| --- | --- | --- |
+| `ERROR` | Something failed and likely needs action or automatic recovery | Payment authorization exhausted retries |
+| `WARN` | Something unusual happened, but the system handled it | Cache refresh skipped and stale value served |
+| `INFO` | A useful business or lifecycle fact happened | Post created, job completed, deploy started |
+| `DEBUG` | Detail useful during development or narrow investigation | Intermediate parser state |
+
+`ERROR` should not mean "the code took a branch we expected." If expected validation failures are logged as errors, the alert stream becomes noise. If real failures are logged as info, the system loses visibility exactly when it needs it.
+
+Levels are not decoration. They are routing rules for attention.
+
+## Aggregation is part of the system
+
+Local logs are temporary. Containers restart. Hosts disappear. Disk fills. A service that only logs to local files is observable only while the local file is still reachable.
+
+At scale, logs need a pipeline:
+
+```text
+application -> stdout/file -> collector -> transport -> index/store -> query/alert
+```
+
+Each step has failure modes:
+
+| Step | Failure to plan for |
+| --- | --- |
+| Application | Blocks while trying to write logs |
+| Collector | Drops logs during restart or backpressure |
+| Transport | Reorders or duplicates records |
+| Index | Rejects records with unexpected field types |
+| Store | Retention expires before an investigation starts |
+| Query | High-cardinality fields make searches slow or expensive |
+
+This does not mean every app needs a custom logging platform. It means logging is a production dependency, and the dependency should have backpressure, drop behavior, retention, and cost limits that are understood.
+
+## Sampling
+
+Some events are too frequent to keep in full detail.
+
+Page views, health checks, cache hits, and successful background jobs can easily dominate log volume. Keeping every record may cost more than the value it provides.
+
+Sampling should be deliberate:
+
+1. Always keep errors.
+2. Always keep security and audit events.
+3. Sample high-volume success paths.
+4. Sample by correlation ID or stable key, not by individual line.
+5. Record the sample rate on the event.
+
+Stable sampling keeps related logs together:
+
+```python
+import hashlib
+
+
+def should_sample(key, rate):
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    bucket = int(digest[:8], 16) / 0xFFFFFFFF
+    return bucket < rate
+
+
+def log_post_view(post_id, user_id, correlation_id):
+    if not should_sample(correlation_id, rate=0.01):
+        return
+
+    logger.info(
+        "post_viewed",
+        extra={
+            "event": "post.viewed",
+            "post_id": post_id,
+            "user_id": user_id,
+            "correlation_id": correlation_id,
+            "sample_rate": 0.01,
+        },
+    )
+```
+
+Sampling by line can leave half a story. Sampling by workflow keeps the story usable when it is selected.
+
+<Callout type="warning" title="Warning">
+  Do not sample correctness, security, billing, or audit facts unless another durable system already stores them with the required guarantees.
+</Callout>
+
+## Retention
+
+Retention is part of the design, not just a storage setting.
+
+Different records need different lifetimes:
+
+| Record type | Typical retention thought |
+| --- | --- |
+| Debug logs | Short, often hours or days |
+| Request logs | Long enough for incident review and support |
+| Error logs | Long enough to compare releases and recurring failures |
+| Security logs | Long enough for investigation and policy |
+| Audit events | Long enough for product, legal, or financial requirements |
+
+Hot storage is fast and expensive. Cold storage is slower and cheaper. The retention policy should match the way the data is used.
+
+If support tickets arrive two weeks after the user action, seven days of searchable logs may be too short. If debug logs contain large payloads, keeping them for a year is usually waste.
+
+## Logs as audit trail
+
+Some logs are operational. Some are audit records. They should not quietly share the same standards.
+
+An audit trail usually needs stricter properties:
+
+1. Stable schema.
+2. Append-only storage.
+3. Actor and target identifiers.
+4. Before and after values when appropriate.
+5. Authorization context.
+6. Tamper evidence or restricted write access.
+7. Clear retention.
+8. PII minimization.
+
+For example:
+
+```python
+def change_role(actor_id, user_id, new_role):
+    old_role = db.get_user_role(user_id)
+
+    db.update_user_role(user_id, new_role)
+
+    audit_log.write(
+        {
+            "event": "user.role_changed",
+            "actor_id": actor_id,
+            "user_id": user_id,
+            "old_role": old_role,
+            "new_role": new_role,
+            "result": "success",
+        }
+    )
+```
+
+This is not the same as a debug line that says "updated user." It is a domain record. It should be treated like one.
+
+## Event streams and logs
+
+Logs can look like event streams because both are append-only records.
+
+The difference is the contract.
+
+| Question | Debug log | Event stream |
+| --- | --- | --- |
+| Is delivery required? | Usually no | Usually yes |
+| Can consumers depend on schema? | Often weak | Should be strong |
+| Can the record be replayed? | Maybe | Usually yes |
+| Is ordering defined? | Often no | Usually per key or partition |
+| Is retention a product concern? | Sometimes | Often yes |
+
+It is fine to use the same event shape for both observability and downstream work. It is risky to let an accidental debug log become the source of truth for a workflow.
+
+If another system must react to the fact, write an event with a delivery contract:
+
+```python
+def publish_post_created(tx, post):
+    tx.insert_outbox_event(
+        event_type="post.created",
+        aggregate_id=post.id,
+        payload={
+            "post_id": post.id,
+            "user_id": post.user_id,
+            "created_at": post.created_at.isoformat(),
+        },
+    )
+```
+
+The logger can record that the event was written. The outbox is the delivery boundary.
+
+## PII and secrets
+
+Logs spread quickly. They move from application memory into collectors, indexes, dashboards, tickets, notebooks, and cold storage. Anything placed into a log is likely to be copied.
+
+So logging needs a negative list and a positive list.
+
+Do not log:
+
+1. Passwords.
+2. Session tokens.
+3. API keys.
+4. Full payment details.
+5. Raw authorization headers.
+6. Large request bodies by default.
+7. Private messages unless the feature explicitly requires secure audit handling.
+
+Do log identifiers that allow lookup in the proper system:
+
+```python
+logger.info(
+    "payment_authorization_failed",
+    extra={
+        "event": "payment.authorization_failed",
+        "payment_id": payment.id,
+        "order_id": order.id,
+        "gateway": "stripe",
+        "gateway_error_code": error.code,
+        "correlation_id": correlation_id,
+    },
+)
+```
+
+The log should point to sensitive data. It should rarely contain it.
+
+## Schema drift
+
+Structured logs fail quietly when field names drift.
+
+One service logs `user_id`. Another logs `uid`. A third logs `userId`. One version writes `duration_ms` as a number, another as a string. Queries become partial, dashboards lie by omission, and incident review gets slower.
+
+A small schema contract helps:
+
+```python
+def log_event(logger, event, **fields):
+    required = {
+        "event": event,
+        "service": SERVICE_NAME,
+        "version": VERSION,
+        "environment": ENVIRONMENT,
+    }
+
+    logger.info(event, extra={**required, **fields})
+```
+
+For larger systems, this becomes a shared logging package or schema registry. The point is not ceremony. The point is to make the important fields boring and consistent.
+
+## What I notice
+
+The systems that are easiest to debug do not necessarily log the most.
+
+They log the same few facts consistently. They use stable event names. They pass correlation IDs without making it optional. They separate expected validation from real failure. They keep the fields small enough to index. They know which records are sampled and which are never sampled.
+
+The difficult systems often have many logs but few records. The messages are expressive. The data is hard to query.
+
+That distinction shows up during incidents. A good log record removes guesses. It does not remove all work, but it narrows the work.
+
+## Design the log event
+
+For a new user-facing write, define the log event before the incident.
+
+Example for post creation:
+
+| Field | Value |
+| --- | --- |
+| `event` | `post.created` |
+| `level` | `INFO` |
+| `service` | `posts-api` |
+| `correlation_id` | Generated at edge, propagated to queue event |
+| `user_id` | Author id |
+| `post_id` | Created post id |
+| `content_length` | Integer, not content body |
+| `duration_ms` | API handler duration |
+| `result` | `success`, `validation_failed`, `timeout`, `unknown` |
+| `attempt` | Request attempt number if retry-aware |
+| `sample_rate` | `1.0` for writes |
+
+Then define the queries that should work:
+
+```text
+event:post.created result:success service:posts-api
+event:post.created user_id:1234
+event:post.created correlation_id:abc123
+event:post.created result:timeout version:2026.05.23.1
+```
+
+If the queries cannot be answered, the event is not shaped yet.
+
+## Metrics that help
+
+Useful logging metrics are about the pipeline and the records:
+
+| Metric | Why it matters |
+| --- | --- |
+| Log events emitted per service | Shows volume and cost shape |
+| Log events dropped by collector | Shows observability loss |
+| Error logs by event name | Shows failure category without string parsing |
+| Unknown or timeout results | Shows work that needs reconciliation |
+| Missing correlation IDs | Shows propagation gaps |
+| Index rejection count | Shows schema drift or bad field types |
+| Query latency | Shows whether logs are still usable during incidents |
+| Storage by event type | Shows which events dominate cost |
+| Sampled event rate | Shows whether sampling is behaving as expected |
+
+The logging system itself needs observation. Otherwise it can fail at the same time the application needs it most.
+
+## What I think
+
+The practical sequence is:
+
+1. Define common fields.
+2. Use stable event names.
+3. Pass a correlation ID through every boundary.
+4. Put queryable values in fields, not prose.
+5. Keep secrets and large payloads out by default.
+6. Treat log levels as an operating contract.
+7. Aggregate logs outside the host or container.
+8. Sample high-volume success paths by workflow.
+9. Never sample records that carry correctness, security, billing, or audit meaning unless another durable source exists.
+10. Set retention by record type.
+11. Watch the logging pipeline for drops and schema rejects.
+
+The underengineering move is to log fewer things with better shape.
+
+A small set of stable records is more useful than a large pile of sentences.
+
+## Tutorial checklist
+
+For any important event, fill this out:
+
+| Question | Example answer |
+| --- | --- |
+| Event name | `payment.authorization_failed` |
+| Level | `ERROR` if retries exhausted, `WARN` if handled by retry |
+| Service | `checkout-api` |
+| Correlation ID | Required from edge request or generated at ingress |
+| Actor | `user_id` or calling service |
+| Aggregate | `order_id`, `payment_id` |
+| Result values | `success`, `declined`, `timeout`, `unknown`, `retry_scheduled` |
+| Duration field | `duration_ms` as a number |
+| Error grouping | `error_class`, `gateway_error_code` |
+| Sampling | Never sampled for payment state changes |
+| Retention | Hot 30 days, cold 1 year |
+| Sensitive data | No card data, no raw authorization headers |
+| Query to support | Find all failed authorizations for an order |
+| Alert to support | Error rate by gateway and deploy version |
+
+Then ask:
+
+```text
+Can this record be found, grouped, and trusted without parsing a sentence?
+```
+
+If not, the log is not structured enough yet.
+
+## Summary
+
+1. Logs are data produced by the running system.
+2. A useful log line is a record, not just a message.
+3. Event names should be stable, specific, and queryable.
+4. Correlation IDs connect local service stories into one workflow story.
+5. Logs, metrics, and traces answer different questions.
+6. Log levels route attention and should have consistent meaning.
+7. Aggregation, indexing, retention, and drops are part of the logging design.
+8. Sampling should preserve workflows and never hide important correctness records.
+9. Audit logs need stricter guarantees than debug logs.
+10. Logs can feed event thinking, but delivery contracts belong in event streams.
+11. The best logs reduce guessing during incidents.
+
+---
+
+## Pop quiz
+
+<Quiz
+  title="Logs as operational data"
+  description="A randomized review of structured logging, correlation IDs, sampling, retention, and audit boundaries."
+  questionCount={4}
+  randomizeChoices={true}>
+  <QuizQuestion
+    id="logs-as-records"
+    prompt="What makes a structured log more useful than a plain sentence?"
+    explanation="Structured logs put queryable values into named fields, so operators can filter, group, alert, and join records without parsing prose.">
+    <QuizChoice>It always uses more disk space</QuizChoice>
+    <QuizChoice correct>It stores important values in named fields</QuizChoice>
+    <QuizChoice>It prevents all production failures</QuizChoice>
+    <QuizChoice>It removes the need for metrics</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="event-name-role"
+    prompt="What should an event name usually identify?"
+    explanation="The event name should identify the kind of fact that happened. Variable details belong in fields like user_id, order_id, result, and duration_ms.">
+    <QuizChoice correct>The stable kind of fact that happened</QuizChoice>
+    <QuizChoice>The full request body</QuizChoice>
+    <QuizChoice>The user's password hash</QuizChoice>
+    <QuizChoice>The exact sentence shown in the UI</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="correlation-id-purpose"
+    prompt="What does a correlation ID provide in logs?"
+    explanation="A correlation ID gives one logical operation a shared identifier across services, queues, workers, logs, and traces.">
+    <QuizChoice>A guarantee that the request cannot fail</QuizChoice>
+    <QuizChoice>A replacement for authentication</QuizChoice>
+    <QuizChoice correct>A shared identifier for following one workflow across boundaries</QuizChoice>
+    <QuizChoice>A way to make every log public</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="logs-metrics-traces"
+    prompt="Which pairing is most accurate?"
+    explanation="Logs explain individual events, metrics show numeric trends and rates, and traces show the causal path of one request across services.">
+    <QuizChoice>Logs are numeric time series, metrics are stack traces</QuizChoice>
+    <QuizChoice correct>Logs explain events, metrics show rates, traces show request paths</QuizChoice>
+    <QuizChoice>Traces replace every log record</QuizChoice>
+    <QuizChoice>Metrics should contain full request bodies</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="log-levels"
+    prompt="What is a good meaning for ERROR logs?"
+    explanation="ERROR should mean something failed and likely needs action, recovery, or alerting. Expected validation branches should usually not be logged as errors.">
+    <QuizChoice>Any branch the code enters</QuizChoice>
+    <QuizChoice>A successful health check</QuizChoice>
+    <QuizChoice correct>Something failed and likely needs action or recovery</QuizChoice>
+    <QuizChoice>Only messages written during local development</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="sampling"
+    prompt="What is a sensible sampling rule?"
+    explanation="High-volume success paths can be sampled, but errors, security events, billing events, and audit facts usually need to be kept or stored durably elsewhere.">
+    <QuizChoice>Sample all billing and audit events by default</QuizChoice>
+    <QuizChoice correct>Sample high-volume success paths, but keep important correctness and audit records</QuizChoice>
+    <QuizChoice>Sample each line independently so workflows are split apart</QuizChoice>
+    <QuizChoice>Only sample errors</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="retention"
+    prompt="Why should retention differ by log type?"
+    explanation="Debug logs, request logs, security logs, and audit events have different investigation value, cost, privacy risk, and policy requirements.">
+    <QuizChoice>Because all logs must be deleted after one minute</QuizChoice>
+    <QuizChoice correct>Because different records have different cost, investigation, and policy needs</QuizChoice>
+    <QuizChoice>Because retention has no cost</QuizChoice>
+    <QuizChoice>Because only DEBUG logs are ever useful</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="audit-vs-debug"
+    prompt="Why should an audit trail have stricter rules than a debug log?"
+    explanation="Audit records may be used to prove who changed what and when, so they need stable schema, actor and target IDs, retention, and stronger write controls.">
+    <QuizChoice>Because audit records should contain every secret</QuizChoice>
+    <QuizChoice>Because audit records are only for local development</QuizChoice>
+    <QuizChoice correct>Because audit records may need to prove important domain actions later</QuizChoice>
+    <QuizChoice>Because audit records should never include timestamps</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="event-stream-contract"
+    prompt="What is the main difference between a debug log and an event stream?"
+    explanation="An event stream has an explicit delivery, schema, retention, and replay contract. A debug log often does not.">
+    <QuizChoice correct>An event stream has a stronger delivery and schema contract</QuizChoice>
+    <QuizChoice>A debug log is always globally ordered</QuizChoice>
+    <QuizChoice>An event stream cannot be replayed</QuizChoice>
+    <QuizChoice>A debug log is the safest source of truth for payments</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="pii"
+    prompt="Which value is usually safer to log for a failed payment?"
+    explanation="The log should point to sensitive data through durable identifiers and safe error codes. It should not contain card numbers, tokens, or raw authorization headers.">
+    <QuizChoice>Raw card number</QuizChoice>
+    <QuizChoice>Authorization header</QuizChoice>
+    <QuizChoice correct>`payment_id` and gateway error code</QuizChoice>
+    <QuizChoice>Session token</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="schema-drift"
+    prompt="Why is schema drift a problem for structured logs?"
+    explanation="If services use different field names or types for the same concept, queries and dashboards become partial and incident analysis slows down.">
+    <QuizChoice>It makes every query faster</QuizChoice>
+    <QuizChoice correct>It causes queries and dashboards to miss records or group them incorrectly</QuizChoice>
+    <QuizChoice>It guarantees no logs are dropped</QuizChoice>
+    <QuizChoice>It removes the need for correlation IDs</QuizChoice>
+  </QuizQuestion>
+</Quiz>
