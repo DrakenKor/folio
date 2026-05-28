@@ -1,17 +1,17 @@
 ---
-title: "Databases don't scale, data models do"
-description: "The database is rarely the first bottleneck. The schema, indexes, and read model decide how much work every request creates."
+title: "Scale lives in the data model"
+description: "The schema, indexes, and read model decide how much work every request creates. Shape the work and the database follows."
 date: "2026-05-12"
 tags: ["Databases", "Schema Design", "PostgreSQL", "Scale"]
 ---
 
-A slow database usually looks like a database problem first.
+A slow database points attention straight at the database.
 
-CPU is high. Queries queue. The app times out. Someone suggests a larger instance, read replicas, sharding, or a different database.
+CPU is high. Queries queue. The app times out. Someone suggests a larger instance, read replicas, sharding, or a different storage engine.
 
-Sometimes that is correct. More often, the data model is forcing the database to do too much work per request.
+Each of those moves can help in the right situation. The move that helps most often is upstream: the data model is asking the database to do a large amount of work per request, and reshaping that request shrinks the work.
 
-This post is about the cheaper path: model the data around the access pattern before changing the storage engine.
+This post is about that path: model the data around the access pattern, and let the storage engine carry a lighter load.
 
 <div style={{ margin: '1.75rem 0 2rem' }}>
   <figure>
@@ -22,7 +22,7 @@ This post is about the cheaper path: model the data around the access pattern be
       style={{ display: 'block', width: '100%', height: 'auto' }}>
       <title id="data-model-svg-title">Normalized and denormalized query paths</title>
       <desc id="data-model-svg-desc">
-        {"Animated split-screen comparison between a normalized schema with join paths and a denormalized feed cache with a direct index scan."}
+        {"Animated split-screen showing a normalized schema tracing join paths across four tables and a denormalized feed cache reading down one index scan."}
       </desc>
       <defs>
         <linearGradient id="data-model-bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -155,7 +155,7 @@ This post is about the cheaper path: model the data around the access pattern be
 
 ## Start with the read path
 
-A schema is not good or bad in isolation. It is good or bad for a workload.
+A schema fits a given workload to a certain degree, and the workload reveals that fit.
 
 Before adding tables or indexes, write down the read path:
 
@@ -168,7 +168,7 @@ Before adding tables or indexes, write down the read path:
 
 The answer changes the model.
 
-An admin report can join six tables and run for two seconds. A feed endpoint cannot. A nightly billing job can scan a large table. A signup request cannot wait on the same scan.
+An admin report has room to join six tables and run for two seconds. A feed endpoint answers in tens of milliseconds, so it earns a model that fits inside that budget. A nightly billing job has hours to scan a large table. A signup request returns while the user waits, so it reads from a path sized for that wait.
 
 <Callout title="Rule of thumb">
   Normalize the source of truth. Denormalize the read model when the product repeatedly asks the same expensive question.
@@ -241,19 +241,19 @@ CREATE INDEX comments_post_created_idx
   ON comments (post_id, created_at DESC);
 ```
 
-This is better than a full scan. It is still not the same as one direct lookup. The query shape requires a join boundary between `posts` and `comments`, then an ordering problem across many `post_id` values.
+With these indexes the planner walks a narrow range to find the user's posts, then walks comment ranges keyed by each post. The query shape carries a join boundary between `posts` and `comments`, followed by an ordering problem across many `post_id` values. A direct lookup walks a single index range in the order the page needs.
 
 ## What I notice
 
-The expensive part is rarely the join keyword itself.
+The cost lives in the amount of candidate data created before the database can return the first page.
 
-The expensive part is the amount of candidate data created before the database can return the first page. A join over 100 rows is fine. A join that creates 4M candidate rows and sorts them to return 100 rows is not fine.
+A join over 100 rows returns at the cost of 100 rows. A join that builds 4M candidate rows carries the cost of sorting all four million to surface the first 100. The keyword is the same; the work scales with the candidate set.
 
-This is where teams often mislabel the problem.
+The label a team reaches for shapes the fix it finds.
 
-"Postgres is slow" is usually too broad.
+"Postgres is slow" describes the whole system, so the repair stays vague.
 
-"This endpoint needs latest comments by user, but comments are keyed by post" is specific enough to fix.
+"This endpoint needs latest comments by user, and comments are keyed by post" names the exact shape, so the repair is a concrete schema change.
 
 ## Build the read model
 
@@ -294,13 +294,13 @@ LIMIT 100;
 
 Now the database can walk one index range in the same order the endpoint needs.
 
-That is the main idea. Not "avoid joins always." Not "duplicate everything." The idea is to make the common read path proportional to the page size, not proportional to the historical data behind the page.
+That is the main idea: make the common read path proportional to the page size, scaling with the page the endpoint returns.
 
 ## The cost of denormalization
 
 Denormalization moves work from read time to write time.
 
-When a comment is created, more than one thing may happen:
+When a comment is created, several writes happen together:
 
 ```sql
 BEGIN;
@@ -350,27 +350,27 @@ COMMIT;
 
 One logical write now creates multiple physical writes. That is write amplification.
 
-It is acceptable when:
+This design earns its keep when:
 
 1. Reads dominate writes.
 2. The read path has strict latency needs.
 3. The duplicated fields are small and stable enough.
 4. You have a repair path for rebuilding the derived table.
 
-It is risky when:
+This design demands care, and watching, when:
 
 1. The duplicated fields change constantly.
-2. Writes are already the bottleneck.
+2. Writes already carry the heaviest load.
 3. The read model needs to update thousands of rows synchronously.
-4. No one owns backfills and consistency checks.
+4. Backfills and consistency checks lack an owner.
 
 <Callout type="warning" title="Warning">
-  A denormalized table without a rebuild job is only half a design. Derived data needs a way to be repaired after bugs, retries, and schema changes.
+  A complete denormalized table ships with a rebuild job beside it. Derived data needs a way to be repaired after bugs, retries, and schema changes.
 </Callout>
 
 ## Optimize for reads, batch writes
 
-In many product systems, read paths outnumber write paths. That does not mean writes are unimportant. It means the write path can often absorb extra work asynchronously.
+In many product systems, reads arrive far more frequently, often hundreds of times for every write. The write path has slack to absorb extra work asynchronously.
 
 For example:
 
@@ -390,11 +390,11 @@ This creates an explicit product decision:
 2. If a delay of a few seconds is acceptable, update it asynchronously.
 3. If the read model is only for analytics, update it in larger batches.
 
-Freshness is part of schema design. Treat it as a requirement, not an implementation detail.
+Freshness is part of schema design. Treat it as a requirement.
 
 ## Indexes are data models too
 
-An index is a stored projection of the table. It has a shape. It has maintenance cost. It is not a general speed switch.
+An index is a stored projection of the table. It has a shape. It has maintenance cost. It speeds up the specific query shapes it was built for.
 
 Use the query to choose the index order.
 
@@ -415,22 +415,22 @@ CREATE INDEX comment_feed_user_recent_idx
   ON comment_feed (user_id, created_at DESC);
 ```
 
-This one looks similar but is weaker for the same query:
+This index has the same columns in a different order:
 
 ```sql
 CREATE INDEX comment_feed_recent_user_idx
   ON comment_feed (created_at DESC, user_id);
 ```
 
-The first index groups one user's rows together, already sorted by time. The second index starts with time across all users. The database may still need to skip over many rows from other users.
+The first index groups one user's rows together, already sorted by time, so the query walks one contiguous range and stops at the page limit. The second index orders rows by time across all users, so the query reads through that timeline and skips the rows belonging to other users along the way.
 
-Column order matters.
+Column order shapes the work.
 
 ## B-tree, hash, covering, partial
 
 Most everyday Postgres indexes are B-tree indexes. They support equality, range scans, and ordered reads. That makes them the default choice for feed queries, lookup pages, account lists, and most filters.
 
-Hash indexes are narrower. They are for equality lookup only. They do not support order. If you need `ORDER BY`, a hash index is the wrong shape.
+Hash indexes serve equality lookup. They answer "find the row where this column equals this value" directly. A query that asks for rows in sorted order reaches for a B-tree, which keeps its entries ordered.
 
 Covering indexes use `INCLUDE` columns to avoid extra table fetches for small, commonly returned fields:
 
@@ -440,7 +440,7 @@ CREATE INDEX comment_feed_covering_idx
   INCLUDE (comment_id, post_id, post_title, comment_author_name);
 ```
 
-Do not put large text blobs into covering indexes by default. You are copying data into the index. That can increase storage, cache pressure, and write cost.
+Keep covering indexes to small, frequently read fields. An `INCLUDE` column copies its data into the index, so a large text blob there grows storage, adds cache pressure, and raises write cost.
 
 Partial indexes index only the rows a query actually needs:
 
@@ -452,9 +452,9 @@ CREATE INDEX comments_visible_recent_idx
 
 This is useful when most queries ignore deleted, archived, private, or expired rows.
 
-The wrong index can be worse than no index because every index adds write cost. Each insert, update, and delete has more structures to maintain. Too many unused indexes slow writes and make maintenance heavier.
+Every index carries a write cost. Each insert, update, and delete maintains every index on the table, so an index that no query reads still charges that maintenance on every write. A pile of unused indexes adds up to slower writes and heavier maintenance.
 
-## When to add a column vs. a table
+## Choosing a column or a table
 
 Add a column when:
 
@@ -487,7 +487,7 @@ CREATE TABLE post_moderation_events (
 );
 ```
 
-The decision is not about purity. It is about read cost, write cost, and lifecycle.
+The decision comes down to read cost, write cost, and lifecycle.
 
 ## Partitioning
 
@@ -540,13 +540,13 @@ If you partition by `tenant_id`, one large tenant can dominate one partition.
 
 If you hash by `user_id`, writes spread more evenly, but range queries by date become harder.
 
-There is no free partition key. Pick the key that matches the dominant access pattern and the dominant failure mode.
+Every partition key carries its own trade. Pick the key that matches the dominant access pattern and the dominant failure mode.
 
 ## Sharding decision point
 
 Sharding is partitioning across database servers. It is operationally expensive, so delay it until the numbers justify it.
 
-Consider sharding when:
+Sharding fits when:
 
 1. One primary cannot sustain the write rate.
 2. One database cannot hold the working set.
@@ -554,14 +554,14 @@ Consider sharding when:
 4. Most critical queries include a shard key.
 5. Cross-shard transactions are rare or can be redesigned.
 
-Avoid sharding when:
+These situations call for a smaller fix first, and sharding waits:
 
-1. The slow query is missing an index.
-2. The app has N+1 queries.
-3. One hot customer or hot key is the real issue.
-4. The product needs frequent global ordering, global uniqueness, or cross-tenant reports.
+1. The slow query is missing an index, so add the index.
+2. The app has N+1 queries, so collapse them into one.
+3. One hot customer or hot key is the real load, so isolate that key.
+4. The product needs frequent global ordering, global uniqueness, or cross-tenant reports, which a single database serves cleanly.
 
-Sharding does not remove data modeling work. It makes bad data models harder to fix.
+Sharding carries the data modeling work along with it, and a clean data model stays the prerequisite that makes it manageable.
 
 ## What I think
 
@@ -574,9 +574,9 @@ The practical sequence is:
 5. If the endpoint is still doing work proportional to history, build a read model.
 6. If write amplification becomes the bottleneck, batch or queue derived updates.
 7. Partition for operations and query exclusion.
-8. Shard only when one database is no longer a reasonable unit.
+8. Shard once one database has stopped being a reasonable unit.
 
-This is why "database scaling" is often a misleading phrase. The database executes the work your model asks for. Change the work first.
+This is where the phrase "database scaling" points back at the model. The database executes the work your model asks for, so scale begins by shaping that work.
 
 ## Tutorial checklist
 
@@ -599,8 +599,8 @@ Then choose the lowest-complexity design that makes the common read proportional
 
 ## Summary
 
-1. Scale is shaped by the data model before it is shaped by the storage engine.
-2. Normalization is good for source-of-truth data, but hot reads often need derived models.
+1. Scale is shaped by the data model first, and the storage engine carries that shape.
+2. Normalization keeps source-of-truth data clean; hot reads run on derived models built for the access pattern.
 3. Denormalization trades read speed for write amplification and consistency work.
 4. Index order should match filter columns, sort columns, and page limits.
 5. Partial and covering indexes help when they match specific query shapes.
@@ -639,7 +639,7 @@ Then choose the lowest-complexity design that makes the common read proportional
   <QuizQuestion
     id="denormalization-tradeoff"
     prompt="What is the main tradeoff when adding a denormalized read model?"
-    explanation="Denormalization usually moves work from read time to write time. Reads get simpler, but writes update more stored structures and need repair paths.">
+    explanation="Denormalization moves work from read time to write time. Reads stay simple while writes update more stored structures and rely on repair paths.">
     <QuizChoice>It removes the need for indexes</QuizChoice>
     <QuizChoice>It guarantees strong consistency without transactions</QuizChoice>
     <QuizChoice correct>It speeds common reads by adding write amplification and consistency work</QuizChoice>
@@ -689,7 +689,7 @@ Then choose the lowest-complexity design that makes the common read proportional
   <QuizQuestion
     id="hot-partition"
     prompt="What is a hot partition?"
-    explanation="A hot partition receives a disproportionate amount of traffic or writes, so partitioning moves the bottleneck instead of removing it.">
+    explanation="A hot partition receives a disproportionate amount of traffic or writes, so partitioning relocates the bottleneck into that one partition.">
     <QuizChoice>A partition that has been archived to cold storage</QuizChoice>
     <QuizChoice correct>A partition that receives a disproportionate share of reads or writes</QuizChoice>
     <QuizChoice>A partition with no indexes</QuizChoice>
@@ -698,7 +698,7 @@ Then choose the lowest-complexity design that makes the common read proportional
 
   <QuizQuestion
     id="column-vs-table"
-    prompt="When is a new table usually better than adding a column?"
+    prompt="When does a new table usually fit the data better than a column?"
     explanation="A separate table fits one-to-many data, different lifecycle, high churn, sparse fields, or large optional data.">
     <QuizChoice>When the value is one-to-one, small, and always read with the row</QuizChoice>
     <QuizChoice correct>When the data is one-to-many, high-churn, sparse, large, or has a different lifecycle</QuizChoice>

@@ -14,9 +14,9 @@ Scaling decisions are easier to reason about when they start with arithmetic. Fo
       role="img"
       aria-labelledby="orders-svg-title orders-svg-desc"
       style={{ display: 'block', width: '100%', height: 'auto' }}>
-      <title id="orders-svg-title">Orders of magnitude scale comparison</title>
+      <title id="orders-svg-title">Orders of magnitude across user milestones</title>
       <desc id="orders-svg-desc">
-        {"Animated bars compare user-count milestones against a single-server limit line, showing how much room exists before distribution is required."}
+        {"Animated bars rise to each user-count milestone alongside a single-server limit line, showing how much room remains at each scale."}
       </desc>
       <defs>
         <linearGradient id="orders-bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -51,10 +51,10 @@ Scaling decisions are easier to reason about when they start with arithmetic. Fo
       <rect width="720" height="420" fill="url(#orders-grid-major)" />
 
       <text x="44" y="48" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
-        {"Actual load vs assumed scale"}
+        {"Where each user milestone lands"}
       </text>
       <text x="44" y="73" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
-        {"user growth follows logarithmic, not linear, load patterns"}
+        {"user growth follows logarithmic load patterns"}
       </text>
 
       <g filter="url(#orders-soft-glow)">
@@ -152,7 +152,7 @@ Scaling decisions are easier to reason about when they start with arithmetic. Fo
 
 ## Translating user count to QPS
 
-User count is not load; activity is. To convert daily active users (DAU) into requests per second:
+Load comes from activity. To convert daily active users (DAU) into requests per second:
 
 ```text
 average QPS = (DAU x requests_per_user_per_day) / 86,400
@@ -202,7 +202,7 @@ for users in [1_000_000, 10_000_000, 100_000_000]:
     print(users, estimate_peak_qps(users, avg_requests_per_user=10))
 ```
 
-What this makes clear is that load follows request frequency, not user count. 1,000 users refreshing a feed every 10 seconds generate more load than 1M users checking email once a day.
+What this makes clear is that load follows request frequency. 1,000 users refreshing a feed every 10 seconds each issue 6 requests per minute, which sustains roughly 100 QPS continuously. 1M users checking email once a day spread their 1M requests across 86,400 seconds, landing near 12 average QPS.
 
 ## Four metrics for scaling decisions
 
@@ -211,11 +211,11 @@ These metrics establish the quantitative foundation for architecture decisions:
 1. **QPS** - how much work arrives per second
 2. **Data volume** - how much state the system stores and scans
 3. **Concurrent connections** - how many things stay open simultaneously
-4. **Latency percentiles** - p50, p95, p99 (not averages)
+4. **Latency percentiles** - p50, p95, p99
 
-Average latency tends to hide problems. If p50 is 40ms but p99 is 4 seconds, the system is slow for roughly 1 in 100 requests.
+Percentiles show the full distribution. With p50 at 40ms and p99 at 4 seconds, roughly 1 in 100 requests takes 4 seconds, and the average alone keeps that tail out of view.
 
-These four pressures are largely independent. A system can have low QPS but a large dataset, or high QPS but a small one, or low traffic with high concurrency because every client holds a socket open. Each tends to call for a different scaling strategy.
+These four pressures move independently. A system can run at low QPS while holding a large dataset, run at high QPS over a small one, or carry light traffic with heavy concurrency because every client holds a socket open. Each pressure calls for its own scaling strategy.
 
 ## Common bottlenecks
 
@@ -230,13 +230,13 @@ Early bottlenecks usually show up at the code or query level:
 - CPU-intensive work per request
 - Missing pagination on list endpoints
 
-Inefficient code scales with load: at 50 QPS the overhead is negligible, at 500 QPS the cost is noticeable, and at 5,000 QPS it becomes the dominant factor.
+Per-request overhead multiplies by the request rate. At 50 QPS the overhead sits in the background. At 500 QPS it shows up in the latency profile. At 5,000 QPS it accounts for most of the work the system does.
 
-The interesting part is that distributing into microservices does not remove these inefficiencies. It replicates them across more services.
+Distributing into microservices carries this same per-request overhead along, copying it into each service that runs the work.
 
 ## Single server capacity
 
-A single modern server has more headroom than is often assumed:
+A single modern server carries substantial headroom:
 
 ```python
 SINGLE_POSTGRES_RULES_OF_THUMB = {
@@ -266,9 +266,9 @@ A few common resource-exhaustion failure modes:
 | **Thread/worker exhaustion** | All workers are blocked on slow I/O, leaving no capacity for new requests |
 | **Network egress** | Large payloads and media reach bandwidth limits before CPU or memory does |
 
-## When to scale vertically vs. distribute
+## Where vertical scaling reaches its limit
 
-### Vertical scaling stops when:
+### Vertical scaling reaches its limit when:
 
 - **CPU-bound**: workload doesn't parallelize (global locks, single-threaded sections)
 - **Memory-bound**: hot data no longer fits in RAM, so most accesses become cache misses
@@ -289,9 +289,9 @@ A few common resource-exhaustion failure modes:
 - The next machine size buys meaningful headroom
 - Operational tasks still fit maintenance windows
 
-**Split reads from writes when:**
-- Read traffic dominates write traffic
-- Stale reads are acceptable for some paths
+**Route reads to replicas when:**
+- Reads make up the large majority of traffic
+- Some paths can serve data that is a few seconds stale
 
 **Add queues when:**
 - User-facing requests wait on deferrable work
@@ -300,7 +300,7 @@ A few common resource-exhaustion failure modes:
 
 **Split into services when:**
 - Teams require independent deploy cycles
-- Components have different scaling profiles
+- Each component scales on its own profile
 - Clear data ownership boundaries exist
 
 **Shard/partition when:**
@@ -310,11 +310,11 @@ A few common resource-exhaustion failure modes:
 
 Distribution is a trade. You buy headroom and pay for it with coordination cost, more failure modes, and more operational surface area.
 
-## The 1M → 100M gap
+## From 1M to 100M DAU
 
-What changes between 1M and 100M DAU is the operating model, not only the scale.
+Across the span from 1M to 100M DAU, the operating model itself shifts along with the scale.
 
-**At 1M DAU**: vertical scaling still works well. The usual approaches apply: larger database instances, connection pooling, a CDN, read replicas, and background job queues. Missing indexes degrade performance but remain recoverable.
+**At 1M DAU**: vertical scaling carries the load. The usual approaches apply: larger database instances, connection pooling, a CDN, read replicas, and background job queues. Missing indexes degrade performance while staying recoverable.
 
 **At 100M DAU**: 10 requests/user/day works out to roughly 115k peak QPS. An endpoint with 20ms of CPU work per request consumes about 2,300 CPU-seconds per second at peak. 100M new rows per day pushes retention policies, index strategies, and backfill infrastructure into the design rather than leaving them as afterthoughts.
 

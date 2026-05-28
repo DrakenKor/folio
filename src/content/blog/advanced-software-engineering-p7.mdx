@@ -5,11 +5,11 @@ date: "2026-05-22"
 tags: ["Distributed Systems", "Networking", "Reliability", "Scale"]
 ---
 
-A network call looks like a function call in code. It is worth looking at how differently the two actually behave.
+A network call shares the syntax of a function call in code. It is worth looking at how each one behaves.
 
-A local function either returns, raises, or crashes the process. A network call has more states than that. The request might not leave the host. It might reach the server and time out on the way back. The server might finish the write after the caller has already given up. The response might be correct but arrive too late to matter.
+A local function returns, raises, or crashes the process. A network call moves through a wider set of states. The request might stay on the host. It might reach the server and time out on the way back. The server might finish the write after the caller has already given up. The response might be correct and arrive too late to matter.
 
-So a network call introduces an uncertainty boundary. Past that boundary, the caller does not always know what happened.
+So a network call introduces an uncertainty boundary. Past that boundary, the caller holds incomplete knowledge of what happened.
 
 <div style={{ margin: '1.75rem 0 2rem' }}>
   <figure>
@@ -63,10 +63,10 @@ So a network call introduces an uncertainty boundary. Past that boundary, the ca
       <rect width="720" height="420" fill="url(#network-grid-major)" />
 
       <text x="42" y="44" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
-        {"A network call has more than two outcomes"}
+        {"A network call carries a set of outcomes"}
       </text>
       <text x="42" y="69" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
-        {"success, timeout, unknown completion, compensation, and fast failure are different states"}
+        {"success, timeout, unknown completion, compensation, and fast failure each stand on their own"}
       </text>
 
       <g filter="url(#network-soft-glow)">
@@ -182,17 +182,15 @@ So a network call introduces an uncertainty boundary. Past that boundary, the ca
 
 ## Start with the boundary
 
-The first question for a network call is not "which client library should we use?"
-
-It is:
+The first question for a network call is this:
 
 ```text
 What does the caller know after this call returns, times out, or fails?
 ```
 
-For a read, the answer might be simple. If a profile service times out, the caller can return no profile card or use stale data.
+For a read, the answer is direct. If a profile service times out, the caller can return no profile card or use stale data.
 
-For a write, the answer is harder. If a payment gateway times out, the caller might not know whether the card was charged. Retrying blindly can charge it twice. Giving up blindly can leave a paid order marked unpaid.
+For a write, the answer carries weight. If a payment gateway times out, the caller holds an open question about whether the card was charged. Retrying blindly can charge it twice. Giving up blindly can leave a paid order marked unpaid.
 
 <Callout title="Rule of thumb">
   Treat every network call as a boundary where success, failure, timeout, and unknown completion must have separate behavior.
@@ -219,9 +217,9 @@ A network call can fail in ordinary ways:
 
 The important column is the second one.
 
-Some failures mean "nothing happened." Some mean "something might have happened." Some mean "the other side handled it and said no." Those are different states.
+Some failures mean "nothing happened." Some mean "something might have happened." Some mean "the other side handled it and said no." Each one is its own state with its own recovery.
 
-## Try-catch is not enough
+## A network call is a failure boundary
 
 This is a common shape:
 
@@ -238,9 +236,9 @@ def create_order(user_id, cart_id):
     return order
 ```
 
-At first glance it looks careful: it catches the failure and cancels the order.
+It catches the failure and cancels the order.
 
-A timeout from `payments.charge`, though, does not prove the charge failed. The payment service might have charged the card and failed to return the response. That leaves the local order canceled even though money may have moved.
+A timeout from `payments.charge` carries one specific meaning: the charge state is unknown. The payment service might have charged the card and held back the response. That leaves the local order canceled while money may have moved.
 
 So the exception branch needs to know whether the result is known, failed, or unknown.
 
@@ -272,7 +270,7 @@ def create_order(user_id, cart_id, idempotency_key):
     return {"order_id": order.id, "status": "payment_failed"}
 ```
 
-This version is less tidy, and closer to what actually happened. A timeout creates a pending state rather than a fake failure.
+This version records what actually happened. A timeout creates a pending state.
 
 ## Timeouts are contracts
 
@@ -299,9 +297,9 @@ The timeout says:
 This dependency has this much time to help this request.
 ```
 
-If the public request has an 800ms deadline, a 5-second internal call is not buying resilience; it is doing work no one is waiting for. It keeps sockets, workers, and memory occupied after the user-facing request has already been lost.
+If the public request has an 800ms deadline, a 5-second internal call is doing work no one is waiting for. It keeps sockets, workers, and memory occupied after the user-facing request has already been lost.
 
-Timeouts also need to be specific. A connection timeout, request write timeout, response header timeout, and response body timeout can mean different things. Client libraries often hide those details behind one `timeout` setting. That is fine for simple paths, but important write paths should preserve enough information to decide whether completion is unknown.
+Timeouts also need to be specific. A connection timeout, request write timeout, response header timeout, and response body timeout each carry their own meaning. Client libraries often fold those details into one `timeout` setting, which serves simple paths well. Important write paths should preserve enough information to decide whether completion is unknown.
 
 ## Retry only when the operation allows it
 
@@ -321,7 +319,7 @@ PUT /profile/123 with version check: retry can be safe
 POST /send-email without dedupe: may send duplicates
 ```
 
-HTTP method alone does not decide safety; the server's behavior does.
+The server's behavior decides safety.
 
 <Callout type="warning" title="Warning">
   Retrying a write after an unknown timeout is only safe when the server can recognize the retry as the same logical command.
@@ -329,9 +327,9 @@ HTTP method alone does not decide safety; the server's behavior does.
 
 ## Idempotency keys
 
-An idempotency key gives a write a stable identity. The caller can repeat the request, and the server can return the original result instead of doing the work twice.
+An idempotency key gives a write a stable identity. The caller can repeat the request, and the server can return the original result.
 
-The server should scope the key to the actor and store a hash of the request body. Reusing the same key with a different payload should be a conflict, not a surprise replay.
+The server should scope the key to the actor and store a hash of the request body. Reusing the same key with a different payload should return a conflict.
 
 ```python
 import hashlib
@@ -387,7 +385,7 @@ This is the database side of "safe to retry." The external charge may still need
 
 ## At-least-once is normal
 
-Networked systems usually provide at-least-once behavior before they provide exactly-once behavior.
+Networked systems naturally provide at-least-once behavior. Exactly-once behavior is built on top of it, with dedupe added at the handler.
 
 The same logical command can arrive twice:
 
@@ -397,7 +395,7 @@ The same logical command can arrive twice:
 4. Client retries.
 5. Server receives the same command again.
 
-This is the expected shape once retries exist, rather than an unusual one.
+This is the expected shape once retries exist.
 
 The response is to make handlers idempotent:
 
@@ -437,9 +435,9 @@ There are three common responses:
 | Compensation | Apply a follow-up action to undo or balance the prior step | Cross-service workflows |
 | Reconciliation | Mark unknown state and repair from durable records later | External systems and timeouts |
 
-Compensation is not a generic undo button. It is a business operation.
+Compensation is a business operation.
 
-Refunding a payment is not the same as pretending the payment never happened. Releasing inventory is not the same as deleting an order. Sending a correction email is not the same as never sending the first one.
+Refunding a payment records a new transaction that reverses an acknowledged charge. Releasing inventory returns a held reservation to the available pool. Sending a correction email follows the first one with an update.
 
 The compensating action should be named in the domain.
 
@@ -469,7 +467,7 @@ This example is still simplified. Real workflows need durable state between step
 
 ## Sagas are state machines
 
-The word saga can sound heavier than the idea.
+The word saga names a simple idea.
 
 The useful version is a state machine for a multi-step workflow:
 
@@ -531,7 +529,7 @@ The endpoint does not need to hold a request open while the whole workflow compl
 
 ## Correlation IDs
 
-Once a request crosses services, local logs are not enough. A correlation ID gives the request one name across boundaries.
+Once a request crosses services, a correlation ID gives the request one name across boundaries.
 
 ```python
 def handle_request(request):
@@ -590,7 +588,7 @@ Which service returned after the user-facing deadline?
 
 For small systems, logs with correlation IDs may be enough. For larger systems, traces become the fastest way to see the actual path. A trace should show the caller span, dependency spans, attempts, timeouts, and error statuses.
 
-A trace is not a substitute for design; it is how the design becomes observable.
+A trace is how the design becomes observable.
 
 If the trace shows three retries across three layers, the retry policy is not centralized enough. If it shows optional dependencies on the critical path, graceful degradation is not implemented. If it shows a request continuing after the deadline, cancellation is not being propagated.
 
@@ -634,7 +632,7 @@ Every call needs an answer for giving up.
 
 Giving up can mean:
 
-| Situation | Better behavior |
+| Situation | Behavior that fits |
 | --- | --- |
 | Optional read times out | Omit the module or serve stale data |
 | Required read times out | Return a clear error before the outer deadline |
@@ -643,9 +641,9 @@ Giving up can mean:
 | Dependency is failing broadly | Open circuit and fail fast |
 | Workflow step is stuck | Move to pending repair state and alert |
 
-Giving up is part of the contract rather than a failure in itself.
+Giving up is part of the contract.
 
-The least useful version is waiting until every deadline expires and then returning an ambiguous `500`. That leaves the caller with no useful control signal, which usually encourages blind retries.
+One common shape waits until every deadline expires and then returns an ambiguous `500`. That leaves the caller with no control signal, which tends to encourage blind retries.
 
 ## What I notice
 
@@ -660,9 +658,9 @@ The code catches `Exception`, logs "dependency failed," and returns an error. Bu
 5. The dependency completed an older version of the command.
 6. The caller timed out but left work running.
 
-Those states need different recovery behavior.
+Each of those states calls for its own recovery behavior.
 
-The hard part is not writing retry code. The hard part is giving each outcome a name and deciding what the product should do next.
+The hard part is giving each outcome a name and deciding what the product should do next.
 
 ## Design the call contract
 
@@ -698,17 +696,17 @@ The first dashboard for network boundaries should include:
 | Metric | Why it matters |
 | --- | --- |
 | Request rate by dependency and operation | Shows where calls are concentrated |
-| Success, failure, timeout, and unknown counts | Separates outcomes that need different behavior |
+| Success, failure, timeout, and unknown counts | Gives each outcome its own count so each gets its own behavior |
 | p50, p95, p99 duration | Shows tail latency and budget pressure |
 | Attempt count | Shows retry amplification |
-| Retry success rate | Shows whether retries are useful or only adding load |
+| Retry success rate | Shows how much load each retry converts into a useful result |
 | Deadline exceeded count | Shows work continuing too long |
 | Circuit breaker state | Shows fast-fail behavior |
 | In-flight calls by dependency | Shows queueing and pool pressure |
 | Pending reconciliation age | Shows unresolved unknown writes |
 | Compensation count | Shows cross-service workflow failures |
 
-Average latency is not enough. A dependency can look healthy at p50 and still break the product at p99.
+Tail latency is what matters here. A dependency that answers in time at p50 can blow the budget at p99, and the product feels the p99.
 
 Unknown completions deserve their own metric. They are where correctness work accumulates.
 
@@ -722,14 +720,14 @@ The practical sequence is:
 4. Retry only operations with a clear idempotency or read-only contract.
 5. Add idempotency keys to important commands.
 6. Make pending states explicit for unknown write completion.
-7. Use compensation for business-level undo, not generic rollback.
+7. Use compensation for business-level undo.
 8. Pass correlation IDs through every boundary.
 9. Watch attempts, timeouts, unknowns, and pending reconciliation age.
 10. Let infrastructure enforce mechanics, but keep semantics in application code.
 
 The underengineering move is to make fewer calls and make the remaining calls explicit.
 
-A small number of well-defined boundaries is easier to operate than a dense graph of implicit assumptions.
+A small number of well-defined boundaries stays legible: each one has a named contract you can read, operate, and reason about directly.
 
 ## Tutorial checklist
 
@@ -761,15 +759,15 @@ If not, retries are not safe yet.
 
 ## Summary
 
-1. A network call is a failure boundary, not a local function call.
-2. Timeout, failure, rejection, and unknown completion are different outcomes.
+1. A network call is a failure boundary.
+2. Timeout, failure, rejection, and unknown completion each name their own outcome.
 3. Every call needs a deadline that fits inside the caller's deadline.
 4. Retries are load multipliers and should require idempotency or read-only semantics.
 5. Idempotency keys give one logical command a stable identity.
 6. Partial failures need transactions, compensation, or reconciliation.
 7. Sagas are durable state machines for cross-service workflows.
 8. Correlation IDs and traces make boundaries observable.
-9. Service mesh behavior is useful for mechanics, but application semantics still matter.
+9. Service mesh behavior enforces the mechanics; the application holds the semantics.
 10. Design the call contract before relying on the call.
 
 ---

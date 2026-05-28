@@ -9,7 +9,7 @@ Logs usually start as notes left by the program.
 
 One line when a request starts. One line when it fails. A few values placed into a string because someone might need them later.
 
-That works for one process on one host. It becomes weaker as soon as there are many services, many hosts, queues, retries, and deploy versions. At that point the log is not just text. It is data created by the running system.
+That carries a single process on a single host. Add many services, many hosts, queues, retries, and deploy versions, and the log becomes data created by the running system, scattered across every machine that touched the request.
 
 The useful question is:
 
@@ -17,7 +17,7 @@ The useful question is:
 Could we query this record during an incident without already knowing the answer?
 ```
 
-If the answer is no, the log may still be comforting. It is just not very operational.
+When the answer is yes, the log earns its place in the system. When the answer is no, it sits there as decoration, present in the file and silent during the incident.
 
 <div style={{ margin: '1.75rem 0 2rem' }}>
   <figure>
@@ -233,10 +233,10 @@ Useful fields tend to be boring:
 | Field | Why it matters |
 | --- | --- |
 | `timestamp` | Orders events approximately and supports time windows |
-| `level` | Separates expected information from operator action |
+| `level` | Routes each record to the attention it deserves |
 | `event` | Names the fact that happened |
 | `service` | Identifies the component that emitted the record |
-| `environment` | Separates production, staging, and development |
+| `environment` | Names the deployment a record came from: production, staging, development |
 | `version` | Connects behavior to a deployed build |
 | `correlation_id` | Follows one request or workflow across boundaries |
 | `actor_id` | Identifies the user, service, or job taking the action |
@@ -244,7 +244,7 @@ Useful fields tend to be boring:
 | `attempt` | Shows retries without guessing from repeated messages |
 | `duration_ms` | Makes latency queryable |
 | `result` | Makes success, failure, timeout, and skipped paths explicit |
-| `error_class` | Groups failures by type instead of by prose |
+| `error_class` | Groups failures by type so they aggregate cleanly |
 
 The fields are the interface. If the only stable part of a log is the sentence, querying it becomes string archaeology.
 
@@ -252,17 +252,17 @@ The fields are the interface. If the only stable part of a log is the sentence, 
   Write logs as records first and messages second. Put anything you will filter, group, alert on, or join across services into a named field.
 </Callout>
 
-## Messages are not enough
+## Logs are records first
 
-This is easy to write:
+This line is quick to type and reads cleanly on a local terminal:
 
 ```python
 logger.info(f"User {user_id} created post {post_id} in {duration_ms}ms")
 ```
 
-It is also easy to read locally. The problem appears later. To count post creation latency by service version, a log system now has to parse a sentence that was written for a human.
+The values live inside a sentence written for a human. To count post creation latency by service version, a log system has to parse that sentence back apart.
 
-This shape is quieter and more useful:
+This shape keeps the values in named fields:
 
 ```python
 logger.info(
@@ -282,7 +282,7 @@ logger.info(
 )
 ```
 
-The sentence can still exist. It should not be the only place the data lives.
+The sentence can still exist. The data should also live in named fields.
 
 ## Event names
 
@@ -298,13 +298,15 @@ Good event names are usually:
 
 For example:
 
-| Better | Weaker |
+| Queryable event name | Message a human might type |
 | --- | --- |
 | `post.created` | `created post 928173` |
 | `payment.authorization_failed` | `payment bad` |
 | `job.retry_scheduled` | `retrying maybe` |
 | `cache.stampede_blocked` | `lock worked` |
 | `request.deadline_exceeded` | `too slow` |
+
+The left column names a stable kind of fact and stays the same across millions of events. The right column carries variable data inside prose, so each row is a new string to match.
 
 The event name should answer "what kind of thing happened?" The fields should answer "to which object, under which request, with which result?"
 
@@ -356,11 +358,11 @@ def create_post(request):
     return {"post_id": post.id}
 ```
 
-Without the ID, each service has a local story. With the ID, the workflow has a shared thread.
+The ID gives the whole workflow a shared thread across every service it touches.
 
 ## Logs, metrics, and traces
 
-These three tools overlap, but they are not the same thing.
+These three tools overlap, and each answers its own kind of question.
 
 | Tool | Shape | Good for |
 | --- | --- | --- |
@@ -387,9 +389,11 @@ Log levels should mean something stable.
 | `INFO` | A useful business or lifecycle fact happened | Post created, job completed, deploy started |
 | `DEBUG` | Detail useful during development or narrow investigation | Intermediate parser state |
 
-`ERROR` should not mean "the code took a branch we expected." If expected validation failures are logged as errors, the alert stream becomes noise. If real failures are logged as info, the system loses visibility exactly when it needs it.
+`ERROR` should mean a real failure that warrants action. Reserve it for those, and the alert stream stays meaningful. Log real failures at the right level, and the system keeps visibility exactly when it needs it.
 
-Levels are not decoration. They are routing rules for attention.
+Each level carries its own promise. `WARN` records a handled surprise. `INFO` records a lifecycle fact. `DEBUG` records detail for a narrow investigation. When every team holds those promises, a reader can trust the level before reading the message.
+
+Levels are routing rules for attention.
 
 ## Aggregation is part of the system
 
@@ -412,7 +416,7 @@ Each step has failure modes:
 | Store | Retention expires before an investigation starts |
 | Query | High-cardinality fields make searches slow or expensive |
 
-This does not mean every app needs a custom logging platform. It means logging is a production dependency, and the dependency should have backpressure, drop behavior, retention, and cost limits that are understood.
+Logging is a production dependency, and the dependency should have backpressure, drop behavior, retention, and cost limits that are understood.
 
 ## Sampling
 
@@ -425,7 +429,7 @@ Sampling should be deliberate:
 1. Always keep errors.
 2. Always keep security and audit events.
 3. Sample high-volume success paths.
-4. Sample by correlation ID or stable key, not by individual line.
+4. Sample by correlation ID or stable key so whole workflows stay together.
 5. Record the sample rate on the event.
 
 Stable sampling keeps related logs together:
@@ -456,7 +460,7 @@ def log_post_view(post_id, user_id, correlation_id):
     )
 ```
 
-Sampling by line can leave half a story. Sampling by workflow keeps the story usable when it is selected.
+Sampling by workflow keeps the story whole and usable when it is selected.
 
 <Callout type="warning" title="Warning">
   Do not sample correctness, security, billing, or audit facts unless another durable system already stores them with the required guarantees.
@@ -464,7 +468,7 @@ Sampling by line can leave half a story. Sampling by workflow keeps the story us
 
 ## Retention
 
-Retention is part of the design, not just a storage setting.
+Retention is part of the design.
 
 Different records need different lifetimes:
 
@@ -476,15 +480,15 @@ Different records need different lifetimes:
 | Security logs | Long enough for investigation and policy |
 | Audit events | Long enough for product, legal, or financial requirements |
 
-Hot storage is fast and expensive. Cold storage is slower and cheaper. The retention policy should match the way the data is used.
+Hot storage answers queries in milliseconds and costs the most per gigabyte. Cold storage answers in seconds or minutes and costs cents on the dollar. The retention policy should match the way the data is used.
 
-If support tickets arrive two weeks after the user action, seven days of searchable logs may be too short. If debug logs contain large payloads, keeping them for a year is usually waste.
+If support tickets arrive two weeks after the user action, the searchable window has to reach back two weeks to answer them. If debug logs carry large payloads, a short window keeps that volume from accumulating into a year of storage no one queries.
 
 ## Logs as audit trail
 
-Some logs are operational. Some are audit records. They should not quietly share the same standards.
+Some logs are operational. Some are audit records. Each deserves its own standards, applied deliberately.
 
-An audit trail usually needs stricter properties:
+An audit trail usually needs these properties:
 
 1. Stable schema.
 2. Append-only storage.
@@ -515,13 +519,11 @@ def change_role(actor_id, user_id, new_role):
     )
 ```
 
-This is not the same as a debug line that says "updated user." It is a domain record. It should be treated like one.
+This is a domain record. It should be treated like one.
 
 ## Event streams and logs
 
-Logs can look like event streams because both are append-only records.
-
-The difference is the contract.
+Logs and event streams are both append-only records. What sets each one apart is the contract it carries.
 
 | Question | Debug log | Event stream |
 | --- | --- | --- |
@@ -531,7 +533,7 @@ The difference is the contract.
 | Is ordering defined? | Often no | Usually per key or partition |
 | Is retention a product concern? | Sometimes | Often yes |
 
-It is fine to use the same event shape for both observability and downstream work. It is risky to let an accidental debug log become the source of truth for a workflow.
+The same event shape can serve both observability and downstream work. When another system depends on a fact, give that fact a delivery contract so it arrives, holds its schema, and can be replayed; a debug log makes its best effort and stays observational.
 
 If another system must react to the fact, write an event with a delivery contract:
 
@@ -582,7 +584,7 @@ logger.info(
 )
 ```
 
-The log should point to sensitive data. It should rarely contain it.
+The log should point to sensitive data through identifiers, leaving the values in the system that owns them.
 
 ## Schema drift
 
@@ -604,17 +606,17 @@ def log_event(logger, event, **fields):
     logger.info(event, extra={**required, **fields})
 ```
 
-For larger systems, this becomes a shared logging package or schema registry. The point is not ceremony. The point is to make the important fields boring and consistent.
+For larger systems, this becomes a shared logging package or schema registry. The point is to make the important fields boring and consistent.
 
 ## What I notice
 
-The systems that are easiest to debug do not necessarily log the most.
+The systems that are easiest to debug log a steady, modest number of facts.
 
-They log the same few facts consistently. They use stable event names. They pass correlation IDs without making it optional. They separate expected validation from real failure. They keep the fields small enough to index. They know which records are sampled and which are never sampled.
+They log the same few facts consistently. They use stable event names. They pass correlation IDs through every path. They mark expected validation at one level and real failure at another. They keep the fields small enough to index. They know which records are sampled and which are always kept.
 
-The difficult systems often have many logs but few records. The messages are expressive. The data is hard to query.
+A system can also carry many expressive log lines whose values live inside prose. During an incident, someone reads those lines and reconstructs the record by hand.
 
-That distinction shows up during incidents. A good log record removes guesses. It does not remove all work, but it narrows the work.
+A good log record arrives already structured. It answers the query directly and narrows the work that remains.
 
 ## Design the log event
 
@@ -672,7 +674,7 @@ The practical sequence is:
 1. Define common fields.
 2. Use stable event names.
 3. Pass a correlation ID through every boundary.
-4. Put queryable values in fields, not prose.
+4. Put queryable values in named fields.
 5. Keep secrets and large payloads out by default.
 6. Treat log levels as an operating contract.
 7. Aggregate logs outside the host or container.
@@ -681,9 +683,9 @@ The practical sequence is:
 10. Set retention by record type.
 11. Watch the logging pipeline for drops and schema rejects.
 
-The underengineering move is to log fewer things with better shape.
+The underengineering move is to log a small set of facts and give each one a stable shape.
 
-A small set of stable records is more useful than a large pile of sentences.
+That small set of stable records carries most of the value during an incident.
 
 ## Tutorial checklist
 
@@ -717,15 +719,15 @@ If not, the log is not structured enough yet.
 ## Summary
 
 1. Logs are data produced by the running system.
-2. A useful log line is a record, not just a message.
+2. A useful log line is a record with named, queryable fields.
 3. Event names should be stable, specific, and queryable.
 4. Correlation IDs connect local service stories into one workflow story.
 5. Logs, metrics, and traces answer different questions.
 6. Log levels route attention and should have consistent meaning.
 7. Aggregation, indexing, retention, and drops are part of the logging design.
 8. Sampling should preserve workflows and never hide important correctness records.
-9. Audit logs need stricter guarantees than debug logs.
-10. Logs can feed event thinking, but delivery contracts belong in event streams.
+9. Audit logs need stable schema, actor and target IDs, retention, and controlled writes.
+10. Logs can feed event thinking; a fact other systems depend on belongs in an event stream with a delivery contract.
 11. The best logs reduce guessing during incidents.
 
 ---

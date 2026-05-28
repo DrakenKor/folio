@@ -1,5 +1,5 @@
 ---
-title: "APIs that don't fall over"
+title: "APIs that stay up under pressure"
 description: "Rate limits, timeouts, retries, circuit breakers, and the controls that keep APIs available under pressure."
 date: "2026-05-19"
 tags: ["APIs", "Reliability", "Rate Limiting", "Scale"]
@@ -7,7 +7,7 @@ tags: ["APIs", "Reliability", "Rate Limiting", "Scale"]
 
 A lot of API outages follow a similar path. A dependency gets slow, requests accumulate, clients retry, workers block, and connection pools fill. The database still has CPU to spare. The app still has memory. The dashboards look roughly normal for a while, until the queueing delay itself becomes what the user experiences.
 
-Adding more servers at this point tends to make things worse rather than better. More servers mean more concurrent calls to the slow dependency, more retries, and more database connections.
+Adding servers at this point feeds the same loop. Each new server opens its own concurrent calls to the slow dependency, issues its own retries, and holds its own database connections.
 
 This post looks at the controls that interrupt that pattern.
 
@@ -174,7 +174,7 @@ This post looks at the controls that interrupt that pattern.
 
 ## The failure is usually queueing
 
-An API does not only fail when code throws. It also fails when useful work waits behind work that will not finish in time.
+An API fails when code throws. It fails the same way when useful work waits behind work that will not finish in time.
 
 Slow dependency calls occupy request workers. Those workers hold memory, sockets, and database connections. New requests arrive and wait. Clients time out and retry, and the retry arrives while the first request is still running. Through this mechanism, a small increase in latency can grow into an outage.
 
@@ -190,9 +190,9 @@ dependency slows:
   1000 concurrent in-flight requests
 ```
 
-Same arrival rate, different service time, forty times more in-flight work.
+The arrival rate holds at 500 requests/sec in both cases. Service time stretches from 50ms to 2 seconds, and in-flight work climbs from 25 to 1000.
 
-This is why adding servers does not always help. More servers increase the number of concurrent calls hitting the dependency that is already slow.
+This is why the effect of adding servers tracks the bottleneck. Each added server sends its own concurrent calls into the dependency that is already slow.
 
 <Callout title="Rule of thumb">
   Reliability starts by limiting the amount of unfinished work in the system.
@@ -270,11 +270,11 @@ global limit
       endpoint cost limit
 ```
 
-Requests should not all cost the same. A `GET /status` request and a `POST /exports` request should not spend the same budget.
+Request cost tracks request weight. A `GET /status` request spends a token or two; a `POST /exports` request spends a larger share of the budget that matches the work it triggers.
 
 ## Fixed window, sliding window, token bucket, leaky bucket
 
-The behavior matters more than the name.
+Each strategy earns its place through its behavior. Read the rows by what they do.
 
 | Strategy | Behavior | Use it when |
 | --- | --- | --- |
@@ -283,9 +283,9 @@ The behavior matters more than the name.
 | Token bucket | Allows bursts up to capacity, then sustained refill | Most API admission control |
 | Leaky bucket | Smooths output at a steady rate | Protecting a downstream with strict throughput |
 
-Fixed windows are simple but have edge bursts. A caller can send 100 requests at `12:00:59` and 100 more at `12:01:00`.
+Fixed windows count with a single counter that resets on the boundary. A caller can send 100 requests at `12:00:59` and 100 more at `12:01:00`, putting 200 requests across two seconds.
 
-Token buckets are a reasonable default because real traffic is bursty. They allow short bursts without allowing unbounded pressure.
+Token buckets suit bursty real traffic. They release short bursts up to capacity and then hold the line at the refill rate, which caps sustained pressure.
 
 ## Timeouts are part of the contract
 
@@ -318,13 +318,13 @@ public request deadline: 800ms
   slack:                200ms
 ```
 
-If the outer request times out at 800ms, an inner call waiting 2 seconds cannot help the user.
+When the outer request times out at 800ms, the user has already left. An inner call still waiting at 2 seconds spends a worker on a result no one is waiting for.
 
 ## Retries are load multipliers
 
-Retries are useful when the failure is temporary and the operation is safe to repeat. Otherwise they add load without adding reliability.
+Retries earn their keep when the failure is temporary and the operation is safe to repeat. When the failure is permanent or the operation carries side effects, each retry adds load and leaves reliability where it was.
 
-What is easy to miss is how retries compound across layers. One retry at three layers multiplies the load:
+Retries also compound across layers. One retry at three layers multiplies the load:
 
 ```text
 client retries 2x
@@ -428,7 +428,7 @@ This code is intentionally small. Real breakers need rolling windows, error rate
 
 ## Choosing the numbers
 
-The patterns are well known. The harder part is choosing specific numbers, and deciding what the product does when those numbers take effect:
+The patterns are well known. The work that follows is choosing specific numbers, and deciding what the product does when those numbers take effect:
 
 - What status code is returned?
 - What does the user see?
@@ -437,11 +437,11 @@ The patterns are well known. The harder part is choosing specific numbers, and d
 - Which dependency is optional?
 - Which write is safe to retry?
 
-These are architecture decisions, not implementation details.
+These are architecture decisions.
 
 ## Bulkheads and concurrency limits
 
-Rate limits control arrival. Concurrency limits control in-flight work. Both are needed.
+Rate limits govern arrival. Concurrency limits govern in-flight work. A reliable API uses both, each covering its own surface.
 
 If an endpoint can spend 2 seconds waiting on a dependency, even a modest request rate can consume every worker. A concurrency limit caps the number of concurrent calls.
 
@@ -470,11 +470,11 @@ analytics pool:      best effort
 admin report pool:   isolated
 ```
 
-This is a bulkhead. One flooded endpoint should not consume the capacity the rest of the product depends on.
+This is a bulkhead. Each pool holds its own capacity, so a flooded endpoint drains only its own pool and leaves the rest of the product its share.
 
 ## Graceful degradation
 
-Not every dependency needs to bring the API down with it.
+A dependency can fail while the API stays up.
 
 - If recommendations are unavailable, return the page without recommendations.
 - If the personalization service is slow, return the default ranking.
@@ -511,16 +511,16 @@ What can we remove and still serve something useful?
 
 Load shedding is rejecting work on purpose to keep the system available for the rest of the traffic.
 
-Good load shedding rejects early:
+Load shedding pays off most when it rejects early:
 
 1. Before expensive authentication fanout if possible.
 2. Before opening database transactions.
 3. Before calling slow dependencies.
 4. Before accepting background jobs that cannot be processed.
 
-Bad load shedding rejects after most of the work has been done.
+A rejection that lands after most of the work is done has already spent the capacity it was meant to save.
 
-When the system is overloaded, a fast `429` or `503` with `Retry-After` tends to be more useful than a 30-second timeout, which often prompts the client to retry blindly.
+When the system is overloaded, a fast `429` or `503` with `Retry-After` hands the client a clear signal in milliseconds and frees the worker. A 30-second timeout holds the worker for the full 30 seconds and leaves the client to retry blindly.
 
 ```http
 HTTP/1.1 429 Too Many Requests
@@ -545,7 +545,7 @@ Clients need clear, distinct signals to behave well.
 | `503` | Service unavailable or circuit open | Retry later with backoff |
 | `504` | Gateway timeout | Retry cautiously; original work may still be running |
 
-Ambiguous errors lead to poorly behaved clients, which create extra load. Clear errors are part of reliability.
+A clear error tells the client exactly what to do next, so it waits, backs off, or stops. That precision is part of reliability.
 
 ## The retry matrix
 
@@ -560,7 +560,7 @@ Before adding a retry, decide if it is safe:
 | Search index update from event handler | Yes | Handler should be idempotent |
 | Email send | Usually no direct retry without dedupe | Duplicate emails hurt trust |
 
-Retry policy depends on operation semantics, not the HTTP method. `PUT` can be unsafe if implemented poorly, and `POST` can be safe with an idempotency key.
+Retry policy follows operation semantics. A `PUT` is safe to retry when its implementation lands the same final state on every attempt. A `POST` is safe to retry when an idempotency key lets the server dedupe the command.
 
 ## Metrics that help
 
@@ -579,7 +579,7 @@ The metrics worth putting on the first dashboard for an API:
 | Saturation by pool | Shows bulkhead pressure |
 | Error rate by status code | Separates overload, bugs, dependency failure, and client misuse |
 
-CPU alone is not enough. An API can be unresponsive at low CPU if every worker is waiting on I/O.
+Watch in-flight work and saturation alongside CPU. An API goes unresponsive at low CPU when every worker sits waiting on I/O.
 
 ## Practical sequence
 
@@ -595,7 +595,7 @@ A workable order to apply these controls:
 8. Return clear status codes that teach clients what to do.
 9. Watch in-flight work, tail latency, retries, and rejects.
 
-A service mesh diagram is not the place to start. The starting questions are simpler:
+The work starts with a few plain questions:
 
 ```text
 How many requests are allowed in?
@@ -605,7 +605,7 @@ What happens when dependency X is slow?
 What should the client do next?
 ```
 
-If those answers are missing, the API does not yet have a reliability story, whatever the architecture diagram says.
+Once those answers exist, the API has a reliability story to stand on, and the architecture diagram describes a system that already knows how it behaves under pressure.
 
 ## Endpoint checklist
 
@@ -633,18 +633,18 @@ Then ask:
 If this endpoint gets 10x traffic for five minutes, what protects the rest of the system?
 ```
 
-If the only answer is autoscaling, the checklist is incomplete. Autoscaling adds capacity; it is not admission control.
+A complete checklist names a control beyond autoscaling. Autoscaling adds capacity, and admission control governs what gets in; both belong in the answer.
 
 ## Summary
 
-1. API failures are often queueing failures before they are code failures.
+1. API failures often arrive as queueing failures, with the code still running fine.
 2. Rate limits control which work enters the system.
 3. Concurrency limits control how much work can be in flight.
 4. Every downstream call needs a timeout and should respect the request deadline.
 5. Retries multiply load; use budgets, backoff, jitter, and idempotency.
 6. Circuit breakers fail fast when a dependency is already unhealthy.
 7. Graceful degradation preserves the core product path.
-8. Load shedding is better than letting every request time out slowly.
+8. Load shedding rejects work early to keep capacity for the traffic the system can still serve.
 9. Status codes and `Retry-After` headers are part of the reliability contract.
 10. Watch in-flight work, p99 latency, retry attempts, rate-limit rejects, and queue lag.
 
@@ -730,7 +730,7 @@ If the only answer is autoscaling, the checklist is incomplete. Autoscaling adds
   <QuizQuestion
     id="circuit-open"
     prompt="What should happen when a circuit breaker is open?"
-    explanation="An open circuit fails fast instead of spending workers and sockets on a dependency that is already unhealthy. Later, half-open probes can test recovery.">
+    explanation="An open circuit fails fast and frees the workers and sockets that a dependency in trouble would otherwise hold. Later, half-open probes can test recovery.">
     <QuizChoice>Every request should keep calling the dependency until it succeeds</QuizChoice>
     <QuizChoice correct>Calls should fail fast until the reset window allows limited recovery probes</QuizChoice>
     <QuizChoice>The service should disable all rate limits</QuizChoice>

@@ -1,6 +1,6 @@
 ---
 title: "Consistency has a cost"
-description: "Strong consistency is useful when correctness depends on one current answer. Many product paths can tolerate bounded lag if the promise is explicit."
+description: "Strong consistency serves the paths where correctness depends on one current answer. Bounded lag serves the product paths where the promise is explicit."
 date: "2026-05-21"
 tags: ["Distributed Systems", "Consistency", "CAP", "Scale"]
 ---
@@ -9,7 +9,7 @@ Consistency bugs usually look small at first.
 
 A user changes their display name and sees the old value on another screen. A follower count goes down and then up. A search result includes a deleted post for a few seconds. An inventory number says one item is left, but checkout fails.
 
-Those cases do not all need the same fix.
+Each of those cases needs its own fix.
 
 The useful question is narrower:
 
@@ -17,7 +17,7 @@ The useful question is narrower:
 What promise does this read need from the write that came before it?
 ```
 
-Sometimes the answer is "the latest value, always." Sometimes it is "the user's own write should be visible to them." Sometimes it is "within a few seconds is fine." The architecture should follow that promise, not a general preference for strong or eventual consistency.
+Sometimes the answer is "the latest value, always." Sometimes it is "the user's own write should be visible to them." Sometimes it is "within a few seconds is fine." The architecture should follow that promise.
 
 <div style={{ margin: '1.75rem 0 2rem' }}>
   <figure>
@@ -28,7 +28,7 @@ Sometimes the answer is "the latest value, always." Sometimes it is "the user's 
       aria-describedby="consistency-svg-desc"
       style={{ display: 'block', width: '100%', height: 'auto' }}>
       <desc id="consistency-svg-desc">
-        {"Animated replicas compare a strong write that waits for confirmation with an eventual write that returns before followers catch up."}
+        {"Animated replicas show a strong write that waits for confirmation, and an eventual write that returns while followers catch up."}
       </desc>
       <defs>
         <linearGradient id="consistency-bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -206,7 +206,7 @@ Sometimes the answer is "the latest value, always." Sometimes it is "the user's 
 
 ## Start with the read promise
 
-Consistency is not one setting for the whole system. It is a promise made by a read path.
+Consistency is a promise made by a read path.
 
 Examples:
 
@@ -218,9 +218,9 @@ Examples:
 | Bounded staleness | Data can lag by a known amount | Search, feeds, counters |
 | Eventual consistency | Replicas or projections converge later | Analytics, rankings, social counts |
 
-It is easy to reach for strong consistency everywhere because it feels safer, or eventual consistency everywhere because it feels scalable.
+Strong consistency feels safer, so it is easy to apply everywhere. Eventual consistency feels scalable, so it is easy to apply everywhere.
 
-Both are vague without the product promise behind them.
+Each one gains its meaning from the product promise behind it.
 
 <Callout title="Rule of thumb">
   Choose consistency per invariant. If a stale read can corrupt money, access, ownership, or uniqueness, coordinate. If it only makes a display temporarily old, set a lag budget.
@@ -250,19 +250,19 @@ There are several fixes, with different costs:
 | Show "saving" until projection catches up | Product accepts pending state | Derived views update asynchronously |
 | Wait for replica apply before success | Higher write latency | Read-after-write must work from replicas |
 
-Do not start with "we need stronger consistency." Start with "which read went stale, for whom, and for how long?"
+Start with "which read went stale, for whom, and for how long?"
 
-## CAP, but only the useful part
+## CAP, the useful part
 
 The simplified CAP theorem line is usually "consistency, availability, partition tolerance: pick two."
 
-The practical version is smaller:
+The practical version asks one thing:
 
 ```text
 When the network is unreliable, should this operation reject work or serve a possibly stale answer?
 ```
 
-Network partitions are not always dramatic. A replica can be behind. A region can lose a link. A queue consumer can pause. A deployment can route traffic unevenly. In those cases, the system chooses.
+Network partitions take quiet forms. A replica can be behind. A region can lose a link. A queue consumer can pause. A deployment can route traffic unevenly. In those cases, the system chooses.
 
 For an account balance write, reject or wait.
 
@@ -272,7 +272,7 @@ For a permission check, read the authoritative source or fail closed.
 
 For a recommendation module, return an empty list or cached result.
 
-CAP is useful when it pushes this decision into the design. It is less useful as a slogan.
+CAP is useful when it pushes this decision into the design.
 
 ## Strong consistency is coordination
 
@@ -286,7 +286,7 @@ Coordination has concrete costs:
 4. More pressure on the leader or quorum.
 5. More complicated failover behavior.
 
-That does not make strong consistency bad. It makes it expensive enough to reserve for invariants.
+Those costs make strong consistency expensive enough to reserve for invariants.
 
 For example, moving credits between accounts should coordinate:
 
@@ -328,15 +328,13 @@ def transfer_credits(from_account_id, to_account_id, amount):
         )
 ```
 
-The transaction is not an implementation detail. It is the consistency boundary.
+The transaction is the consistency boundary.
 
-This path should not read from a stale projection to decide whether money can move. A stale read here is not a UI issue. It can create incorrect state.
+This path should read from the leader to decide whether money can move. A stale read here can create incorrect state.
 
 ## Eventual consistency is a lag budget
 
-Eventual consistency should not mean "we hope it catches up."
-
-It should mean:
+Eventual consistency should mean:
 
 ```text
 This derived value may lag the source of truth by up to N seconds.
@@ -388,11 +386,11 @@ def handle_profile_updated(event):
     cache.delete(f"profile_card:v3:user:{user_id}")
 ```
 
-Search may lag. The profile edit response does not need to wait for search if the product can tolerate that lag.
+Search may lag. The profile edit response can return on its own as soon as the write commits, leaving search to catch up within its lag budget.
 
 The important part is measuring it.
 
-## Read-your-writes without making everything strong
+## Read-your-writes scoped to the writer
 
 Many product paths only need the writer to see their own latest write. Everyone else can see it later.
 
@@ -429,7 +427,7 @@ def get_settings(user_id, min_version=None):
 
 This keeps normal reads cheap. Only reads that require a known version pay the leader or waiting cost.
 
-That is a useful pattern because most traffic is not immediately after a write.
+That is a useful pattern because most traffic arrives well after the write it would chase.
 
 ## Quorums
 
@@ -448,7 +446,7 @@ For `N = 3`:
 
 | W | R | Shape |
 | ---: | ---: | --- |
-| 1 | 1 | Fast, but stale reads are easy |
+| 1 | 1 | Fast, with stale reads common |
 | 2 | 1 | Writes wait for a majority, reads can still be stale |
 | 1 | 2 | Writes are fast, reads compare more replicas |
 | 2 | 2 | Read and write quorums overlap |
@@ -465,13 +463,11 @@ assert quorum_intersects(3, 2, 2)
 assert not quorum_intersects(3, 1, 1)
 ```
 
-The real systems are more complicated. Clocks, leader terms, hinted handoff, read repair, partitions, and stale replicas all matter. But the arithmetic is still useful: stronger reads and writes require more agreement, and more agreement costs latency and availability.
+Real systems carry more moving parts. Clocks, leader terms, hinted handoff, read repair, partitions, and stale replicas all matter. The arithmetic still earns its place: stronger reads and writes require more agreement, and more agreement costs latency and availability.
 
 ## Replication lag is a product metric
 
-If a feature depends on eventual consistency, replica lag is not just an infrastructure metric.
-
-It is part of the product behavior.
+If a feature depends on eventual consistency, replica lag is part of the product behavior.
 
 Useful metrics:
 
@@ -519,7 +515,7 @@ WHERE id = $2
 
 If zero rows update, the client edited an old version. The product can ask them to reload, merge, or choose between versions.
 
-Last-write-wins is acceptable for some low-value fields:
+Last-write-wins keeps the most recent value and drops the rest. That suits fields where the latest setting is the whole intent:
 
 ```text
 display theme
@@ -527,7 +523,7 @@ sort preference
 temporary draft title
 ```
 
-It is a poor default for fields where intent matters:
+For fields where each write carries intent that must survive, the conflict needs domain-specific handling:
 
 ```text
 account balance
@@ -551,9 +547,9 @@ Those are separate.
 
 A system can have a strongly consistent source of truth and eventually consistent read models. That is common and practical.
 
-A user profile might be strongly written to `users`, then eventually projected to search, feed headers, notifications, and caches. That does not make the system sloppy. It means each read path has a different promise.
+A user profile might be strongly written to `users`, then eventually projected to search, feed headers, notifications, and caches. Each read path has a different promise.
 
-The part that causes bugs is not eventual consistency by itself. The bugs come from forgetting which reads are eventual.
+The bugs come from forgetting which reads are eventual.
 
 ## Make pending states explicit
 
@@ -569,7 +565,7 @@ Examples:
 | Import job | `queued`, `running`, `completed`, `failed` |
 | Profile update | `saved`, `visible_in_search_soon` if search lag matters |
 
-This does not mean every UI needs extra labels. It means the backend should not call a projection complete before it is complete.
+The backend should call a projection complete only once it is complete.
 
 If the write is accepted but derived work is delayed, the API response should say that.
 
@@ -600,13 +596,13 @@ A useful split:
 | View count | Eventual or approximate |
 | Analytics dashboard | Eventual, often batched |
 
-Do not make the search index strongly consistent with the profile table unless the product actually needs search to update before the profile edit returns. Usually it does not.
+Keep the search index eventual with the profile table. The profile edit returns on its own, and search catches up after. Strong coupling here belongs to the rare product that needs search to update inside the edit response.
 
-Do not make inventory eventual if the product sells scarce items and overselling is unacceptable. Usually it cannot.
+Keep inventory strong when the product sells scarce items and every reservation must hold. Coordinated reservations are what keep the last item from being sold twice.
 
 ## Repair is part of eventual consistency
 
-Eventual consistency needs a repair path. Otherwise "eventual" means "unless an event was dropped."
+Eventual consistency needs a repair path. The repair path is what makes "eventual" hold even when an event is dropped.
 
 Common repair tools:
 
@@ -632,13 +628,13 @@ def repair_profile_projection(batch_size=500):
 
 The repair job should be boring. It compares source version to projection version and updates missing or old projections.
 
-If a derived system cannot be repaired from the source of truth, it is not just a projection. It is another source of truth, and the consistency story needs to be treated more seriously.
+If a derived system cannot be repaired from the source of truth, it is itself another source of truth, and the consistency story needs to be treated more seriously.
 
 ## Multi-region makes the tradeoff visible
 
-Inside one region, strong consistency can be cheap enough for many paths.
+Inside one region, the round trips that strong consistency needs stay short, so many paths can afford it.
 
-Across regions, the cost becomes easier to see.
+Across regions, those round trips stretch over real distance, and the cost shows up in plain sight.
 
 A write that must coordinate between Tokyo, Virginia, and Frankfurt waits on speed-of-light latency, network variance, and failure handling. If every profile edit needs global agreement before returning, the user pays for that design on every edit.
 
@@ -646,13 +642,13 @@ Common patterns:
 
 | Pattern | Fit |
 | --- | --- |
-| Single write region | Simpler correctness, higher latency for distant writers |
+| Single write region | One place to reason about correctness, with added latency for distant writers |
 | Regional reads with one write leader | Good for read-heavy products |
 | Per-tenant or per-user home region | Keeps most writes near their owner |
 | Active-active with conflict resolution | Useful when local writes must continue during partition |
 | Global strong consistency | Reserve for narrow invariants that justify the latency |
 
-The smaller the consistency boundary, the easier multi-region becomes.
+A tight consistency boundary keeps the coordinated work local, and the rest of the system spreads across regions freely.
 
 ## What I think
 
@@ -668,7 +664,7 @@ The practical sequence is:
 8. Measure lag and stale reads.
 9. Build repair from the source of truth.
 
-The main underengineering move is not "make everything eventual." It is "make only the invariant strong."
+The main underengineering move is "make only the invariant strong."
 
 That keeps the expensive guarantee near the data that needs it.
 
@@ -705,13 +701,13 @@ Incorrect needs coordination.
 
 ## Summary
 
-1. Consistency is a read promise, not a single system-wide setting.
+1. Consistency is a read promise that each read path makes.
 2. Strong consistency is coordination, and coordination costs latency and availability.
 3. Eventual consistency should have a lag budget and repair path.
 4. Many systems use a strong source of truth with eventual read models.
 5. Read-your-writes can be targeted with versions and leader fallback.
-6. Quorums make read/write agreement explicit, but they do not remove operational complexity.
-7. Conflict resolution should follow product semantics; last-write-wins is not a safe default.
+6. Quorums make read/write agreement explicit, and the operational complexity stays for you to handle.
+7. Conflict resolution should follow product semantics; last-write-wins fits fields whose latest value is their whole intent.
 8. Pending states should be named when derived work happens later.
 9. Measure replica lag, projection lag, stale reads, conflicts, and repair activity.
 10. Make the invariant strong, then let lower-risk projections lag intentionally.
@@ -728,7 +724,7 @@ Incorrect needs coordination.
   <QuizQuestion
     id="read-promise"
     prompt="What is the first consistency question to ask for a read path?"
-    explanation="Consistency should be chosen based on the promise a read needs from previous writes, not as a blanket system-wide preference.">
+    explanation="Consistency should be chosen per read path, based on the promise that read needs from the writes before it.">
     <QuizChoice>Which database has the most replicas?</QuizChoice>
     <QuizChoice correct>What promise this read needs from the write that came before it</QuizChoice>
     <QuizChoice>How to remove every cache from the system</QuizChoice>
@@ -737,7 +733,7 @@ Incorrect needs coordination.
 
   <QuizQuestion
     id="strong-cost"
-    prompt="Why does strong consistency usually cost more than eventual consistency?"
+    prompt="Where does the cost of strong consistency come from?"
     explanation="Strong consistency requires coordination before answering, which adds round trips, waiting, locking, leader pressure, and lower availability during failures.">
     <QuizChoice correct>It coordinates before answering, adding latency and availability tradeoffs</QuizChoice>
     <QuizChoice>It stores less data, which makes queries slower</QuizChoice>
@@ -777,8 +773,8 @@ Incorrect needs coordination.
 
   <QuizQuestion
     id="last-write-wins"
-    prompt="When is last-write-wins a weak default?"
-    explanation="Last-write-wins discards intent. It is risky for balances, inventory, permissions, documents, and other state where conflicts need domain-specific handling.">
+    prompt="Which fields need domain-specific conflict handling rather than last-write-wins?"
+    explanation="Last-write-wins keeps the latest value and drops the rest. Balances, inventory, permissions, and documents carry intent in each write, so they need conflict handling that preserves it.">
     <QuizChoice>For a temporary UI sort preference</QuizChoice>
     <QuizChoice correct>For account balances, inventory, permissions, or document bodies</QuizChoice>
     <QuizChoice>For a color theme preference</QuizChoice>

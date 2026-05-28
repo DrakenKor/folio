@@ -26,7 +26,7 @@ If the write path is vague, the architecture is vague.
       style={{ display: 'block', width: '100%', height: 'auto' }}>
       <title id="write-path-svg-title">Synchronous and asynchronous write paths</title>
       <desc id="write-path-svg-desc">
-        {"Animated comparison between a blocking write chain and an asynchronous queue-based write path with parallel workers."}
+        {"Animated view of a blocking write chain that walks API, DB, cache, and notify in sequence, and an asynchronous write path where the API returns at the queue while parallel workers process events."}
       </desc>
       <defs>
         <linearGradient id="write-path-bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -185,9 +185,9 @@ For a bank transfer, success might mean "the ledger entries are durably committe
 
 For a file upload, success might mean "the object bytes and metadata are durable." Thumbnail generation can happen later.
 
-If the boundary is too far downstream, users wait on work they do not care about.
+Place the boundary far downstream and users wait on work they do not care about.
 
-If the boundary is too early, you say "success" for work that can still disappear.
+Place the boundary early and you say "success" for work that can still disappear.
 
 <Callout title="Rule of thumb">
   Return only after the smallest durable fact that the product promise requires. Everything else is a derived effect.
@@ -221,7 +221,7 @@ And it is fragile under partial failure:
 
 Now the code needs cleanup logic, dedupe logic, and product support.
 
-The problem is not that synchronous writes are always wrong. The problem is that this function has no explicit boundary between the canonical write and the derived side effects.
+Synchronous writes have their place. The thing to notice here is that this function blends the canonical write and the derived side effects into one undivided block, with the boundary between them left implicit.
 
 ## What I notice
 
@@ -233,13 +233,13 @@ The user thinks they are creating a post.
 
 The system is doing six things.
 
-When p99 latency rises, the database tends to get blamed first, because it is the obvious stateful component. More often the real issue is that the request path has quietly become an integration path.
+When p99 latency rises, the database tends to get blamed first, because it is the obvious stateful component. The real cause is usually elsewhere: the request path has quietly become an integration path.
 
 The fix is to name the critical path.
 
 ## Split canonical writes from derived work
 
-A more scalable write path is usually:
+A write path that scales tends to take this shape:
 
 ```text
 request
@@ -302,13 +302,13 @@ Second, the idempotency result is stored in the same transaction.
 
 Third, nothing calls search, notifications, or analytics before returning to the user.
 
-This keeps the request path small without pretending derived work is optional.
+This keeps the request path small while treating derived work as real work that runs on its own schedule.
 
 ## The outbox pattern
 
-The awkward problem with queues is the gap between the database commit and the queue publish.
+Queues open a gap between the database commit and the queue publish.
 
-This is unsafe:
+Watch what that gap does:
 
 ```python
 def create_post(user_id, content):
@@ -367,7 +367,7 @@ The system must be designed around at-least-once delivery unless you have a very
 
 ## Idempotency is the retry contract
 
-Retries are not optional.
+Retries are everywhere.
 
 Clients retry after timeouts. Load balancers retry. Workers retry. Operators replay events after bugs. You replay outbox rows after deploys. A mobile app sends the same request twice because the connection died before it saw the response.
 
@@ -388,7 +388,7 @@ CREATE TABLE idempotency_keys (
 
 The key should mean: "For this user, this logical command may run once."
 
-The request hash matters because clients can accidentally reuse keys for different payloads. If the same key arrives with a different request body, return a conflict instead of guessing.
+The request hash matters because clients can accidentally reuse keys for different payloads. When the same key arrives with a different request body, return a conflict, so the server stays honest about what each key represents.
 
 For worker handlers, make each effect idempotent too:
 
@@ -410,11 +410,11 @@ def handle_post_created(event):
 
 The important part is the handler name. Search indexing, feed projection, notifications, and analytics are different effects. Each needs its own dedupe boundary.
 
-## A queue does not remove the hard decisions
+## A queue keeps the hard decisions yours
 
 Queues help when work can happen later.
 
-They do not remove decisions, though.
+The decisions remain yours.
 
 You still need to decide:
 
@@ -427,19 +427,19 @@ You still need to decide:
 | Where do poison messages go? | Bad payloads need a dead-letter path. |
 | What is the max acceptable lag? | Async work still has a product freshness budget. |
 
-A queue trades one failure mode for another.
+A queue shapes how a spike lands.
 
-Without a queue, a spike makes users wait.
+A direct path turns a spike into waiting: users hold the connection while the work runs.
 
-With a queue, a spike makes lag grow instead.
+A queue turns a spike into lag: the work accumulates behind the boundary and drains over time.
 
-That is often a reasonable trade, but only if the lag is visible and bounded.
+The queue earns its place when that lag is visible and bounded.
 
 ## Backpressure
 
 Backpressure is the system saying: "I cannot accept work at this rate and still keep my promises."
 
-Ignoring it means returning success for work that is not really keeping up.
+Ignoring it means returning success for work that is falling behind.
 
 Consider the arithmetic:
 
@@ -447,7 +447,7 @@ Consider the arithmetic:
 2. Workers can process 5,000 events per second.
 3. The queue grows by 15,000 events per second.
 4. Notification lag reaches 45 minutes.
-5. From the user's side the product feels broken, even though the API is returning `200`.
+5. The API keeps returning `200` while the product feels broken from the user's side.
 
 It helps to decide on a policy before reaching that point.
 
@@ -467,11 +467,11 @@ For social notifications, preserve the post and delay the notification.
 
 For analytics, sample or drop events before impacting the user-facing write.
 
-## Streams vs queues vs direct writes
+## What streams, queues, and direct writes each do
 
 These words get overloaded.
 
-The simpler distinction:
+Here is what each one is for:
 
 | Pattern | Use it when | Watch out for |
 | --- | --- | --- |
@@ -526,9 +526,9 @@ If events use random keys, related updates can be processed out of order.
 
 Pick the key based on the invariant you need to preserve.
 
-## Update-in-place vs append-only
+## Update-in-place and append-only
 
-A normal table stores current state:
+A current-state table holds the latest value:
 
 ```sql
 UPDATE posts
@@ -557,9 +557,9 @@ INSERT INTO post_events (
 
 Append-only is useful when history matters, replay matters, or multiple projections need to be rebuilt.
 
-It is not automatically better.
+Each shape earns its place.
 
-Current-state tables are easier to query. Logs are easier to audit and replay. Many systems need both:
+Current-state tables answer "what is true now" in a single read. Logs preserve every fact in sequence, ready to audit and replay. Many systems run both together:
 
 ```text
 post_events     -> source of historical facts
@@ -609,7 +609,7 @@ def start_import(user_id, file_id):
     return {"job_id": job_id, "status": "queued"}
 ```
 
-But be honest in the product language. If the work is queued, call it queued. Do not call it done.
+Be honest in the product language. If the work is queued, call it queued. Reserve "done" for work that has finished.
 
 ## Failure states are product states
 
@@ -630,7 +630,7 @@ CREATE TABLE import_jobs (
 );
 ```
 
-The status model is not UX polish. It is part of correctness.
+The status model is part of correctness.
 
 If the user can start a job, refresh the page, and see nothing, the write path is incomplete. The request returned before the real work finished, so the product needs a way to represent the pending work.
 
@@ -690,7 +690,7 @@ If the answer is "we do not know," the write path is not designed yet.
 4. Move derived effects behind queues, workers, or streams.
 5. Use an outbox when a database write and event publish must move together.
 6. Assume retries and duplicates; make commands and handlers idempotent.
-7. Treat queue lag and backpressure as product concerns, not just ops metrics.
+7. Treat queue lag and backpressure as product concerns that shape the user experience.
 8. Pick partition keys based on the ordering invariant you need.
 9. Async workflows need explicit pending, completed, and failed states.
 

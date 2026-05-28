@@ -7,9 +7,9 @@ tags: ["Caching", "Performance", "Redis", "Scale"]
 
 Caching is a common technique for reducing latency: put Redis in front of the database, put a CDN in front of the app, or put a memoized function in front of expensive code. Latency drops and load on the source of truth decreases.
 
-The tradeoffs show up in specific cases: a user updates their profile and sees the old name for five minutes, a hot key expires and 20,000 requests reach the database at the same time, or a private response gets cached under a public key. These are the cases where caching becomes an architectural concern rather than a simple optimization.
+The tradeoffs show up in specific cases: a user updates their profile and sees the old name for five minutes, a hot key expires and 20,000 requests reach the database at the same time, or a private response gets cached under a public key. These are the cases where caching becomes an architectural concern.
 
-A cache is not just a faster place to put data. It is an agreement about how stale, shared, and recoverable a value is allowed to be.
+A cache is an agreement about how stale, shared, and recoverable a value is allowed to be.
 
 <div style={{ margin: '1.75rem 0 2rem' }}>
   <figure>
@@ -144,7 +144,7 @@ A cache is not just a faster place to put data. It is an agreement about how sta
 
 ## Start with the stale promise
 
-The first caching question is not "what should we put in Redis?" but rather:
+The first caching question is:
 
 ```text
 How wrong is this value allowed to be, and for how long?
@@ -156,7 +156,7 @@ This is the stale promise. A product logo can be stale for a day, a user display
   Cache data only after naming the freshness promise, the invalidation owner, and the fallback when the cache is empty.
 </Callout>
 
-Caching without a stale promise produces correctness that is incidental rather than designed, and tends to surface when two screens disagree.
+Caching without a stale promise produces incidental correctness, and tends to surface when two screens disagree.
 
 ## The cache is a read model
 
@@ -169,11 +169,11 @@ A cache is a derived read model with a short memory, which means the same questi
 5. Can the answer be rebuilt?
 6. What happens when many callers rebuild it at once?
 
-The last question is the one most often skipped. A cache improves the normal path but can make the miss path worse: if a hot key serves 10,000 QPS and the cached value expires, every request can become a database request unless something coordinates the refill.
+The last question is the one most often skipped. A cache speeds up the hit path and shapes the miss path: if a hot key serves 10,000 QPS and the cached value expires, every one of those requests becomes a database request until something coordinates the refill.
 
 ## Cache layers
 
-Caching is not one thing. The layer decides who shares the value and who owns invalidation.
+Caching happens in layers. The layer decides who shares the value and who owns invalidation.
 
 | Layer | Typical latency | Good for | Main risk |
 | --- | ---: | --- | --- |
@@ -185,25 +185,25 @@ Caching is not one thing. The layer decides who shares the value and who owns in
 
 Use the highest layer that can safely answer the request. A static image belongs on a CDN. A public product catalog page belongs on a CDN with purge or a short TTL. An authenticated account dashboard belongs in an application cache keyed by tenant and user permissions. An expensive analytics number should be precomputed, stored, and given an age.
 
-The closer the cache is to the user, the faster it is, and the harder it is to coordinate.
+A cache near the user answers in microseconds and is owned by that user's device or edge node, so coordinating its invalidation reaches across many independent caches. A cache in Redis answers in a few milliseconds from one shared place, so a single delete reaches every reader.
 
 ## Cache keys are data models
 
 The key is the schema.
 
-Bad key:
+A bare key names one dimension:
 
 ```text
 profile:123
 ```
 
-Better key:
+A full key names every dimension that changes the answer:
 
 ```text
 profile:v3:tenant:88:user:123:viewer:456:locale:en-US
 ```
 
-The second key looks unwieldy because it reflects all the dimensions that change the answer. If the response varies by tenant, viewer permissions, locale, feature flag, or API version, the key must include that dimension. Without those dimensions, the cache mixes answers rather than storing one.
+The second key carries the tenant, the viewer, the locale, and the schema version because each of those changes what the profile should return. When the response varies by tenant, viewer permissions, locale, feature flag, or API version, the key includes that dimension so each distinct answer lands in its own slot. A key that names only the user id stores every variation of that profile under one slot, so whichever answer arrived first is served to everyone.
 
 Common key dimensions:
 
@@ -235,9 +235,9 @@ def profile_cache_key(tenant_id, user_id, viewer_id, locale):
 
 When the representation changes, bump the version and old values expire naturally. This is a simple and effective approach to deploy-time invalidation.
 
-## TTL is not invalidation
+## TTL is a safety fuse
 
-TTL is a fuse. It guarantees the cache entry dies eventually, but it does not guarantee the entry is correct until then. If a user changes their display name and the cached profile has a 10-minute TTL, the old name can remain visible for 10 minutes unless the write path invalidates it. That may be acceptable, but it should be a product decision.
+TTL is a fuse. It guarantees the cache entry dies once the timer runs out. During the window before that, the entry holds whatever value it was given at write time. If a user changes their display name and the cached profile has a 10-minute TTL, the old name stays visible for up to 10 minutes, until the write path invalidates the key. That window can be acceptable, and it is a product decision.
 
 There are three basic choices:
 
@@ -335,7 +335,7 @@ The general shape is:
 4. The database is the fallback, reached only when the cache cannot answer.
 
 <Callout type="warning" title="Warning">
-  A cache miss is not free. At scale, a miss is the most expensive read path because it does cache work and source-of-truth work.
+  A cache miss carries a cost. At scale, a miss is the most expensive read path because it does cache work and source-of-truth work.
 </Callout>
 
 ## The stampede calculation
@@ -350,7 +350,7 @@ cache entry expires:   now
 concurrent DB reads = 8,000 x 0.250 = 2,000
 ```
 
-One expired key can produce 2,000 concurrent database reads. If each query holds a connection for 250ms, the connection pool can be exhausted, unrelated endpoints start waiting, clients retry, and the effect spreads into territory covered by the API reliability post. This is why a five-minute TTL on its own does not address the miss path.
+One expired key can produce 2,000 concurrent database reads. If each query holds a connection for 250ms, the connection pool can be exhausted, unrelated endpoints start waiting, clients retry, and the effect spreads into territory covered by the API reliability post. A five-minute TTL governs how long the hit path stays warm; the miss path is governed by what coordinates the refill at the moment of expiry.
 
 ## Stampede defenses
 
@@ -376,11 +376,11 @@ def should_refresh_early(ttl_remaining, original_ttl):
     return random.random() < max(0.0, age_ratio ** 3)
 ```
 
-Early in the TTL, refresh is unlikely. Near the end, one of the readers is likely to refresh before the key fully expires. This is not needed everywhere; it is worth the extra writes on hot keys where a synchronized expiry would be costly.
+Early in the TTL, refresh is unlikely. Near the end, one of the readers is likely to refresh before the key fully expires. This is worth the extra writes on hot keys where a synchronized expiry would be costly.
 
 ## Write-through, write-behind, and friends
 
-The pattern names matter less than where the acknowledgment boundary sits.
+Each pattern is defined by where the acknowledgment boundary sits: the point in the write where the caller is told the write succeeded.
 
 | Pattern | Read path | Write path | Risk |
 | --- | --- | --- | --- |
@@ -390,7 +390,7 @@ The pattern names matter less than where the acknowledgment boundary sits.
 | Write-behind | App writes cache, DB is updated later | Fast write response | Data loss if cache fails before flush |
 | Refresh-ahead | Cache refreshes before expiry | Background refresh | Extra work for unused keys |
 
-For most product systems, cache-aside is a reasonable default. Write-through is useful when read-after-write matters and the write rate is manageable. Write-behind is risky for canonical data but can work for metrics, counters, or logs where loss and replay rules are explicit. Avoid letting the cache become the only place the truth exists unless the system is intentionally designed as an in-memory store with its own durability story.
+For most product systems, cache-aside is a reasonable default. Write-through fits when read-after-write matters and the write rate is manageable. Write-behind acknowledges the write at the cache and flushes to the database later, so it carries a loss window; that window is acceptable for metrics, counters, or logs where loss and replay rules are explicit, and it puts canonical data at risk during the same window. Let the cache become the only place the truth exists when the system is intentionally designed as an in-memory store with its own durability story.
 
 ## Invalidation is part of the write path
 
@@ -433,9 +433,9 @@ def handle_profile_updated(event):
 
 Invalidation can be synchronous if freshness is critical, but with many derived keys, doing it inside the user request can turn a simple update into a slow integration path. The choice comes back to the freshness promise.
 
-## Delete usually beats update
+## Deleting on writes
 
-On writes, deleting the cached value is often simpler than updating it because one write can affect many read shapes. Changing a display name may affect the user's profile, their posts, comment rows, notification previews, search snippets, and team member lists. Updating all of those cache entries correctly is difficult, while deleting the known keys and letting reads rebuild is generally safer.
+On writes, deleting the cached value lets the next read rebuild it from the source of truth. One write can affect many read shapes: changing a display name touches the user's profile, their posts, comment rows, notification previews, search snippets, and team member lists. Deleting the known keys is one operation per key, and the rebuild that follows pulls the correct value through the normal read path. Updating each of those cache entries in place asks the write to reproduce every read shape correctly at write time.
 
 The catch is key discovery: if the affected keys cannot be named, they cannot be invalidated precisely. That leaves three options:
 
@@ -455,7 +455,7 @@ def invalidate_profile_namespace(user_id):
     cache.incr(f"profile_namespace:user:{user_id}")
 ```
 
-Instead of deleting every possible profile key, increment the namespace version. New reads use new keys, and old keys expire later. This trades memory for simpler invalidation.
+Increment the namespace version with a single write. New reads compose new keys, and old keys sit unused until their TTL expires them. The old values occupy memory for the remainder of their TTL, and invalidation stays a single increment.
 
 ## What I notice
 
@@ -502,7 +502,7 @@ For sensitive data:
 Cache-Control: no-store
 ```
 
-Vague headers around private content should be avoided. The cache bug that matters most is not stale data; it is one user seeing another user's data because the cache key ignored identity.
+Spell out the headers around private content. When a cache key ignores identity, one user's response gets served to another user, which is the failure these headers exist to prevent.
 
 ## Negative caching
 
@@ -528,7 +528,7 @@ def get_product(product_id):
     return product
 ```
 
-Keep negative TTLs short. If the product is created one second after the miss is cached, users may keep seeing "not found" until the negative entry expires. Negative caching is a tool for reducing pressure, not a substitute for the source of truth.
+Keep negative TTLs short. If the product is created one second after the miss is cached, users may keep seeing "not found" until the negative entry expires. Negative caching is a tool for reducing pressure, and the source of truth remains the place the answer lives.
 
 ## Hot keys
 
@@ -565,14 +565,14 @@ Local memory caching is often the right choice for small, frequently accessed da
 
 Counters look cache-friendly: likes, views, followers, notifications. They are also where correctness arguments get hard to pin down.
 
-If the number is decorative, approximate is fine:
+When the number is decorative, an approximate value satisfies the reader:
 
 ```text
 1,204 likes
 about 1.2K views
 ```
 
-If the number controls access or money, approximate is not fine:
+When the number controls access or money, the displayed value drives a decision and needs the source-of-truth figure:
 
 ```text
 remaining credits
@@ -594,24 +594,24 @@ def flush_view_counts(limit=1000):
         cache.delete(key)
 ```
 
-This reduces database write pressure but creates a loss window: if Redis loses the buffer before flush, those views are gone. That is acceptable for views and not acceptable for payments.
+This batches many increments into one database write and opens a loss window: if Redis loses the buffer before the flush, those buffered views are gone. A lost view leaves the count slightly low, which the product can absorb. A payment carries the requirement that every cent is recorded, so it writes straight to the source of truth.
 
-## When not to cache
+## When to skip the cache
 
-Caching should not be a reflex. Avoid caching when:
+Let caching be a deliberate choice. Skip the cache when:
 
 1. The read is already cheap and low volume.
 2. The value changes constantly.
 3. The key would need too many personalization dimensions.
 4. The response contains sensitive data and the cache layer is shared.
-5. The miss path is more dangerous than the hit path is useful.
+5. A cache miss threatens the source of truth while the hit saves little.
 6. The team cannot name the invalidation trigger.
 
-The simplest cache is the one that is not added. Sometimes the right fix is an index, a smaller response, pagination, a read model, or a better query. Caching is a pressure valve rather than a substitute for modeling the data correctly.
+A cache that is never added carries no contract to maintain. The fix that addresses the underlying cost is an index, a smaller response, pagination, a read model, or a sharper query. Caching is a pressure valve placed on top of data that is already modeled correctly.
 
 ## Metrics that actually help
 
-Hit rate is useful but not sufficient on its own. A more complete set of metrics:
+Hit rate tells one part of the story. A fuller set of metrics:
 
 | Metric | Why it matters |
 | --- | --- |
@@ -626,7 +626,7 @@ Hit rate is useful but not sufficient on its own. A more complete set of metrics
 | Serialized payload size | Shows network and memory cost |
 | Source-of-truth QPS saved | Shows the actual value of the cache |
 
-Hit rate can be misleading on its own: a cache with 99 percent hit rate can still cause problems if the 1 percent misses all happen on one hot path with expensive queries.
+Hit rate reports an average across all reads: a cache at 99 percent hit rate sends 1 percent of reads to the source of truth, and when that 1 percent lands on one hot path with expensive queries, those misses carry the full weight on that path.
 
 ## What I think
 
@@ -639,7 +639,7 @@ The practical sequence is:
 5. Add TTL with jitter.
 6. Invalidate on writes that break the promise.
 7. Protect hot misses with single-flight or stale-while-revalidate.
-8. Measure misses, not just hits.
+8. Measure misses alongside hits.
 9. Keep a repair path back to the source of truth.
 
 Caching is reasonable to underengineer only when the contract is small and explicit:
@@ -652,7 +652,7 @@ One caller rebuilds it.
 Others get stale data.
 ```
 
-That is a design. Without something like it, the cache is operating on assumptions rather than guarantees.
+That is a design. A cache built on a contract like this one runs on stated decisions; the moment those lines are written down, the cache stops running on assumptions.
 
 ## Tutorial checklist
 
@@ -679,17 +679,17 @@ Then ask:
 If this cache is empty during peak traffic, what breaks first?
 ```
 
-If the answer is "the database," the cache is not just an optimization; it is part of capacity planning.
+If the answer is "the database," the cache is part of capacity planning.
 
 ## Summary
 
 1. Caching is an agreement about acceptable staleness.
 2. A cache key is a data model; include every dimension that changes the answer.
-3. TTL is a safety fuse, not a complete invalidation strategy.
+3. TTL is a safety fuse; invalidation on write completes the strategy.
 4. Cache-aside is a good default, but hot misses need stampede protection.
-5. Serve stale data intentionally when it is better than taking down the source of truth.
+5. Serve stale data intentionally to keep the source of truth standing under a stampede.
 6. Invalidation belongs in the write path.
-7. Delete or version cached values on writes unless updating every affected key is truly simple.
+7. Delete or version cached values on writes, and update in place when every affected key is simple to name.
 8. CDN and browser caching depend on precise `Cache-Control` and `Vary` headers.
 9. Do not cache sensitive or highly personalized data without a precise isolation key.
 10. Measure misses, hot keys, stale responses, lock waits, evictions, and source-of-truth load saved.
