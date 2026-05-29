@@ -1,21 +1,21 @@
 ---
 title: "The write path is your architecture"
-description: "How data gets into your system decides latency, durability, retries, consistency, and every read model that follows."
+description: "How data enters your system quietly decides latency, durability, retries, consistency, and every read model that follows."
 date: "2026-05-18"
 tags: ["Architecture", "Writes", "Event Streaming", "Scale"]
 ---
 
-Most architecture diagrams leave out the part that matters.
+Most architecture diagrams leave out the part that matters most.
 
-They show boxes. API, database, queue, worker, cache, search. Sometimes they show arrows.
+They show boxes. API, database, queue, worker, cache, search. Sometimes arrows between them. It looks complete, and it tells you almost nothing about how the system behaves.
 
-The useful diagram is narrower.
+There is a narrower diagram that does.
 
-What happens after a user clicks submit?
+It answers one question: what happens after a user clicks submit?
 
-That is the write path. The write path decides what the user waits for, what can be retried, what can be lost, what needs to be repaired, and which read models are even possible later.
+That is the write path. It decides what the user waits for, what can be retried, what can be lost, what needs repair, and which read models are even possible later. When the write path is clear, the architecture is clear. When it is vague, everything downstream inherits the vagueness.
 
-If the write path is vague, the architecture is vague.
+So it is worth sitting with this one question for a while.
 
 <div style={{ margin: '1.75rem 0 2rem' }}>
   <figure>
@@ -170,24 +170,21 @@ If the write path is vague, the architecture is vague.
 
 ## Start with the acknowledgement boundary
 
-
-The first question:
+There is one question to ask before any of the others:
 
 ```text
 What must be true before we tell the user the write succeeded?
 ```
 
-That line is the acknowledgement boundary.
+That line is the acknowledgement boundary. Everything in the design tends to fall into place once you can answer it honestly.
 
-For a blog comment, success might mean "the canonical comment row exists." Notifications, search indexing, abuse scanning, and feed fanout can happen later.
+For a blog comment, success might mean the canonical comment row exists. Notifications, search indexing, abuse scanning, and feed fanout can all happen later.
 
-For a bank transfer, success might mean "the ledger entries are durably committed, balanced, and visible to the account owner." Sending an email receipt can happen later.
+For a bank transfer, success might mean the ledger entries are durably committed, balanced, and visible to the account owner. The email receipt can happen later.
 
-For a file upload, success might mean "the object bytes and metadata are durable." Thumbnail generation can happen later.
+For a file upload, success might mean the object bytes and metadata are durable. Thumbnail generation can happen later.
 
-Place the boundary far downstream and users wait on work they do not care about.
-
-Place the boundary early and you say "success" for work that can still disappear.
+Place the boundary far downstream and the user waits on work they never asked about. Place it too early and you say "success" for work that can still quietly disappear. The whole craft here is finding the line that is both true and small.
 
 <Callout title="Rule of thumb">
   Return only after the smallest durable fact that the product promise requires. Everything else is a derived effect.
@@ -195,7 +192,7 @@ Place the boundary early and you say "success" for work that can still disappear
 
 ## The naive write path
 
-This is the shape most systems start with:
+This is the shape most systems start with, and there is nothing shameful about it:
 
 ```python
 def create_post(user_id, content):
@@ -207,11 +204,11 @@ def create_post(user_id, content):
     return post
 ```
 
-It is easy to read.
+It reads top to bottom and you understand it immediately.
 
-It also adds latency. The user waits for the database, cache, search, notifications, analytics, and every network hop behind those calls.
+It also adds latency. The user waits for the database, the cache, search, notifications, analytics, and every network hop hiding behind those calls.
 
-And it is fragile under partial failure:
+And it is fragile under partial failure. Picture the sequence:
 
 1. The post insert succeeds.
 2. Search indexing times out.
@@ -219,27 +216,25 @@ And it is fragile under partial failure:
 4. The user retries.
 5. The second request creates a duplicate post.
 
-Now the code needs cleanup logic, dedupe logic, and product support.
+Now the code needs cleanup logic, dedupe logic, and a support ticket.
 
-Synchronous writes have their place. The thing to notice here is that this function blends the canonical write and the derived side effects into one undivided block, with the boundary between them left implicit.
+Synchronous writes still have their place. The thing worth noticing is subtler: this function blends the canonical write and the derived side effects into one undivided block, and the boundary between them is left implicit. The cost is not in any single line. It is in the missing line that would have separated them.
 
 ## What I notice
 
 The write path tends to grow quietly.
 
-One team adds analytics. Another adds notifications. Another adds search. Another invalidates a cache. Another writes audit logs. The endpoint still looks like one function, but the product contract has changed.
+One team adds analytics. Another adds notifications. Another adds search. Another invalidates a cache. Another writes audit logs. The endpoint still looks like one tidy function, but the product contract underneath it has changed.
 
-The user thinks they are creating a post.
+The user thinks they are creating a post. The system is doing six things.
 
-The system is doing six things.
+So when p99 latency rises, the database usually gets blamed first, because it is the obvious stateful component sitting in the diagram. The real cause is usually elsewhere. Without anyone deciding it, the request path has become an integration path.
 
-When p99 latency rises, the database tends to get blamed first, because it is the obvious stateful component. The real cause is usually elsewhere: the request path has quietly become an integration path.
-
-The fix is to name the critical path.
+The fix is simply to name the critical path, out loud, on purpose.
 
 ## Split canonical writes from derived work
 
-A write path that scales tends to take this shape:
+A write path that scales tends to settle into this shape:
 
 ```text
 request
@@ -256,7 +251,7 @@ worker
   -> update analytics
 ```
 
-The user waits for the fact. Workers handle the effects.
+The user waits for the fact. Workers handle the effects. That single division is most of the work.
 
 ```python
 def create_post(user_id, content, idempotency_key):
@@ -294,21 +289,21 @@ def create_post(user_id, content, idempotency_key):
     return {"id": post_id, "status": "published"}
 ```
 
-There are three important details here.
+Three details carry the weight here.
 
 First, the canonical row and the event are written in the same database transaction.
 
-Second, the idempotency result is stored in the same transaction.
+Second, the idempotency result is stored in that same transaction.
 
 Third, nothing calls search, notifications, or analytics before returning to the user.
 
-This keeps the request path small while treating derived work as real work that runs on its own schedule.
+The request path stays small, and derived work is treated as real work that runs on its own schedule. Nothing is dropped. It is just held in the right place.
 
 ## The outbox pattern
 
-Queues open a gap between the database commit and the queue publish.
+Queues open a small gap between the database commit and the queue publish. Small, but it is exactly where things go wrong.
 
-Watch what that gap does:
+Watch what the gap does:
 
 ```python
 def create_post(user_id, content):
@@ -317,9 +312,9 @@ def create_post(user_id, content):
     return post
 ```
 
-If the database write succeeds and the queue publish fails, the post exists but no worker hears about it.
+If the database write succeeds and the queue publish fails, the post exists but no worker ever hears about it. The fact is real and the effects never come.
 
-The outbox pattern removes that gap by writing the event into the same database transaction as the canonical fact.
+The outbox pattern closes that gap by writing the event into the same database transaction as the canonical fact. Either both land or neither does.
 
 ```sql
 CREATE TABLE posts (
@@ -340,7 +335,7 @@ CREATE TABLE outbox_events (
 );
 ```
 
-Then a relay publishes unpublished events:
+Then a relay publishes the unpublished events:
 
 ```python
 def publish_outbox_batch(limit=100):
@@ -355,11 +350,11 @@ def publish_outbox_batch(limit=100):
         db.mark_outbox_event_published(event.id)
 ```
 
-This relay can crash after publishing but before marking the event as published. That means workers may receive duplicates.
+This relay can crash after publishing but before marking the event as published. When that happens, workers receive duplicates.
 
-That is normal.
+That is fine. It is the expected shape of the world, not a defect.
 
-The system must be designed around at-least-once delivery unless you have a very specific reason and infrastructure support for something stricter.
+The system should be designed around at-least-once delivery, unless you have a very specific reason and the infrastructure to support something stricter.
 
 <Callout type="warning" title="Warning">
   "Exactly once" is usually a property of a narrow subsystem, not your whole product workflow. Design handlers so duplicate events are harmless.
@@ -367,11 +362,11 @@ The system must be designed around at-least-once delivery unless you have a very
 
 ## Idempotency is the retry contract
 
-Retries are everywhere.
+Retries are everywhere, whether you plan for them or not.
 
-Clients retry after timeouts. Load balancers retry. Workers retry. Operators replay events after bugs. You replay outbox rows after deploys. A mobile app sends the same request twice because the connection died before it saw the response.
+Clients retry after timeouts. Load balancers retry. Workers retry. Operators replay events after a bug. You replay outbox rows after a deploy. A mobile app sends the same request twice because the connection died before the response arrived.
 
-If retries are unsafe, the system is unsafe.
+So if retries are unsafe, the system is unsafe. There is no way around it.
 
 For external API writes, require an idempotency key:
 
@@ -386,9 +381,9 @@ CREATE TABLE idempotency_keys (
 );
 ```
 
-The key should mean: "For this user, this logical command may run once."
+The key carries a single meaning: for this user, this logical command may run once.
 
-The request hash matters because clients can accidentally reuse keys for different payloads. When the same key arrives with a different request body, return a conflict, so the server stays honest about what each key represents.
+The request hash matters because clients sometimes reuse keys for different payloads by accident. When the same key arrives with a different request body, return a conflict. That keeps the server honest about what each key actually represents.
 
 For worker handlers, make each effect idempotent too:
 
@@ -408,15 +403,13 @@ def handle_post_created(event):
         )
 ```
 
-The important part is the handler name. Search indexing, feed projection, notifications, and analytics are different effects. Each needs its own dedupe boundary.
+The handler name is the quiet hero here. Search indexing, feed projection, notifications, and analytics are different effects, and each one needs its own dedupe boundary. They process the same event, but they are not the same work.
 
 ## A queue keeps the hard decisions yours
 
-Queues help when work can happen later.
+A queue helps when work can happen later. What it does not do is make the decisions for you.
 
-The decisions remain yours.
-
-You still need to decide:
+You still choose:
 
 | Question | Why it matters |
 | --- | --- |
@@ -427,31 +420,31 @@ You still need to decide:
 | Where do poison messages go? | Bad payloads need a dead-letter path. |
 | What is the max acceptable lag? | Async work still has a product freshness budget. |
 
-A queue shapes how a spike lands.
+A queue mostly shapes how a spike lands.
 
-A direct path turns a spike into waiting: users hold the connection while the work runs.
+A direct path turns a spike into waiting. Users hold the connection while the work runs.
 
-A queue turns a spike into lag: the work accumulates behind the boundary and drains over time.
+A queue turns a spike into lag. The work accumulates behind the boundary and drains over time.
 
-The queue earns its place when that lag is visible and bounded.
+A queue earns its place when that lag is visible and bounded. Otherwise it just moves the problem somewhere you can no longer see it.
 
 ## Backpressure
 
-Backpressure is the system saying: "I cannot accept work at this rate and still keep my promises."
+Backpressure is the system saying, plainly: I cannot accept work at this rate and still keep my promises.
 
-Ignoring it means returning success for work that is falling behind.
+Ignoring it means returning success for work that is already falling behind.
 
-Consider the arithmetic:
+The arithmetic makes it concrete:
 
 1. The API accepts 20,000 writes per second.
 2. Workers can process 5,000 events per second.
 3. The queue grows by 15,000 events per second.
 4. Notification lag reaches 45 minutes.
-5. The API keeps returning `200` while the product feels broken from the user's side.
+5. The API keeps returning `200` while the product feels broken to the person using it.
 
-It helps to decide on a policy before reaching that point.
+It helps a great deal to decide on a policy before reaching that point, while there is still room to think.
 
-Possible policies:
+A few options:
 
 1. Return `429` or `503` when queue lag crosses a threshold.
 2. Accept the write but mark derived effects as delayed.
@@ -459,19 +452,19 @@ Possible policies:
 4. Degrade expensive fanout into smaller batches.
 5. Route large tenants through separate partitions.
 
-The right policy depends on the product.
+The right policy depends entirely on the product.
 
-For payments, slow down intake before losing ledger correctness.
+For payments, slow intake down before risking ledger correctness.
 
-For social notifications, preserve the post and delay the notification.
+For social notifications, preserve the post and let the notification arrive late.
 
-For analytics, sample or drop events before impacting the user-facing write.
+For analytics, sample or drop events before touching the user-facing write.
 
 ## What streams, queues, and direct writes each do
 
-These words get overloaded.
+These words get overloaded, and the overload causes most of the confusion.
 
-Here is what each one is for:
+Here is what each one is actually for:
 
 | Pattern | Use it when | Watch out for |
 | --- | --- | --- |
@@ -479,7 +472,7 @@ Here is what each one is for:
 | Queue | Each item should be processed by one consumer group for background work | Poison messages, retries, visibility timeouts, lag |
 | Stream/log | Many consumers need the same ordered history of facts | Retention, replay safety, partition keys, schema evolution |
 
-Examples:
+Seen through examples:
 
 ```text
 Direct write:
@@ -494,19 +487,19 @@ Stream/log:
   post.created feeds search, ranking, notifications, analytics, audit
 ```
 
-Use a queue when you want work distribution.
+Use a queue when you want to distribute work.
 
-Use a stream when you want a durable history that multiple consumers can independently read and replay.
+Use a stream when you want a durable history that multiple consumers can read and replay independently.
 
-Use a direct write when the user-facing command is not true until that write completes.
+Use a direct write when the user-facing command simply is not true until that write completes.
 
 ## Ordering comes from partition keys
 
-Ordering is not global by default.
+Ordering is not global by default, and assuming otherwise is a common source of quiet bugs.
 
-Most scalable logs order records within a partition. That means the key matters.
+Most scalable logs order records within a partition. So the key you choose is the thing that decides where order is preserved.
 
-For posts, a reasonable key may be `post_id` if all events for one post need order:
+For posts, `post_id` is a reasonable key if all events for one post need to stay in order:
 
 ```text
 post.created
@@ -514,17 +507,17 @@ post.updated
 post.deleted
 ```
 
-For account balances, the key is usually `account_id` because operations for one account need a single sequence.
+For account balances, the key is usually `account_id`, because operations for one account need a single, undisputed sequence.
 
-For notifications, the key may be `recipient_user_id` so one user's notification timeline stays ordered.
+For notifications, the key may be `recipient_user_id`, so one person's notification timeline stays ordered.
 
-The wrong key creates subtle bugs.
+The wrong key creates subtle bugs that are hard to trace later.
 
-If all events use one global key, one partition becomes hot.
+If every event uses one global key, a single partition becomes hot.
 
 If events use random keys, related updates can be processed out of order.
 
-Pick the key based on the invariant you need to preserve.
+Pick the key based on the invariant you actually need to preserve, and nothing more.
 
 ## Update-in-place and append-only
 
@@ -537,7 +530,7 @@ SET content = $2,
 WHERE id = $1;
 ```
 
-An append-only log stores facts:
+An append-only log stores facts instead:
 
 ```sql
 INSERT INTO post_events (
@@ -555,11 +548,11 @@ INSERT INTO post_events (
 );
 ```
 
-Append-only is useful when history matters, replay matters, or multiple projections need to be rebuilt.
+Append-only is useful when history matters, when replay matters, or when several projections need to be rebuilt from the same source.
 
-Each shape earns its place.
+Each shape earns its place. There is no winner.
 
-Current-state tables answer "what is true now" in a single read. Logs preserve every fact in sequence, ready to audit and replay. Many systems run both together:
+Current-state tables answer "what is true now" in a single read. Logs preserve every fact in sequence, ready to audit and replay. Many systems run both together, side by side:
 
 ```text
 post_events     -> source of historical facts
@@ -568,11 +561,11 @@ feed_items      -> read model
 search_index    -> external projection
 ```
 
-This is event sourcing in the small. You do not need to redesign the whole company around it. You can use append-only facts where replay and audit justify the cost.
+This is event sourcing in the small. You do not need to redesign the whole company around it. You can keep append-only facts in the few places where replay and audit justify the cost, and leave the rest alone.
 
 ## A practical decision matrix
 
-Before designing a write path, fill this out:
+Before designing a write path, it helps to fill this out:
 
 | Requirement | Direct DB write | DB + outbox | Queue first | Stream first |
 | --- | --- | --- | --- | --- |
@@ -585,9 +578,9 @@ Before designing a write path, fill this out:
 
 My default for product systems is DB + outbox.
 
-It preserves a simple source of truth, gives workers a durable event stream, and avoids coupling the request path to every side effect.
+It keeps a simple source of truth, gives workers a durable event stream, and avoids coupling the request path to every side effect. It is rarely the most clever choice, and that is part of why it holds up.
 
-Queue first can be correct when the command itself is naturally asynchronous:
+Queue first can be the right call when the command itself is naturally asynchronous:
 
 ```text
 import a CSV
@@ -609,13 +602,13 @@ def start_import(user_id, file_id):
     return {"job_id": job_id, "status": "queued"}
 ```
 
-Be honest in the product language. If the work is queued, call it queued. Reserve "done" for work that has finished.
+And it is worth being honest in the product language. If the work is queued, call it queued. Reserve "done" for work that has actually finished.
 
 ## Failure states are product states
 
-Async writes create intermediate states.
+Async writes create intermediate states. They exist whether or not you acknowledge them.
 
-Name them.
+So name them.
 
 ```sql
 CREATE TABLE import_jobs (
@@ -630,13 +623,13 @@ CREATE TABLE import_jobs (
 );
 ```
 
-The status model is part of correctness.
+The status model is part of correctness, not decoration around it.
 
-If the user can start a job, refresh the page, and see nothing, the write path is incomplete. The request returned before the real work finished, so the product needs a way to represent the pending work.
+If a user can start a job, refresh the page, and see nothing, the write path is incomplete. The request returned before the real work finished, so the product needs an honest way to represent the work that is still pending.
 
 ## What I think
 
-The useful mental model is:
+The mental model I keep returning to is small:
 
 ```text
 command -> fact -> effects -> projections
@@ -646,19 +639,19 @@ A command is what the user asks for.
 
 A fact is what the system durably records.
 
-Effects are things caused by the fact.
+Effects are the things caused by the fact.
 
-Projections are read models created from facts.
+Projections are read models built from facts.
 
-Most messy architectures mix these together. A request handler validates a command, writes a fact, mutates three projections, calls two external systems, and returns success based on whatever happened last.
+Most tangled architectures simply blur these together. A request handler validates a command, writes a fact, mutates three projections, calls two external systems, and returns success based on whatever happened to finish last.
 
-That is how a write path becomes untestable.
+That is how a write path becomes untestable, quietly, one helpful addition at a time.
 
-Separate the pieces. Then decide where the acknowledgement boundary belongs.
+Separate the pieces. Then decide, deliberately, where the acknowledgement boundary belongs. Most of the difficulty dissolves once those two things are done.
 
 ## Tutorial checklist
 
-For any important write path, fill this out:
+For any important write path, it is worth filling this out:
 
 | Question | Example answer |
 | --- | --- |
@@ -674,13 +667,13 @@ For any important write path, fill this out:
 | Repair path | Replay `post.created` events from outbox or event log |
 | User-visible states | Published immediately; side effects may lag |
 
-Then ask the harder question:
+Then sit with the harder question:
 
 ```text
 What happens if every step after the acknowledgement boundary fails?
 ```
 
-If the answer is "we do not know," the write path is not designed yet.
+If the answer is "we do not know," the write path is not designed yet. And that is alright. It just means there is one more honest question to answer before you ship.
 
 ## Summary
 

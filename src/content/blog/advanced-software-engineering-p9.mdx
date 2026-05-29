@@ -1,0 +1,796 @@
+---
+title: "Deploys need a release path"
+description: "A safe deploy has a scope, a rollout plan, health signals, rollback criteria, and database changes that work across versions."
+date: "2026-05-29"
+tags: ["Deployment", "CI/CD", "Infrastructure", "Scale"]
+---
+
+A deploy is a production change. That is the whole of it, and it is enough.
+
+Every deploy carries the same few things: a version, a path into service, a set of users who can reach it, health signals to watch, and a condition that tells the rollout when to stop. Once you can see those parts, the change stops being a moment of suspense and becomes something you can hold.
+
+There is one question that organizes all of it:
+
+```text
+What has to be true before the next slice of traffic sees this version?
+```
+
+Asked early, that question keeps the deploy small enough to reason about. It gives the system a way to move forward, and it gives the person at the controls a clear place to stop. Nothing more is required of you than to answer it honestly, one slice at a time.
+
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 420"
+      role="img"
+      aria-labelledby="deploy-svg-title deploy-svg-desc"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <title id="deploy-svg-title">Progressive deployment with health checks</title>
+      <desc id="deploy-svg-desc">
+        {"Animated rollout showing traffic moving from stable servers to a canary version while health metrics decide whether the rollout advances or rolls back."}
+      </desc>
+      <defs>
+        <linearGradient id="deploy-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#07111a" />
+          <stop offset="100%" stopColor="#0a1724" />
+        </linearGradient>
+        <pattern id="deploy-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#dbeafe" strokeWidth="0.5" opacity="0.08" />
+        </pattern>
+        <pattern id="deploy-grid-major" width="96" height="96" patternUnits="userSpaceOnUse">
+          <path d="M 96 0 L 0 0 0 96" fill="none" stroke="#dbeafe" strokeWidth="1" opacity="0.12" />
+        </pattern>
+        <linearGradient id="deploy-panel" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#102638" />
+          <stop offset="100%" stopColor="#07131d" />
+        </linearGradient>
+        <filter id="deploy-soft-glow">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <marker id="deploy-arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#67e8f9" />
+        </marker>
+        <marker id="deploy-arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
+        </marker>
+        <marker id="deploy-arrow-yellow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24" />
+        </marker>
+      </defs>
+
+      <rect width="720" height="420" rx="18" fill="url(#deploy-bg)" />
+      <rect width="720" height="420" fill="url(#deploy-grid-minor)" />
+      <rect width="720" height="420" fill="url(#deploy-grid-major)" />
+
+      <text x="42" y="44" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        {"Deploys advance through gates"}
+      </text>
+      <text x="42" y="69" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+        {"a small slice receives the version, metrics decide the next slice"}
+      </text>
+
+      <g filter="url(#deploy-soft-glow)">
+        <rect x="54" y="103" width="166" height="210" rx="10" fill="url(#deploy-panel)" stroke="#67e8f9" strokeWidth="1.4" />
+        <rect x="262" y="103" width="150" height="210" rx="10" fill="url(#deploy-panel)" stroke="#fbbf24" strokeWidth="1.4" />
+        <rect x="468" y="103" width="178" height="210" rx="10" fill="url(#deploy-panel)" stroke="#93c5fd" strokeWidth="1.4" />
+      </g>
+
+      <text x="137" y="128" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+        {"stable"}
+      </text>
+      <text x="337" y="128" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+        {"canary"}
+      </text>
+      <text x="557" y="128" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+        {"health gate"}
+      </text>
+
+      <g>
+        <rect x="82" y="156" width="42" height="42" rx="6" fill="#0f2b31" stroke="#67e8f9" strokeWidth="1.2" />
+        <rect x="147" y="156" width="42" height="42" rx="6" fill="#0f2b31" stroke="#67e8f9" strokeWidth="1.2" />
+        <rect x="82" y="226" width="42" height="42" rx="6" fill="#0f2b31" stroke="#67e8f9" strokeWidth="1.2" />
+        <rect x="147" y="226" width="42" height="42" rx="6" fill="#0f2b31" stroke="#67e8f9" strokeWidth="1.2" />
+        <text x="103" y="181" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"v1"}</text>
+        <text x="168" y="181" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"v1"}</text>
+        <text x="103" y="251" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"v1"}</text>
+        <text x="168" y="251" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"v1"}</text>
+      </g>
+
+      <g>
+        <rect x="316" y="178" width="42" height="42" rx="6" fill="#2a220d" stroke="#fbbf24" strokeWidth="1.4">
+          <animate attributeName="opacity" values="0.65;1;0.65" dur="3.8s" repeatCount="indefinite" />
+        </rect>
+        <text x="337" y="203" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"v2"}</text>
+        <path d="M 337 225 L 337 266" stroke="#fbbf24" strokeWidth="1.2" strokeDasharray="4 7" opacity="0.7" />
+        <text x="337" y="285" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11">
+          {"5% traffic"}
+          <animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.32;0.42;0.78;1" dur="14s" repeatCount="indefinite" />
+        </text>
+        <text x="337" y="285" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11" opacity="0">
+          {"50% traffic"}
+          <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.36;0.48;0.68;1" dur="14s" repeatCount="indefinite" />
+        </text>
+      </g>
+
+      <g>
+        <path d="M 82 92 C 110 78 146 78 174 92" fill="none" stroke="#67e8f9" strokeWidth="1.4" markerEnd="url(#deploy-arrow-cyan)" opacity="0.75" />
+        <circle cx="86" cy="88" r="4" fill="#e0f2fe" />
+        <circle cx="118" cy="80" r="4" fill="#e0f2fe" />
+        <circle cx="150" cy="80" r="4" fill="#e0f2fe" />
+        <circle cx="182" cy="88" r="4" fill="#e0f2fe" />
+        <path d="M 177 90 C 234 91 287 111 324 174" fill="none" stroke="#fbbf24" strokeWidth="1.8" strokeDasharray="5 7" markerEnd="url(#deploy-arrow-yellow)" opacity="0">
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.12;0.18;0.36;0.45;1" dur="14s" repeatCount="indefinite" />
+        </path>
+        <path d="M 177 91 C 244 88 291 142 324 174" fill="none" stroke="#10b981" strokeWidth="1.8" markerEnd="url(#deploy-arrow-green)" opacity="0">
+          <animate attributeName="opacity" values="0;0;0;1;1;0;0" keyTimes="0;0.36;0.44;0.5;0.68;0.74;1" dur="14s" repeatCount="indefinite" />
+        </path>
+        <path d="M 324 174 C 251 122 196 105 125 108" fill="none" stroke="#67e8f9" strokeWidth="1.8" markerEnd="url(#deploy-arrow-cyan)" opacity="0">
+          <animate attributeName="opacity" values="0;0;0;0;1;1;0" keyTimes="0;0.72;0.78;0.82;0.86;0.96;1" dur="14s" repeatCount="indefinite" />
+        </path>
+      </g>
+
+      <g>
+        <rect x="496" y="154" width="122" height="24" rx="5" fill="#07131d" stroke="#10b981" strokeWidth="1" />
+        <rect x="496" y="198" width="122" height="24" rx="5" fill="#07131d" stroke="#10b981" strokeWidth="1" />
+        <rect x="496" y="242" width="122" height="24" rx="5" fill="#07131d" stroke="#10b981" strokeWidth="1" />
+        <text x="509" y="170" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"error rate"}</text>
+        <text x="509" y="214" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"p99 latency"}</text>
+        <text x="509" y="258" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"success rate"}</text>
+        <polyline points="501,192 521,189 541,190 561,187 581,190 613,188" fill="none" stroke="#10b981" strokeWidth="1.6" opacity="0">
+          <animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.7;0.74;0.98;1" dur="14s" repeatCount="indefinite" />
+        </polyline>
+        <polyline points="501,236 521,234 541,235 561,233 581,234 613,232" fill="none" stroke="#10b981" strokeWidth="1.6" opacity="0">
+          <animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.7;0.74;0.98;1" dur="14s" repeatCount="indefinite" />
+        </polyline>
+        <polyline points="501,280 521,279 541,279 561,278 581,279 613,278" fill="none" stroke="#10b981" strokeWidth="1.6" opacity="0">
+          <animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.7;0.74;0.98;1" dur="14s" repeatCount="indefinite" />
+        </polyline>
+        <polyline points="501,192 521,190 541,189 561,182 581,170 613,159" fill="none" stroke="#ef4444" strokeWidth="1.8" opacity="0">
+          <animate attributeName="opacity" values="0;0;0;0;1;1;0" keyTimes="0;0.72;0.78;0.82;0.86;0.94;1" dur="14s" repeatCount="indefinite" />
+        </polyline>
+        <g opacity="0">
+          <animate attributeName="opacity" values="0;0;0;0;1;1;0" keyTimes="0;0.75;0.8;0.84;0.88;0.96;1" dur="14s" repeatCount="indefinite" />
+          <rect x="532" y="290" width="50" height="26" rx="6" fill="#2a1218" stroke="#ef4444" strokeWidth="1.2" />
+          <text x="557" y="307" textAnchor="middle" fill="#fecaca" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"rollback"}</text>
+        </g>
+        <text x="557" y="296" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11" opacity="0">
+          {"advance"}
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.32;0.44;0.68;0.74;1" dur="14s" repeatCount="indefinite" />
+        </text>
+      </g>
+
+      <g>
+        <text x="48" y="360" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          {"rollout"}
+        </text>
+        <rect x="119" y="349" width="74" height="20" rx="5" fill="#0f2b31" stroke="#67e8f9" strokeWidth="0.8" />
+        <rect x="204" y="349" width="74" height="20" rx="5" fill="#241f12" stroke="#fbbf24" strokeWidth="0.8" />
+        <rect x="289" y="349" width="74" height="20" rx="5" fill="#132816" stroke="#10b981" strokeWidth="0.8" />
+        <rect x="374" y="349" width="74" height="20" rx="5" fill="#132816" stroke="#10b981" strokeWidth="0.8" />
+        <rect x="459" y="349" width="74" height="20" rx="5" fill="#132816" stroke="#10b981" strokeWidth="0.8" />
+        <text x="156" y="363" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"build"}</text>
+        <text x="241" y="363" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"5%"}</text>
+        <text x="326" y="363" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"25%"}</text>
+        <text x="411" y="363" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"50%"}</text>
+        <text x="496" y="363" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">{"100%"}</text>
+        <circle r="4" fill="#f8fafc">
+          <animateMotion dur="14s" repeatCount="indefinite" path="M 156 359 L 241 359 L 326 359 L 411 359 L 496 359 L 241 359" keyPoints="0;0.18;0.36;0.52;0.68;0.9" keyTimes="0;0.18;0.36;0.52;0.68;1" />
+          <animate attributeName="opacity" values="0;1;1;1;0.4;1;0" keyTimes="0;0.08;0.68;0.78;0.82;0.9;1" dur="14s" repeatCount="indefinite" />
+        </circle>
+      </g>
+    </svg>
+  </figure>
+</div>
+
+## Start with the release path
+
+Three words do a lot of quiet work here, and it helps to let them mean different things.
+
+A deploy places a version in production.
+
+A release exposes behavior to users.
+
+A rollout changes that exposure over time.
+
+They help because each one has its own control points, and naming them separately gives you somewhere precise to act:
+
+| Word | What it names | Control point |
+| --- | --- | --- |
+| Deploy | Code and configuration available in production | Build, artifact, environment, version |
+| Release | Behavior reachable by users | Feature flag, permission, tenant, cohort |
+| Rollout | The amount of exposure | Percentage, region, account set, traffic route |
+
+Once those controls are separate, you gain room to breathe. A version can sit in production at zero traffic. A feature can be enabled for a single tenant. A rollout can rest at a small percentage for as long as you need. The change is present, and nothing has happened yet that you cannot undo.
+
+<Callout title="Rule of thumb">
+  Every deploy should name the version, the rollout scope, the health gates, and the rollback condition before traffic moves.
+</Callout>
+
+## The release object
+
+Give the release one durable record, in one place, that everyone can return to.
+
+```python
+from dataclasses import dataclass
+from datetime import datetime
+
+
+@dataclass
+class Release:
+    version: str
+    artifact_digest: str
+    environment: str
+    rollout_percentage: int
+    status: str
+    started_at: datetime
+    owner: str
+```
+
+That record becomes the single thing automation reads and updates, so the truth lives somewhere other than memory.
+
+The useful release states are few, and they stay simple on purpose:
+
+| State | Meaning |
+| --- | --- |
+| `prepared` | Artifact built, verified, and available |
+| `deployed` | Version present in production capacity |
+| `canary` | Small traffic slice reaches the version |
+| `expanding` | Rollout percentage is increasing |
+| `paused` | Version remains deployed and rollout is stopped |
+| `rolled_back` | Traffic returned to the previous stable version |
+| `completed` | Full intended scope reaches the version |
+
+With this record, humans and automation share one view of the same world. There is no private version of the story.
+
+## Blue-green deployment
+
+Blue-green deployment keeps two production-ready environments side by side.
+
+One environment serves traffic. The other quietly receives the new version, the migrations that are safe for the current system, the configuration, the warmup, and the smoke checks. When the prepared environment is healthy, routing moves traffic to it. The switch happens only after the new side has earned it.
+
+A few things hold this together:
+
+1. Both environments can run the production workload.
+2. Routing can move traffic with a clear command.
+3. The previous environment stays available for a defined window.
+4. Shared dependencies can handle both versions during the transition.
+5. State changes remain compatible across the switch.
+
+Blue-green works well when the serving layer can be duplicated cleanly. The shared parts, databases, queues, caches, and object storage, still ask for release discipline, because they are touched by both sides. When the shared state is already compatible, the traffic switch becomes the easy step it was meant to be.
+
+## Rolling deployment
+
+A rolling deployment replaces capacity gradually, a little at a time.
+
+One instance leaves service. The new version starts. Readiness checks pass. The instance returns to service. Then the same small step repeats, instance by instance, until the whole fleet is running the version you intended.
+
+The shape is ordinary, and that is its strength:
+
+```text
+drain old instance
+start new version
+wait for readiness
+serve traffic
+continue with the next instance
+```
+
+A rolling deployment lives with version overlap, and there is no avoiding it. During the rollout, old and new instances may handle the same user, read the same database rows, consume the same queues, and write the same cache keys. They coexist for a while.
+
+So compatibility is the requirement. If the two versions can hold the same data without confusion, the overlap is nothing to fear.
+
+## Canary deployment
+
+A canary sends a small slice of production traffic to the new version, and then watches.
+
+The slice should be stable. A user, tenant, or request key should hash into the same bucket each time, so that one user sees one consistent behavior throughout the measurement window. Stability is a kindness to your future self reading the metrics.
+
+```python
+import hashlib
+
+
+def stable_bucket(key: str, buckets: int = 100) -> int:
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % buckets
+
+
+def receives_canary(user_id: str, rollout_percentage: int) -> bool:
+    return stable_bucket(user_id) < rollout_percentage
+```
+
+That is enough for a percentage rollout. The same user lands in the same bucket while the percentage moves underneath them, and their experience stays steady.
+
+Canary traffic asks for the same monitoring as normal traffic, only broken down by version so you can compare like with like:
+
+| Signal | Question it answers |
+| --- | --- |
+| Request rate | Is the canary receiving the intended scope? |
+| Error rate | Is the version failing requests? |
+| p95 and p99 latency | Is the version changing tail behavior? |
+| Saturation | Are CPU, memory, pools, or queues near limits? |
+| Business success rate | Are important workflows completing? |
+| Unknown or pending states | Is the version creating repair work? |
+| Log event shape | Are important events still emitted with expected fields? |
+
+The rollout advances when the health gate is satisfied, and not before. There is no rush in it.
+
+## Feature flags
+
+A feature flag controls behavior at runtime, which lets you separate shipping code from turning it on.
+
+A flag worth keeping has a name, an owner, a default value, a rollout rule, and a removal date. The removal date matters as much as the rest.
+
+```python
+def use_new_ranking(request, flags):
+    enabled = flags.enabled(
+        "feed.new_ranking",
+        actor_id=request.user.id,
+        tenant_id=request.tenant.id,
+        default=False,
+    )
+
+    if enabled:
+        return rank_feed_v2(request)
+
+    return rank_feed_v1(request)
+```
+
+The flag lookup should be fast, local where it can be, and observable. When the behavior change is meaningful, let the request log carry the flag state alongside it, so the record explains itself later.
+
+```python
+logger.info(
+    "feed.ranked",
+    extra={
+        "event": "feed.ranked",
+        "user_id": request.user.id,
+        "tenant_id": request.tenant.id,
+        "ranking_version": "v2" if enabled else "v1",
+        "flag": "feed.new_ranking",
+        "flag_enabled": enabled,
+        "duration_ms": duration_ms,
+        "result": "success",
+    },
+)
+```
+
+Flags are production code, not notes in the margin. They deserve tests, ownership, cleanup, and a known default, the same care you give anything else that runs.
+
+## Rollout gates
+
+A rollout gate is a small decision function, and its smallness is the point.
+
+```python
+def rollout_gate(version, baseline, current):
+    checks = {
+        "error_rate": current.error_rate <= baseline.error_rate * 1.25,
+        "p99_latency": current.p99_latency_ms <= baseline.p99_latency_ms * 1.20,
+        "success_rate": current.success_rate >= baseline.success_rate * 0.995,
+        "saturation": current.max_saturation <= 0.80,
+        "unknown_states": current.unknown_state_rate <= baseline.unknown_state_rate,
+    }
+
+    return {
+        "version": version,
+        "passed": all(checks.values()),
+        "checks": checks,
+    }
+```
+
+The numbers themselves are policy, and you can tune them. What matters is that the decision is explicit and written down by the gate rather than carried in someone's head. A deploy rests easiest when the choice to advance or stop is something you can point to.
+
+Good rollout gates tend to share these qualities:
+
+1. They use metrics tagged by version.
+2. They wait long enough to collect useful data.
+3. They include user-visible success signals.
+4. They include saturation signals.
+5. They produce a decision record.
+6. They page a human when the decision needs human judgment.
+
+From there the gate can advance, pause, or roll back. Three calm options, each of them safe.
+
+## Automatic rollback
+
+Rollback is a routing action first, before it is anything else.
+
+The simplest automatic rollback just moves traffic away from the version that failed the gate, back to the version that was already serving well.
+
+```python
+def evaluate_release(release):
+    baseline = metrics.for_version(release.previous_version)
+    current = metrics.for_version(release.version)
+    decision = rollout_gate(release.version, baseline, current)
+
+    audit_log.write(
+        {
+            "event": "release.gate_evaluated",
+            "version": release.version,
+            "rollout_percentage": release.rollout_percentage,
+            "passed": decision["passed"],
+            "checks": decision["checks"],
+        }
+    )
+
+    if decision["passed"]:
+        return advance_rollout(release)
+
+    route_traffic(version=release.previous_version, percentage=100)
+    mark_release(release.version, status="rolled_back")
+    alert_release_owner(release, decision)
+    return release
+```
+
+Rollback works cleanly when the release kept its state compatible all along. Code can move back the moment the data still makes sense to the previous version. The exit was prepared before it was ever needed.
+
+That is why database migrations matter so much.
+
+## Database changes
+
+Database changes have to work across the entire rollout window, while both versions are alive.
+
+A common and dependable sequence is:
+
+1. Expand the schema.
+2. Deploy code that can read and write both shapes.
+3. Backfill existing rows.
+4. Move reads to the new shape.
+5. Stop writing the old shape.
+6. Contract the schema after the old version is gone.
+
+As an example, take splitting `users.name` into `first_name` and `last_name`. Each step below leaves the system whole.
+
+First, add nullable columns:
+
+```sql
+ALTER TABLE users ADD COLUMN first_name text;
+ALTER TABLE users ADD COLUMN last_name text;
+```
+
+Then write both shapes:
+
+```python
+def update_name(user_id, full_name):
+    first_name, last_name = split_name(full_name)
+
+    db.execute(
+        """
+        UPDATE users
+        SET name = %(full_name)s,
+            first_name = %(first_name)s,
+            last_name = %(last_name)s
+        WHERE id = %(user_id)s
+        """,
+        {
+            "user_id": user_id,
+            "full_name": full_name,
+            "first_name": first_name,
+            "last_name": last_name,
+        },
+    )
+```
+
+Then read with a fallback:
+
+```python
+def display_name(user):
+    if user.first_name is not None and user.last_name is not None:
+        return f"{user.first_name} {user.last_name}"
+
+    return user.name
+```
+
+Backfill in batches:
+
+```python
+def backfill_names(batch_size=500):
+    rows = db.query(
+        """
+        SELECT id, name
+        FROM users
+        WHERE first_name IS NULL
+        ORDER BY id
+        LIMIT %(batch_size)s
+        """,
+        {"batch_size": batch_size},
+    )
+
+    for row in rows:
+        first_name, last_name = split_name(row.name)
+        db.execute(
+            """
+            UPDATE users
+            SET first_name = %(first_name)s,
+                last_name = %(last_name)s
+            WHERE id = %(user_id)s
+              AND first_name IS NULL
+            """,
+            {
+                "user_id": row.id,
+                "first_name": first_name,
+                "last_name": last_name,
+            },
+        )
+```
+
+Once the rollout and backfill are both complete, a later migration can remove the old column. The removal belongs to its own release, given its own time. There is no need to crowd everything into one risky moment.
+
+<Callout type="warning" title="Warning">
+  A complete rollback plan includes data shape. The previous code version has to understand the records it will read after traffic moves back.
+</Callout>
+
+## Queues and workers
+
+Deploys move through queues too, in their own time, not just through request traffic.
+
+A producer may publish a new event field before every consumer has the new code. A worker may read a job created by the previous version. A retry may replay a payload from hours ago, long after the deploy you thought was finished. None of this is a problem if you expect it.
+
+So queue payloads carry a few compatibility rules:
+
+1. Add fields as optional first.
+2. Keep old fields during the rollout.
+3. Give events a schema version.
+4. Make consumers tolerant of unknown fields.
+5. Keep handlers idempotent.
+6. Hold old handler code until queued work drains or expires.
+
+Example:
+
+```python
+def handle_user_updated(event):
+    version = event.get("schema_version", 1)
+
+    if version == 1:
+        email = event["email"]
+        display_name = event.get("name", "")
+    else:
+        email = event["email"]
+        display_name = " ".join(
+            part for part in [event.get("first_name"), event.get("last_name")] if part
+        )
+
+    search_index.update_user(
+        user_id=event["user_id"],
+        email=email,
+        display_name=display_name,
+        event_id=event["event_id"],
+    )
+```
+
+The worker treats old payloads as ordinary input, not as exceptions. Nothing breaks, because nothing was surprised.
+
+## Configuration
+
+Configuration is part of the release, every bit as much as code.
+
+Configuration worth trusting has:
+
+| Property | Reason |
+| --- | --- |
+| Typed values | Prevents accidental strings, units, and missing fields |
+| Defaults | Keeps startup behavior explicit |
+| Validation | Fails before serving traffic |
+| Versioning | Connects behavior to a deployed config |
+| Audit trail | Shows who changed production behavior |
+| Rollback path | Restores a known prior value |
+
+Let configuration changes show up in the release record and in the logs for affected requests. A silent config change can wear the mask of a code regression during an incident, and at three in the morning that disguise costs real time. Visibility is mercy.
+
+## Smoke tests and readiness
+
+Smoke tests check the version in its environment.
+
+Readiness checks decide whether an instance is ready to receive traffic.
+
+A small smoke test suite walks the production path at low volume:
+
+1. Start the process.
+2. Load configuration.
+3. Connect to required dependencies.
+4. Serve a health endpoint.
+5. Execute one read path.
+6. Execute one write path in a safe test scope.
+7. Emit a structured log event.
+8. Export metrics with the version tag.
+
+Readiness should cover the dependency state the request path truly needs, stay cheap to run, and keep unavailable instances out of rotation until they are genuinely ready. It is a small gate that prevents a lot of grief.
+
+## What I notice
+
+Calm deploy systems have a name for each stage.
+
+The version is named. The artifact is named. The rollout scope is named. The flag is named. The health gate is named. The rollback condition is named. The database state is named. Naming a thing is how you stop being afraid of it.
+
+When all of that is named, the team can point to one release record and simply see what is happening, together.
+
+The systems that feel anxious are the ones that scatter those facts across chat messages, dashboards, a terminal history on someone's laptop, and memory. Nothing is wrong with the people; the path is just hidden from them.
+
+So the work, gentle and unglamorous, is to make the path visible.
+
+## Metrics that help
+
+The deployment metrics that earn their keep are tagged by `version`, `environment`, `region`, and `rollout_percentage`, so you can always ask which slice of the world a number belongs to.
+
+| Metric | Why it matters |
+| --- | --- |
+| Request rate by version | Confirms traffic is reaching the intended code |
+| Error rate by version | Shows failures tied to the release |
+| p95 and p99 latency by version | Shows tail behavior during rollout |
+| Saturation by version | Shows CPU, memory, pool, thread, and queue pressure |
+| Business success rate | Shows product workflow completion |
+| Rollback count | Shows release quality and gate behavior |
+| Time in each rollout stage | Shows stalled releases |
+| Migration batch rate | Shows backfill progress |
+| Migration lock time | Shows schema change risk |
+| Queue age by payload version | Shows old work still in flight |
+| Flag evaluation rate | Shows which behavior users are receiving |
+
+The release process leaves logs of its own, too:
+
+```text
+release.prepared
+release.deployed
+release.canary_started
+release.gate_evaluated
+release.rollout_advanced
+release.paused
+release.rolled_back
+release.completed
+```
+
+With those events, deployments become queryable in the same system as application behavior. The deploy stops being a separate, mysterious thing and joins the rest of what you can see.
+
+## What I think
+
+The practical sequence, in order, is this:
+
+1. Build one artifact and give it a digest.
+2. Deploy the artifact to production capacity.
+3. Keep release behavior behind a flag when the behavior is meaningful.
+4. Start with a small stable cohort.
+5. Tag logs, metrics, and traces with the version and flag state.
+6. Evaluate the health gate after enough traffic arrives.
+7. Advance the rollout in clear steps.
+8. Pause when the signal is incomplete.
+9. Route traffic back when the gate fails.
+10. Design database and queue changes for overlapping versions.
+11. Remove old flags, columns, and compatibility paths in later releases.
+
+The under-engineering move, the one that quietly saves you, is to make the deploy path explicit and mechanical. Let the steps be boring. Boring is what lets you stay calm.
+
+A small release system with clear gates is genuinely enough for most teams. You do not need more than this to be safe.
+
+## Tutorial checklist
+
+For any production deploy, it helps to fill this out before you begin:
+
+| Question | Example answer |
+| --- | --- |
+| Version | `2026.05.29.3` |
+| Artifact | Image digest or build hash |
+| Environment | `production` |
+| Owner | Release engineer or service team |
+| Rollout scope | 5 percent of users, stable hash by `user_id` |
+| Feature flag | `feed.new_ranking`, default `false` |
+| Health window | 20 minutes or 100,000 requests |
+| Success signals | Error rate, p99 latency, feed render success |
+| Saturation signals | CPU, memory, DB pool, queue age |
+| Rollback condition | Gate failure on error, latency, or workflow success |
+| Database state | Expanded schema deployed, old and new code compatible |
+| Queue state | Payload v1 and v2 both accepted |
+| Observability | Logs and metrics tagged by version and flag |
+| Cleanup | Remove flag and old code after full rollout and one stable window |
+
+Then ask:
+
+```text
+Can this release pause or move back while keeping data in a shape the old code can read?
+```
+
+A complete release path can answer yes to that question without hesitation. When it can, the deploy is no longer something to brace against. It is just a change you can make, and unmake, in the open.
+
+## Summary
+
+1. A deploy places a version in production.
+2. A release exposes behavior to users.
+3. A rollout changes exposure over time.
+4. Blue-green deployment keeps two production-ready environments.
+5. Rolling deployment replaces capacity gradually.
+6. Canary deployment sends a small stable slice of traffic to the new version.
+7. Feature flags control runtime behavior and need ownership.
+8. Rollout gates turn health metrics into advance, pause, or rollback decisions.
+9. Automatic rollback works cleanly when state remains compatible.
+10. Database migrations need an expand, overlap, backfill, and contract sequence.
+11. Queue payloads need compatibility across producer and consumer versions.
+12. A release record makes the deploy path visible and auditable.
+
+---
+
+## Pop quiz
+
+<Quiz
+  title="Deployment and release safety"
+  description="A gentle, randomized review of release paths, canaries, feature flags, rollout gates, rollback, and compatible migrations."
+  questionCount={4}
+  randomizeChoices={true}>
+  <QuizQuestion
+    id="deploy-release-rollout"
+    prompt="What does a rollout name?"
+    explanation="A rollout names the changing exposure of a release, usually through a percentage, region, account set, tenant set, or traffic route.">
+    <QuizChoice>The laptop used to write the code</QuizChoice>
+    <QuizChoice correct>The amount of exposure a version or behavior receives over time</QuizChoice>
+    <QuizChoice>A permanent replacement for logs</QuizChoice>
+    <QuizChoice>The SQL type of a new column</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="stable-canary-bucket"
+    prompt="Why should a canary cohort use a stable key such as user_id or tenant_id?"
+    explanation="A stable key keeps the same actor in the same rollout bucket during the measurement window, which makes behavior and metrics easier to interpret.">
+    <QuizChoice correct>It keeps the same actor in the same rollout bucket</QuizChoice>
+    <QuizChoice>It removes the need for metrics</QuizChoice>
+    <QuizChoice>It makes every request use a different version</QuizChoice>
+    <QuizChoice>It deletes old database rows automatically</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="feature-flag-fields"
+    prompt="Which fields belong on a useful feature flag record?"
+    explanation="A useful feature flag has a name, owner, default value, rollout rule, and cleanup plan so production behavior is explicit.">
+    <QuizChoice>Only a random number</QuizChoice>
+    <QuizChoice correct>Name, owner, default value, rollout rule, and removal date</QuizChoice>
+    <QuizChoice>A copy of every user record</QuizChoice>
+    <QuizChoice>Only the commit message</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="rollout-gate"
+    prompt="What is the role of a rollout gate?"
+    explanation="A rollout gate evaluates version-tagged health signals and returns an advance, pause, or rollback decision.">
+    <QuizChoice>To hide deploy events from operators</QuizChoice>
+    <QuizChoice>To rename all database tables</QuizChoice>
+    <QuizChoice correct>To turn health signals into an advance, pause, or rollback decision</QuizChoice>
+    <QuizChoice>To remove the need for smoke tests</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="rollback-data-shape"
+    prompt="Why does rollback depend on database compatibility?"
+    explanation="Traffic can move back to the previous code version when that code can still read and write the records it will encounter after the new version ran.">
+    <QuizChoice>Because CSS files are stored in SQL tables</QuizChoice>
+    <QuizChoice correct>Because the previous code must understand the records it reads after traffic moves back</QuizChoice>
+    <QuizChoice>Because rollbacks require every table to be empty</QuizChoice>
+    <QuizChoice>Because migrations always finish before code starts</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="expand-contract"
+    prompt="What is a safe order for a schema change used by two code versions?"
+    explanation="The usual sequence is expand schema, deploy compatible code, backfill, move reads, stop old writes, and contract later.">
+    <QuizChoice>Drop the old column first, then deploy the old code</QuizChoice>
+    <QuizChoice correct>Expand, deploy compatible code, backfill, move reads, stop old writes, contract later</QuizChoice>
+    <QuizChoice>Run every write through one permanent staging table</QuizChoice>
+    <QuizChoice>Rename every table during peak traffic</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="queue-payloads"
+    prompt="Why do queued payloads need version compatibility during deploys?"
+    explanation="A worker may process payloads created by older producers or retried from earlier attempts, so handlers should tolerate old shapes and unknown fields.">
+    <QuizChoice>Queues always erase payloads before delivery</QuizChoice>
+    <QuizChoice correct>Workers may process old or retried payloads after new code is deployed</QuizChoice>
+    <QuizChoice>Queue payloads always use one global shape forever</QuizChoice>
+    <QuizChoice>Compatibility applies to static asset filenames</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="release-record"
+    prompt="What does a release record provide?"
+    explanation="A release record gives humans and automation one shared view of the version, artifact, environment, rollout scope, owner, and status.">
+    <QuizChoice correct>A shared view of the version, artifact, scope, owner, and status</QuizChoice>
+    <QuizChoice>A replacement for source control</QuizChoice>
+    <QuizChoice>A way to skip readiness checks</QuizChoice>
+    <QuizChoice>A guarantee that every metric stays flat</QuizChoice>
+  </QuizQuestion>
+</Quiz>

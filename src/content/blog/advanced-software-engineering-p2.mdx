@@ -1,17 +1,17 @@
 ---
 title: "Scale lives in the data model"
-description: "The schema, indexes, and read model decide how much work every request creates. Shape the work and the database follows."
+description: "The schema, indexes, and read model quietly decide how much work each request creates. Shape the work, and the database follows."
 date: "2026-05-12"
 tags: ["Databases", "Schema Design", "PostgreSQL", "Scale"]
 ---
 
-A slow database points attention straight at the database.
+A slow database tends to draw all the attention to itself.
 
-CPU is high. Queries queue. The app times out. Someone suggests a larger instance, read replicas, sharding, or a different storage engine.
+CPU is high. Queries queue. The app times out. The first ideas that arrive are usually about the database itself: a larger instance, read replicas, sharding, a different storage engine.
 
-Each of those moves can help in the right situation. The move that helps most often is upstream: the data model is asking the database to do a large amount of work per request, and reshaping that request shrinks the work.
+Any of those can be the right move in the right situation. But the move that helps most often sits a little upstream. The data model is asking the database to do a large amount of work for every request, and reshaping the request shrinks the work before it ever reaches the engine.
 
-This post is about that path: model the data around the access pattern, and let the storage engine carry a lighter load.
+That is the path this post follows. Model the data around the way it is actually read, and the storage engine gets to carry a lighter load.
 
 <div style={{ margin: '1.75rem 0 2rem' }}>
   <figure>
@@ -155,9 +155,9 @@ This post is about that path: model the data around the access pattern, and let 
 
 ## Start with the read path
 
-A schema fits a given workload to a certain degree, and the workload reveals that fit.
+A schema only ever fits a particular workload, and the workload is what reveals the fit. So it helps to begin there, with how the data is read, rather than with the tables themselves.
 
-Before adding tables or indexes, write down the read path:
+Before adding tables or indexes, write the read path down:
 
 1. What endpoint or job is reading?
 2. Which columns does it filter by?
@@ -166,9 +166,9 @@ Before adding tables or indexes, write down the read path:
 5. Does the read need fresh data, or is stale data acceptable?
 6. Is this path hit 10 times per minute, or 10,000 times per second?
 
-The answer changes the model.
+Each answer reshapes the model.
 
-An admin report has room to join six tables and run for two seconds. A feed endpoint answers in tens of milliseconds, so it earns a model that fits inside that budget. A nightly billing job has hours to scan a large table. A signup request returns while the user waits, so it reads from a path sized for that wait.
+An admin report has room to join six tables and run for two seconds. A feed endpoint answers in tens of milliseconds, so it earns a model that fits inside that budget. A nightly billing job has hours to scan a large table. A signup request returns while the user waits, so it reads from a path sized for that wait. Different budgets, different shapes. None of them wrong.
 
 <Callout title="Rule of thumb">
   Normalize the source of truth. Denormalize the read model when the product repeatedly asks the same expensive question.
@@ -176,7 +176,7 @@ An admin report has room to join six tables and run for two seconds. A feed endp
 
 ## The normalized version
 
-Start with a normal schema:
+Start with an ordinary, normalized schema:
 
 ```sql
 CREATE TABLE users (
@@ -200,7 +200,7 @@ CREATE TABLE comments (
 );
 ```
 
-This is clean. Each fact lives in one place.
+This is clean. Each fact lives in exactly one place, which is a good place for facts to live.
 
 Now add the read:
 
@@ -221,7 +221,7 @@ LIMIT 100;
 
 The product question is simple: "Show the latest comments on this user's posts."
 
-The database question is bigger:
+The question the database hears is larger:
 
 1. Find the user's posts.
 2. Find comments for those posts.
@@ -229,9 +229,9 @@ The database question is bigger:
 4. Return the newest 100 rows.
 5. Fetch display data from related tables.
 
-`LIMIT 100` does not make this automatically cheap. If the user has 50,000 posts and 80M comments across them, the planner still needs a path to find the newest 100 without doing work proportional to the full match set.
+`LIMIT 100` does not make this cheap on its own. If the user has 50,000 posts and 80M comments across them, the planner still needs some path to the newest 100 that does not first touch the whole match set.
 
-Indexes help:
+Indexes help here:
 
 ```sql
 CREATE INDEX posts_user_id_idx
@@ -241,23 +241,23 @@ CREATE INDEX comments_post_created_idx
   ON comments (post_id, created_at DESC);
 ```
 
-With these indexes the planner walks a narrow range to find the user's posts, then walks comment ranges keyed by each post. The query shape carries a join boundary between `posts` and `comments`, followed by an ordering problem across many `post_id` values. A direct lookup walks a single index range in the order the page needs.
+With these indexes the planner walks a narrow range to find the user's posts, then walks comment ranges keyed by each post. The query still carries a join boundary between `posts` and `comments`, and after that an ordering problem across many `post_id` values. A direct lookup, by contrast, walks a single index range in the order the page already needs.
 
 ## What I notice
 
 The cost lives in the amount of candidate data created before the database can return the first page.
 
-A join over 100 rows returns at the cost of 100 rows. A join that builds 4M candidate rows carries the cost of sorting all four million to surface the first 100. The keyword is the same; the work scales with the candidate set.
+A join over 100 rows returns at the cost of 100 rows. A join that builds 4M candidate rows carries the cost of sorting all four million just to surface the first 100. Same query, same `LIMIT`; the work simply scales with the candidate set.
 
-The label a team reaches for shapes the fix it finds.
+And the words a team reaches for tend to shape the fix it finds.
 
-"Postgres is slow" describes the whole system, so the repair stays vague.
+"Postgres is slow" describes the whole system at once, so the repair stays vague and the conversation goes in circles.
 
-"This endpoint needs latest comments by user, and comments are keyed by post" names the exact shape, so the repair is a concrete schema change.
+"This endpoint needs latest comments by user, and comments are keyed by post" names the exact shape. Now the repair is a concrete schema change, and the path forward is clear.
 
 ## Build the read model
 
-For a hot feed path, create a read-optimized table:
+For a hot feed path, give the read its own table, shaped for exactly how it is read:
 
 ```sql
 CREATE TABLE comment_feed (
@@ -292,15 +292,15 @@ ORDER BY created_at DESC
 LIMIT 100;
 ```
 
-Now the database can walk one index range in the same order the endpoint needs.
+Now the database walks one index range, in the same order the endpoint hands back to the user.
 
-That is the main idea: make the common read path proportional to the page size, scaling with the page the endpoint returns.
+That is the whole idea, really: make the common read proportional to the page size, so the work scales with the page returned rather than with all of history.
 
 ## The cost of denormalization
 
-Denormalization moves work from read time to write time.
+Denormalization does not remove work. It moves it from read time to write time, where there is often more room for it.
 
-When a comment is created, several writes happen together:
+When a comment is created, several writes now happen together:
 
 ```sql
 BEGIN;
@@ -348,7 +348,7 @@ WHERE p.id = $2;
 COMMIT;
 ```
 
-One logical write now creates multiple physical writes. That is write amplification.
+One logical write becomes several physical writes. That is write amplification, and it is worth naming plainly rather than discovering by surprise later.
 
 This design earns its keep when:
 
@@ -357,7 +357,7 @@ This design earns its keep when:
 3. The duplicated fields are small and stable enough.
 4. You have a repair path for rebuilding the derived table.
 
-This design demands care, and watching, when:
+And it asks for more care, and closer watching, when:
 
 1. The duplicated fields change constantly.
 2. Writes already carry the heaviest load.
@@ -365,12 +365,12 @@ This design demands care, and watching, when:
 4. Backfills and consistency checks lack an owner.
 
 <Callout type="warning" title="Warning">
-  A complete denormalized table ships with a rebuild job beside it. Derived data needs a way to be repaired after bugs, retries, and schema changes.
+  A denormalized table is only complete when a rebuild job sits beside it. Derived data will eventually need repair, after bugs, retries, and schema changes, so give it a way to be repaired before you need one.
 </Callout>
 
 ## Optimize for reads, batch writes
 
-In many product systems, reads arrive far more frequently, often hundreds of times for every write. The write path has slack to absorb extra work asynchronously.
+In many product systems reads arrive far more often than writes, sometimes hundreds of reads for every write. That imbalance is an opening: the write path usually has slack to absorb extra work, and much of that work can happen asynchronously.
 
 For example:
 
@@ -382,21 +382,21 @@ comment.created
   -> enqueue search indexing
 ```
 
-The request path can commit the canonical row and enqueue durable work. Workers can update read models in batches.
+The request path commits the canonical row and enqueues durable work, then returns. Workers update the read models in batches, on their own time.
 
-This creates an explicit product decision:
+This turns freshness into an explicit product decision rather than an accident of implementation:
 
 1. If the user must see the new data immediately, update the read model synchronously.
 2. If a delay of a few seconds is acceptable, update it asynchronously.
 3. If the read model is only for analytics, update it in larger batches.
 
-Freshness is part of schema design. Treat it as a requirement.
+Freshness is part of schema design, not separate from it. It is worth deciding on purpose.
 
 ## Indexes are data models too
 
-An index is a stored projection of the table. It has a shape. It has maintenance cost. It speeds up the specific query shapes it was built for.
+An index is itself a small data model: a stored projection of the table. It has a shape, it has a maintenance cost, and it speeds up only the query shapes it was built for. Nothing more, nothing less.
 
-Use the query to choose the index order.
+So let the query choose the index order.
 
 For this query:
 
@@ -422,15 +422,15 @@ CREATE INDEX comment_feed_recent_user_idx
   ON comment_feed (created_at DESC, user_id);
 ```
 
-The first index groups one user's rows together, already sorted by time, so the query walks one contiguous range and stops at the page limit. The second index orders rows by time across all users, so the query reads through that timeline and skips the rows belonging to other users along the way.
+The first index groups one user's rows together, already sorted by time, so the query walks one contiguous range and stops at the page limit. The second orders rows by time across all users, so the query reads down that shared timeline and steps past everyone else's rows along the way. Same columns, very different amount of work.
 
 Column order shapes the work.
 
 ## B-tree, hash, covering, partial
 
-Most everyday Postgres indexes are B-tree indexes. They support equality, range scans, and ordered reads. That makes them the default choice for feed queries, lookup pages, account lists, and most filters.
+Most everyday Postgres indexes are B-tree indexes. They handle equality, range scans, and ordered reads, which is why they are the sensible default for feed queries, lookup pages, account lists, and most filters.
 
-Hash indexes serve equality lookup. They answer "find the row where this column equals this value" directly. A query that asks for rows in sorted order reaches for a B-tree, which keeps its entries ordered.
+Hash indexes serve equality lookup. They answer "find the row where this column equals this value" directly. When a query needs rows in sorted order, that is a job for a B-tree, since a B-tree keeps its entries ordered and a hash index does not.
 
 Covering indexes use `INCLUDE` columns to avoid extra table fetches for small, commonly returned fields:
 
@@ -440,9 +440,9 @@ CREATE INDEX comment_feed_covering_idx
   INCLUDE (comment_id, post_id, post_title, comment_author_name);
 ```
 
-Keep covering indexes to small, frequently read fields. An `INCLUDE` column copies its data into the index, so a large text blob there grows storage, adds cache pressure, and raises write cost.
+Keep covering indexes to small, frequently read fields. An `INCLUDE` column copies its data into the index, so a large text blob placed there grows storage, adds cache pressure, and raises write cost. Small and well-chosen is the whole point.
 
-Partial indexes index only the rows a query actually needs:
+Partial indexes store only the rows a query actually needs:
 
 ```sql
 CREATE INDEX comments_visible_recent_idx
@@ -450,9 +450,9 @@ CREATE INDEX comments_visible_recent_idx
   WHERE deleted_at IS NULL;
 ```
 
-This is useful when most queries ignore deleted, archived, private, or expired rows.
+This pays off when most queries quietly ignore deleted, archived, private, or expired rows anyway.
 
-Every index carries a write cost. Each insert, update, and delete maintains every index on the table, so an index that no query reads still charges that maintenance on every write. A pile of unused indexes adds up to slower writes and heavier maintenance.
+It is worth remembering that every index carries a write cost. Each insert, update, and delete maintains every index on the table, so an index that no query ever reads still charges its maintenance on every single write. A drawer full of unused indexes slowly becomes slower writes and heavier maintenance. Indexes are easy to add and easy to forget; the occasional review is kind to your future self.
 
 ## Choosing a column or a table
 
@@ -487,7 +487,7 @@ CREATE TABLE post_moderation_events (
 );
 ```
 
-The decision comes down to read cost, write cost, and lifecycle.
+The decision comes down to three quiet questions: read cost, write cost, and lifecycle.
 
 ## Partitioning
 
@@ -509,11 +509,11 @@ post_bodies
 post_embeddings
 ```
 
-Horizontal partitioning helps when queries can exclude partitions. A query for May 2026 comments does not need to inspect June 2026 partitions.
+Horizontal partitioning helps when queries can exclude whole partitions. A query for May 2026 comments has no reason to inspect the June 2026 partitions, so it simply does not.
 
-Vertical partitioning helps when a small hot row carries large cold fields. A list page may need `post_id`, `title`, and `created_at`, but not a 40 KB body or a 1,536-dimension embedding.
+Vertical partitioning helps when a small hot row drags along large cold fields. A list page may need `post_id`, `title`, and `created_at`, but not a 40 KB body or a 1,536-dimension embedding riding next to them.
 
-Partitioning helps only if the query includes the partition key.
+Either way, partitioning only helps if the query includes the partition key.
 
 ```sql
 -- Good partition fit: includes created_at.
@@ -528,23 +528,23 @@ FROM comments
 WHERE author_id = $1;
 ```
 
-If the table is partitioned by month, the second query may still touch many partitions.
+If the table is partitioned by month, the second query may still have to touch many partitions to find its answer.
 
 ## Hot partitions
 
-Partitioning can create a new bottleneck.
+Partitioning can also quietly create a new bottleneck, so it helps to see it coming.
 
-If you partition writes by `created_at`, almost every new row goes into the current partition. Historical partitions are quiet. The current partition is hot.
+Partition writes by `created_at`, and almost every new row lands in the current partition. The historical partitions go quiet; the current one runs hot.
 
-If you partition by `tenant_id`, one large tenant can dominate one partition.
+Partition by `tenant_id`, and one large tenant can dominate a single partition.
 
-If you hash by `user_id`, writes spread more evenly, but range queries by date become harder.
+Hash by `user_id`, and writes spread out more evenly, but range queries by date become harder.
 
-Every partition key carries its own trade. Pick the key that matches the dominant access pattern and the dominant failure mode.
+Every partition key carries its own trade-off; there is no key without one. The honest move is to pick the key that matches the dominant access pattern and the failure mode you most want to avoid.
 
 ## Sharding decision point
 
-Sharding is partitioning across database servers. It is operationally expensive, so delay it until the numbers justify it.
+Sharding is partitioning across database servers. It is genuinely expensive to operate, so it is worth waiting until the numbers ask for it rather than reaching for it early.
 
 Sharding fits when:
 
@@ -554,18 +554,18 @@ Sharding fits when:
 4. Most critical queries include a shard key.
 5. Cross-shard transactions are rare or can be redesigned.
 
-These situations call for a smaller fix first, and sharding waits:
+And these situations call for a smaller fix first, while sharding waits:
 
 1. The slow query is missing an index, so add the index.
 2. The app has N+1 queries, so collapse them into one.
 3. One hot customer or hot key is the real load, so isolate that key.
 4. The product needs frequent global ordering, global uniqueness, or cross-tenant reports, which a single database serves cleanly.
 
-Sharding carries the data modeling work along with it, and a clean data model stays the prerequisite that makes it manageable.
+Sharding does not replace the data modeling work; it carries that work along with it. A clean data model stays the quiet prerequisite that keeps sharding manageable.
 
 ## What I think
 
-The practical sequence is:
+In practice, the sequence tends to settle into this:
 
 1. Measure the slow path.
 2. Write the query shape in plain language.
@@ -576,11 +576,11 @@ The practical sequence is:
 7. Partition for operations and query exclusion.
 8. Shard once one database has stopped being a reasonable unit.
 
-This is where the phrase "database scaling" points back at the model. The database executes the work your model asks for, so scale begins by shaping that work.
+This is where the phrase "database scaling" quietly points back at the model. The database only executes the work the model asks of it, so scale begins, calmly, by shaping that work.
 
 ## Tutorial checklist
 
-For any hot read path, fill this out:
+For any hot read path, it helps to fill this out before changing anything:
 
 | Question | Example answer |
 | --- | --- |
@@ -595,7 +595,7 @@ For any hot read path, fill this out:
 | Primary index | `(user_id, created_at DESC)` |
 | Repair path | Rebuild feed rows from canonical comments |
 
-Then choose the lowest-complexity design that makes the common read proportional to the page size.
+Then choose the simplest design that makes the common read proportional to the page size. The simplest one that works is usually the right one.
 
 ## Summary
 

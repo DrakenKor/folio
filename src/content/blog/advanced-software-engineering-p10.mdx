@@ -1,0 +1,718 @@
+---
+title: "Scale has a carrying cost"
+description: "Every scaled system carries ongoing costs in infrastructure, operations, coordination, and debugging. A calm architecture is one that keeps those costs in plain view."
+date: "2026-05-30"
+tags: ["Scale", "Architecture", "Infrastructure", "Operations"]
+---
+
+Scale is capacity with an invoice attached.
+
+The invoice is rarely just money. It includes compute, storage, and bandwidth, but also observability, oncall time, release discipline, schema discipline, incident review, and the quiet work of keeping people coordinated.
+
+None of that is a problem. It is simply the shape of the thing. And it becomes much easier to live with once you can see it. So before reaching for a new component, it helps to ask one question and let it settle:
+
+```text
+What recurring cost does this scaling move create?
+```
+
+That single question keeps an architecture grounded. It names the work that arrives alongside each new piece, and it gives the team a steady way to decide, to operate, and to come back later and revisit.
+
+<div style={{ margin: '1.75rem 0 2rem' }}>
+  <figure>
+    <svg
+      viewBox="0 0 720 420"
+      role="img"
+      aria-labelledby="scale-cost-svg-title scale-cost-svg-desc"
+      style={{ display: 'block', width: '100%', height: 'auto' }}>
+      <title id="scale-cost-svg-title">Scale cost ledger</title>
+      <desc id="scale-cost-svg-desc">
+        {"Animated architecture view showing traffic moving through scaled components while compute, storage, network, and operations costs fill a visible ledger."}
+      </desc>
+      <defs>
+        <linearGradient id="scale-cost-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#07111a" />
+          <stop offset="100%" stopColor="#0a1724" />
+        </linearGradient>
+        <pattern id="scale-cost-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#dbeafe" strokeWidth="0.5" opacity="0.08" />
+        </pattern>
+        <pattern id="scale-cost-grid-major" width="96" height="96" patternUnits="userSpaceOnUse">
+          <path d="M 96 0 L 0 0 0 96" fill="none" stroke="#dbeafe" strokeWidth="1" opacity="0.12" />
+        </pattern>
+        <linearGradient id="scale-cost-panel" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#102638" />
+          <stop offset="100%" stopColor="#07131d" />
+        </linearGradient>
+        <linearGradient id="scale-cost-fill" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#10b981" />
+          <stop offset="58%" stopColor="#67e8f9" />
+          <stop offset="100%" stopColor="#fbbf24" />
+        </linearGradient>
+        <filter id="scale-cost-soft-glow">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <marker id="scale-cost-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#67e8f9" />
+        </marker>
+      </defs>
+
+      <rect width="720" height="420" rx="18" fill="url(#scale-cost-bg)" />
+      <rect width="720" height="420" fill="url(#scale-cost-grid-minor)" />
+      <rect width="720" height="420" fill="url(#scale-cost-grid-major)" />
+
+      <text x="42" y="44" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="18" fontWeight="700">
+        {"Scale creates carrying cost"}
+      </text>
+      <text x="42" y="69" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+        {"traffic, data, boundaries, and operations all receive a line item"}
+      </text>
+
+      <g filter="url(#scale-cost-soft-glow)">
+        <rect x="48" y="111" width="116" height="58" rx="9" fill="url(#scale-cost-panel)" stroke="#67e8f9" strokeWidth="1.5" />
+        <rect x="218" y="111" width="116" height="58" rx="9" fill="url(#scale-cost-panel)" stroke="#67e8f9" strokeWidth="1.5" />
+        <rect x="218" y="221" width="116" height="58" rx="9" fill="url(#scale-cost-panel)" stroke="#10b981" strokeWidth="1.5" />
+        <rect x="388" y="111" width="116" height="58" rx="9" fill="url(#scale-cost-panel)" stroke="#fbbf24" strokeWidth="1.5" />
+        <rect x="388" y="221" width="116" height="58" rx="9" fill="url(#scale-cost-panel)" stroke="#93c5fd" strokeWidth="1.5" />
+      </g>
+
+      <text x="106" y="136" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+        {"api"}
+      </text>
+      <text x="106" y="154" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+        {"request path"}
+      </text>
+      <text x="276" y="136" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+        {"cache"}
+      </text>
+      <text x="276" y="154" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+        {"read load"}
+      </text>
+      <text x="276" y="246" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+        {"queue"}
+      </text>
+      <text x="276" y="264" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+        {"write load"}
+      </text>
+      <text x="446" y="136" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+        {"database"}
+      </text>
+      <text x="446" y="154" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+        {"state"}
+      </text>
+      <text x="446" y="246" textAnchor="middle" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+        {"observability"}
+      </text>
+      <text x="446" y="264" textAnchor="middle" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+        {"signals"}
+      </text>
+
+      <path d="M 166 140 L 214 140" fill="none" stroke="#67e8f9" strokeWidth="1.6" markerEnd="url(#scale-cost-arrow)" opacity="0.74" />
+      <path d="M 334 140 L 384 140" fill="none" stroke="#67e8f9" strokeWidth="1.6" markerEnd="url(#scale-cost-arrow)" opacity="0.74" />
+      <path d="M 166 151 C 202 198 226 219 254 223" fill="none" stroke="#10b981" strokeWidth="1.4" strokeDasharray="5 8" markerEnd="url(#scale-cost-arrow)" opacity="0.64" />
+      <path d="M 334 251 L 384 251" fill="none" stroke="#93c5fd" strokeWidth="1.4" strokeDasharray="5 8" markerEnd="url(#scale-cost-arrow)" opacity="0.64" />
+      <path d="M 446 171 L 446 216" fill="none" stroke="#fbbf24" strokeWidth="1.4" strokeDasharray="5 8" markerEnd="url(#scale-cost-arrow)" opacity="0.7" />
+
+      <g>
+        <circle r="5" fill="#e0f2fe">
+          <animateMotion dur="5.6s" repeatCount="indefinite" path="M 106 90 L 106 139 L 276 140 L 446 140" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.12;0.88;1" dur="5.6s" repeatCount="indefinite" />
+        </circle>
+        <circle r="4" fill="#bbf7d0">
+          <animateMotion dur="6.4s" begin="0.9s" repeatCount="indefinite" path="M 106 91 L 106 150 C 202 198 226 219 276 251 L 446 251" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.13;0.86;1" dur="6.4s" begin="0.9s" repeatCount="indefinite" />
+        </circle>
+        <circle r="4" fill="#fde68a">
+          <animateMotion dur="7s" begin="1.8s" repeatCount="indefinite" path="M 276 140 L 446 140 L 446 251" />
+          <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.14;0.84;1" dur="7s" begin="1.8s" repeatCount="indefinite" />
+        </circle>
+      </g>
+
+      <g>
+        <rect x="548" y="102" width="126" height="198" rx="10" fill="url(#scale-cost-panel)" stroke="#dbeafe" strokeWidth="1.2" opacity="0.96" />
+        <text x="611" y="127" textAnchor="middle" fill="#f8fafc" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="13" fontWeight="700">
+          {"cost ledger"}
+        </text>
+
+        <text x="565" y="158" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"compute"}
+        </text>
+        <rect x="565" y="166" width="88" height="10" rx="4" fill="#07131d" stroke="#24465a" strokeWidth="0.8" />
+        <rect x="565" y="166" height="10" rx="4" fill="url(#scale-cost-fill)">
+          <animate attributeName="width" values="18;42;66;82;18" keyTimes="0;0.28;0.52;0.76;1" dur="14s" repeatCount="indefinite" />
+        </rect>
+
+        <text x="565" y="195" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"storage"}
+        </text>
+        <rect x="565" y="203" width="88" height="10" rx="4" fill="#07131d" stroke="#24465a" strokeWidth="0.8" />
+        <rect x="565" y="203" height="10" rx="4" fill="url(#scale-cost-fill)">
+          <animate attributeName="width" values="14;34;58;74;14" keyTimes="0;0.28;0.52;0.76;1" dur="14s" repeatCount="indefinite" />
+        </rect>
+
+        <text x="565" y="232" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"network"}
+        </text>
+        <rect x="565" y="240" width="88" height="10" rx="4" fill="#07131d" stroke="#24465a" strokeWidth="0.8" />
+        <rect x="565" y="240" height="10" rx="4" fill="url(#scale-cost-fill)">
+          <animate attributeName="width" values="10;24;49;70;10" keyTimes="0;0.28;0.52;0.76;1" dur="14s" repeatCount="indefinite" />
+        </rect>
+
+        <text x="565" y="269" fill="#dbeafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"ops"}
+        </text>
+        <rect x="565" y="277" width="88" height="10" rx="4" fill="#07131d" stroke="#24465a" strokeWidth="0.8" />
+        <rect x="565" y="277" height="10" rx="4" fill="url(#scale-cost-fill)">
+          <animate attributeName="width" values="8;28;54;80;8" keyTimes="0;0.28;0.52;0.76;1" dur="14s" repeatCount="indefinite" />
+        </rect>
+      </g>
+
+      <g>
+        <text x="48" y="338" fill="#93a4b7" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="12">
+          {"load"}
+        </text>
+        <line x1="104" y1="334" x2="614" y2="334" stroke="#dbeafe" strokeWidth="1.2" opacity="0.34" />
+        <circle cx="104" cy="334" r="4" fill="#10b981" />
+        <circle cx="274" cy="334" r="4" fill="#67e8f9" />
+        <circle cx="444" cy="334" r="4" fill="#fbbf24" />
+        <circle cx="614" cy="334" r="4" fill="#ef4444" />
+        <text x="104" y="356" textAnchor="middle" fill="#bbf7d0" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"1k"}
+        </text>
+        <text x="274" y="356" textAnchor="middle" fill="#cffafe" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"100k"}
+        </text>
+        <text x="444" y="356" textAnchor="middle" fill="#fde68a" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"1m"}
+        </text>
+        <text x="614" y="356" textAnchor="middle" fill="#fecaca" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10">
+          {"10m"}
+        </text>
+        <circle r="6" fill="#f8fafc">
+          <animateMotion dur="14s" repeatCount="indefinite" path="M 104 334 L 274 334 L 444 334 L 614 334 L 104 334" keyPoints="0;0.28;0.52;0.76;1" keyTimes="0;0.28;0.52;0.76;1" />
+          <animate attributeName="opacity" values="0;1;1;1;0" keyTimes="0;0.08;0.82;0.92;1" dur="14s" repeatCount="indefinite" />
+        </circle>
+      </g>
+    </svg>
+  </figure>
+</div>
+
+## Start with the ledger
+
+Every scaling move creates a line item, whether or not anyone writes it down. The kind choice is to write it down.
+
+A good line item names the cost, the owner, the trigger that prompted it, the operational signal it serves, and the point at which someone will look at it again.
+
+| Scaling move | Cost it creates | Signal it serves |
+| --- | --- | --- |
+| Read replica | Extra database capacity, replication lag, backup scope | Read latency and primary saturation |
+| Cache | Memory, invalidation rules, stampede protection | Read latency and origin load |
+| Queue | Broker capacity, worker capacity, retry policy | Write latency and burst absorption |
+| Partition | Routing logic, migration work, query limits | Storage growth and hot keys |
+| Search index | Index storage, reindex jobs, data drift checks | Query latency and search quality |
+| New service | Ownership, deployment, observability, API contract | Clear domain boundary and independent scaling |
+| New region | Replication, routing, compliance, incident coverage | User latency and regional resilience |
+
+A ledger like this keeps scale visible, and visible cost is calm cost.
+
+<Callout title="Rule of thumb">
+  Every scaling mechanism should have a trigger, an owner, a budget, a health signal, and a review date.
+</Callout>
+
+## The carrying cost
+
+Carrying cost is the recurring work created by an architectural choice. It is what a decision asks of you not once, but every day afterward.
+
+Some of it is money. Some of it is attention. Some of it is coordination between people. And some of it is risk that simply has to be carried and operated, gently, over time.
+
+The categories are reassuringly stable. Once you know them, very little surprises you:
+
+| Category | What it contains |
+| --- | --- |
+| Compute | Instances, containers, warm capacity, autoscaling, idle headroom |
+| Storage | Data, indexes, replicas, backups, retention, restore tests |
+| Network | Egress, cross-zone traffic, cross-region traffic, retries |
+| Coordination | Schemas, migrations, contracts, ownership, release sequencing |
+| Observability | Metrics, logs, traces, dashboards, alerts, sampling |
+| Operations | Runbooks, pages, incident review, capacity planning, access control |
+| Team time | Design review, code review, onboarding, debugging, maintenance |
+
+A useful cost model holds all of these categories together. The dollar amount is only one line of the record, and rarely the most expensive one.
+
+## Cost as a record
+
+The record itself can stay small. It does not need to be elaborate to be honest.
+
+```python
+from dataclasses import dataclass
+from decimal import Decimal
+
+
+@dataclass(frozen=True)
+class CostItem:
+    name: str
+    category: str
+    monthly_usd: Decimal
+    owner: str
+    signal: str
+    review_date: str
+
+
+def monthly_total(items):
+    return sum((item.monthly_usd for item in items), Decimal("0"))
+
+
+ledger = [
+    CostItem(
+        name="feed-cache-primary",
+        category="cache",
+        monthly_usd=Decimal("280"),
+        owner="feed-platform",
+        signal="p95_feed_read_ms",
+        review_date="2026-07-01",
+    ),
+    CostItem(
+        name="post-created-queue",
+        category="queue",
+        monthly_usd=Decimal("180"),
+        owner="publishing",
+        signal="post_created_queue_age_seconds",
+        review_date="2026-07-01",
+    ),
+    CostItem(
+        name="search-index",
+        category="storage",
+        monthly_usd=Decimal("420"),
+        owner="discovery",
+        signal="search_result_latency_ms",
+        review_date="2026-07-01",
+    ),
+]
+```
+
+That is enough to start. You can always add to it later.
+
+What matters most here is shared visibility. Anyone on the team can see which resource exists, which signal it serves, and who looks after it. Nothing important is hidden in one person's head.
+
+## Compute
+
+Compute cost is the running capacity plus the headroom you keep in reserve.
+
+The headroom matters because a scaled system lives with bursts, retries, background jobs, migrations, and deploys that overlap. An instance count tuned to average traffic is only one number in the record, and average is the one moment you are least likely to need help.
+
+Useful compute records include:
+
+| Field | Example |
+| --- | --- |
+| Service | `feed-api` |
+| Current replicas | `18` |
+| Minimum replicas | `12` |
+| Maximum replicas | `60` |
+| Target CPU | `55 percent` |
+| Target memory | `70 percent` |
+| Scale signal | `request_rate`, `queue_age`, `cpu`, `latency` |
+| Warmup time | `90 seconds` |
+| Monthly spend | `$2,900` |
+
+Autoscaling has a cost shape of its own. Fast scaling asks for headroom. Slow scaling asks for queueing. Warm capacity is simply room to absorb the ordinary movement of the day without strain.
+
+## Storage
+
+Storage cost is the primary data, and then all the data that gathers around it.
+
+Indexes are data. Replicas are data. Backups are data. Retention is data. Search copies are data. Analytics exports are data. It adds up quietly, which is exactly why it helps to name it.
+
+A storage record should name:
+
+1. The primary table or object set.
+2. The indexed fields.
+3. The retention period.
+4. The backup schedule.
+5. The restore objective.
+6. The growth rate.
+7. The owner of deletion policy.
+
+Growth rate is the signal that lets you plan instead of react.
+
+```python
+def projected_storage_gb(current_gb, daily_growth_gb, days):
+    return current_gb + daily_growth_gb * days
+
+
+def projected_monthly_storage_cost(current_gb, daily_growth_gb, days, usd_per_gb_month):
+    projected_gb = projected_storage_gb(current_gb, daily_growth_gb, days)
+    return projected_gb * usd_per_gb_month
+```
+
+The calculation is small. Its gift is direction: storage stops being a surprise and becomes a slope you can see ahead of time.
+
+## Network
+
+Network cost appears wherever data crosses a boundary.
+
+Those boundaries are everywhere once you look: availability zones, regions, services, queues, databases, caches, object stores, analytics sinks, and third-party APIs.
+
+The cost shows up as traffic volume, egress billing, latency, retry volume, and the surface area for failure.
+
+The metrics that help here are simple ones:
+
+| Metric | Question it answers |
+| --- | --- |
+| Bytes out by service | Which service moves data |
+| Bytes out by region | Which region creates transfer cost |
+| Request count by dependency | Which boundary receives traffic |
+| Retry count by dependency | Which boundary creates repeated work |
+| Timeout count by dependency | Which boundary consumes waiting time |
+| Payload size p95 | Which API shape carries large responses |
+
+Network records keep payload size and call count where you can see them, which is most of the work.
+
+## Coordination
+
+Coordination cost grows whenever components share behavior. It is the most human of the costs, and the easiest to underestimate.
+
+A schema shared by producers and consumers needs a version. A database table shared by old and new code needs an expand-and-contract path. A service API needs a contract. A cache key needs an owner. A queue payload needs to stay compatible. Each of these is a small agreement between people, carried in code.
+
+A coordination record can be a plain checklist:
+
+| Boundary | Contract |
+| --- | --- |
+| HTTP API | Request schema, response schema, timeout, retry policy |
+| Queue event | Event name, schema version, idempotency key, retention |
+| Database table | Migration order, rollback shape, owner |
+| Cache key | Key format, TTL, invalidation source |
+| Feature flag | Default value, rollout rule, removal date |
+
+The record turns coordination from anxiety into ordinary release work.
+
+## Operations
+
+Operations cost is the work of keeping the system understandable to the people who run it.
+
+A component should arrive already carrying its own signals:
+
+1. Health check.
+2. Readiness check.
+3. Request rate.
+4. Error rate.
+5. p95 and p99 latency.
+6. Saturation.
+7. Queue age or backlog where relevant.
+8. Structured logs with identifiers.
+9. Trace spans for external boundaries.
+10. Runbook with common actions.
+
+A good alert is generous to the person it wakes. It states the condition and points to the first place to look.
+
+```text
+condition: post_created_queue_age_seconds p95 at 120+ for 10 minutes
+owner: publishing
+first view: queue dashboard, worker saturation, recent deploys
+first action: pause fanout backfill jobs
+```
+
+This is not separate from the architecture. It is the operating surface of the component, the part you actually touch at three in the morning.
+
+## Debugging
+
+Debugging cost is the distance between a symptom and the boundary responsible for it. Shorten that distance and you give your future self a kindness.
+
+Short paths are made of identifiers:
+
+| Identifier | Purpose |
+| --- | --- |
+| `request_id` | Follow one request through services |
+| `actor_id` | Group behavior by user, account, tenant, or system actor |
+| `version` | Tie behavior to deployed code |
+| `flag_state` | Tie behavior to runtime configuration |
+| `event_id` | Tie retries and consumers to one logical event |
+| `job_id` | Follow background work |
+| `region` | Locate traffic and data placement |
+
+These fields shrink the search space during an incident, when attention is scarce and stress is high. They also keep cost visible, since every boundary then shows up in logs, metrics, and traces.
+
+## Team cost
+
+Team cost is ownership work, and it is real.
+
+Each component needs a team that can change it, deploy it, debug it, and explain its limits without flinching. That team needs tests, dashboards, runbooks, and enough local knowledge to make ordinary changes feel ordinary.
+
+Useful ownership fields are:
+
+| Field | Example |
+| --- | --- |
+| Owner | `feed-platform` |
+| Backup owner | `core-infra` |
+| Code path | `src/feed` |
+| Dashboard | `feed service overview` |
+| Runbook | `feed-read-latency.md` |
+| Data owner | `growth-product` |
+| Review cadence | Monthly |
+
+Ownership belongs in the cost model, because capacity nobody owns slowly becomes capacity nobody understands.
+
+## Managed services
+
+A managed service trades some of the operating work for a bill and a contract. That is often a fair trade, as long as you know what you are trading.
+
+The contract is worth making explicit:
+
+| Question | Example answer |
+| --- | --- |
+| What does the provider operate? | Broker storage, replication, patching |
+| What does the team operate? | Schema, producers, consumers, retries, alerts |
+| What limit matters? | Partition throughput and retention |
+| What failure mode matters? | Publish latency and consumer lag |
+| What exit path exists? | Export events to object storage |
+| What cost signal matters? | Messages per second and retained bytes |
+
+This framing keeps managed services where they belong: inside the architecture, as real components with real owners, rather than as something that happens to you from outside.
+
+## Thresholds
+
+Thresholds make scale decisions mechanical, so they do not have to be emotional.
+
+| Area | Trigger to record | First capacity question |
+| --- | --- | --- |
+| API | Sustained p95 latency outside target | Which resource is saturated |
+| Database | Primary CPU, lock time, storage, or connection pressure | Which query shape creates the work |
+| Cache | Hit rate, memory, eviction rate, origin load | Which key family carries the traffic |
+| Queue | Age, backlog, retry rate, dead letters | Which handler or dependency sets throughput |
+| Storage | Growth rate, restore time, retention cost | Which data class has policy |
+| Network | Egress, payload size, timeout rate | Which boundary carries the volume |
+| Team | Ownership load, review load, incident load | Which component needs clearer boundaries |
+
+Thresholds give the system a named next step, so a busy moment becomes a known move rather than a debate.
+
+## The decision record
+
+Architectural decisions age gracefully when the reason behind them is written down.
+
+```markdown
+# Decision: Add read replica for feed reads
+
+Date: 2026-05-29
+Owner: feed-platform
+
+## Trigger
+
+Primary database CPU is at 70 percent for 45 minutes during daily peak.
+Feed read queries account for 62 percent of read load.
+
+## Change
+
+Add one read replica for feed read paths.
+Route feed reads through a replica-aware repository.
+Keep writes on the primary.
+
+## Operating signals
+
+- replica_lag_seconds
+- feed_read_p95_ms
+- primary_cpu_percent
+- replica_cpu_percent
+- feed_read_error_rate
+
+## Review
+
+Review on 2026-07-01.
+Remove the replica route if feed reads move to the materialized feed store.
+```
+
+The record makes the decision easy to revisit later. It also gives the eventual cleanup work a place to wait patiently until its time comes.
+
+<Callout type="warning" title="Warning">
+  A scaling move with no review date tends, quietly, to become permanent infrastructure.
+</Callout>
+
+## What I notice
+
+Calm systems show their cost.
+
+The dashboard shows the resource. The ledger shows the owner. The runbook shows the first action. The decision record shows the reason. The bill shows the spend. The code shows the boundary. Each fact has somewhere to live, and so it does not have to live as worry in someone's mind.
+
+When those facts are visible, the work feels ordinary, and ordinary is a good feeling to engineer for.
+
+Scale gets hard when the cost slips into memory, into chat threads, into scattered dashboards nobody quite owns. The architecture still carries the cost either way. The only thing that changes is how much the team can actually hold onto it.
+
+## Metrics that help
+
+Cost metrics and reliability metrics like to sit next to each other.
+
+| Metric | Why it matters |
+| --- | --- |
+| Monthly spend by service | Shows where money is going |
+| Spend by environment | Shows production, staging, and development shape |
+| Cost per 1,000 requests | Connects usage to traffic |
+| Cost per tenant or account | Connects usage to product shape |
+| CPU and memory utilization | Shows compute headroom |
+| Storage growth per day | Shows future capacity |
+| Backup size and restore time | Shows recovery cost |
+| Network egress by boundary | Shows data movement |
+| Queue age and worker saturation | Shows async capacity |
+| Error budget burn | Shows reliability cost |
+| Incident count by service | Shows operational load |
+| Alert count by service | Shows attention cost |
+| Deploy count and rollback count | Shows release cost |
+| Time to diagnose | Shows debugging cost |
+
+The most useful view is always cost placed beside the signal it serves. Numbers mean more when they sit next to their reason.
+
+## What I think
+
+In practice, the sequence that works is unhurried:
+
+1. Start with the product path and its current limits.
+2. Measure the current traffic, data, latency, and saturation.
+3. Name the scaling move in one sentence.
+4. Name the owner.
+5. Name the recurring costs.
+6. Name the signal the move improves.
+7. Name the new signals required to operate it.
+8. Set a budget.
+9. Set a review date.
+10. Write the decision record.
+11. Implement the smallest useful version.
+12. Review the outcome against the trigger.
+
+The under-engineered move, the one that ages well, is simply a visible ledger.
+
+A system can be genuinely sophisticated and still rest on a small number of clear records. Sophistication and simplicity are not enemies here.
+
+## A checklist to lean on
+
+For any scaling change, you can fill this out and feel settled:
+
+| Question | Example answer |
+| --- | --- |
+| Scaling move | Add one feed read replica |
+| Trigger | Primary CPU at 70 percent during peak |
+| Owner | `feed-platform` |
+| Budget | `$420/month` |
+| User-facing signal | Feed read p95 target 180 ms |
+| Capacity signal | Primary CPU target 60 percent |
+| New operating signal | Replica lag target 2 seconds |
+| New failure mode | Stale read during replica lag |
+| New runbook | `feed-read-replica.md` |
+| New dashboard | Feed database read path |
+| Rollout path | 10 percent, 50 percent, 100 percent read traffic |
+| Review date | `2026-07-01` |
+| Cleanup condition | Feed materialized store serves the read path |
+
+Then return to one quiet question:
+
+```text
+Does this move have a visible cost, a visible owner, and a visible review point?
+```
+
+A scaling change that can answer yes to all three is complete, and you can let it rest.
+
+## Summary
+
+If you keep only a few things, keep these:
+
+1. Scale creates recurring cost.
+2. Cost includes money, attention, coordination, debugging, and ownership.
+3. A scaling move should create a ledger line.
+4. The ledger should name owner, trigger, budget, signal, and review date.
+5. Compute cost includes headroom and warm capacity.
+6. Storage cost includes indexes, replicas, backups, and retention.
+7. Network cost appears at every boundary.
+8. Coordination cost appears in schemas, APIs, cache keys, queues, and releases.
+9. Operations cost is part of the architecture.
+10. Debugging cost is reduced by stable identifiers.
+11. Managed services still need ownership and operating signals.
+12. Thresholds and decision records keep scale decisions visible.
+
+---
+
+## Pop quiz
+
+<Quiz
+  title="Scale cost and operational ownership"
+  description="A randomized review of carrying cost, cost records, ownership, thresholds, managed services, and decision records."
+  questionCount={4}
+  randomizeChoices={true}>
+  <QuizQuestion
+    id="carrying-cost"
+    prompt="What does carrying cost mean in a scaled system?"
+    explanation="Carrying cost is the recurring money, attention, coordination, debugging, and ownership work created by an architectural choice.">
+    <QuizChoice correct>The recurring work and spend created by an architectural choice</QuizChoice>
+    <QuizChoice>The color used for service diagrams</QuizChoice>
+    <QuizChoice>The title of a deploy branch</QuizChoice>
+    <QuizChoice>The number of headings in a design document</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="cost-ledger-fields"
+    prompt="Which fields belong in a useful cost ledger line?"
+    explanation="A useful ledger line names the scaling move, cost, owner, trigger, operating signal, budget, and review point.">
+    <QuizChoice>A random service name and a screenshot</QuizChoice>
+    <QuizChoice correct>Owner, trigger, budget, operating signal, and review date</QuizChoice>
+    <QuizChoice>Hostname by itself</QuizChoice>
+    <QuizChoice>Pull request number by itself</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="storage-cost"
+    prompt="Which items count as storage cost?"
+    explanation="Storage cost includes primary data, indexes, replicas, backups, retention, search copies, and exports.">
+    <QuizChoice correct>Primary data, indexes, replicas, backups, and retention</QuizChoice>
+    <QuizChoice>CSS files by themselves</QuizChoice>
+    <QuizChoice>Local editor settings by themselves</QuizChoice>
+    <QuizChoice>Request headers by themselves</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="network-cost"
+    prompt="Where does network cost appear?"
+    explanation="Network cost appears where data crosses boundaries such as services, regions, caches, queues, databases, object stores, and third-party APIs.">
+    <QuizChoice>Inside unit tests by themselves</QuizChoice>
+    <QuizChoice correct>At boundaries where data moves between components or locations</QuizChoice>
+    <QuizChoice>Inside source comments by themselves</QuizChoice>
+    <QuizChoice>In a design title by itself</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="operations-signals"
+    prompt="Which signals help operate a scaled component?"
+    explanation="A scaled component needs health, readiness, request rate, error rate, latency, saturation, logs, traces, and a runbook.">
+    <QuizChoice correct>Health, readiness, request rate, error rate, latency, saturation, and runbook</QuizChoice>
+    <QuizChoice>A color palette by itself</QuizChoice>
+    <QuizChoice>A folder name by itself</QuizChoice>
+    <QuizChoice>The commit author by themselves</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="managed-service-contract"
+    prompt="What should a managed service contract clarify?"
+    explanation="A managed service contract clarifies provider responsibilities, team responsibilities, limits, failure modes, exit path, and cost signals.">
+    <QuizChoice>The font size in the dashboard</QuizChoice>
+    <QuizChoice correct>Provider responsibilities, team responsibilities, limits, failure modes, exit path, and cost signals</QuizChoice>
+    <QuizChoice>The number of markdown tables in the post</QuizChoice>
+    <QuizChoice>The order of imports in one file</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="decision-record"
+    prompt="What does an architecture decision record preserve?"
+    explanation="A decision record preserves the trigger, change, owner, operating signals, budget, review point, and cleanup condition.">
+    <QuizChoice correct>The reason, owner, signals, budget, review point, and cleanup condition for a change</QuizChoice>
+    <QuizChoice>A replacement for monitoring</QuizChoice>
+    <QuizChoice>A secret credential for production</QuizChoice>
+    <QuizChoice>A permanent skip for incidents</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="thresholds"
+    prompt="What role do thresholds play in scale decisions?"
+    explanation="Thresholds make scale decisions mechanical by naming the signal that triggers a capacity change or architecture change.">
+    <QuizChoice>They choose the syntax theme</QuizChoice>
+    <QuizChoice>They erase ownership records</QuizChoice>
+    <QuizChoice correct>They name the signal that triggers a capacity or architecture change</QuizChoice>
+    <QuizChoice>They replace release notes</QuizChoice>
+  </QuizQuestion>
+</Quiz>

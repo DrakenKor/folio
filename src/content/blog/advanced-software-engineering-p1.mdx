@@ -5,7 +5,7 @@ date: "2026-05-11"
 tags: ["Scale", "Architecture", "Distributed Systems"]
 ---
 
-Scaling decisions are easier to reason about when they start with arithmetic. Four metrics tend to inform the architecture choices that follow: **requests per second**, **data volume**, **concurrent connections**, and **latency targets**.
+Scaling tends to feel overwhelming before it is measured, and quite ordinary afterward. Most of the worry dissolves once the question is turned into arithmetic. So that is where we start: with four numbers that quietly inform the architecture choices that follow. They are **requests per second**, **data volume**, **concurrent connections**, and **latency targets**. Hold onto those four. Everything else in this post is just a way of getting to know them better.
 
 <div style={{ margin: '1.75rem 0 2rem' }}>
   <figure>
@@ -152,7 +152,7 @@ Scaling decisions are easier to reason about when they start with arithmetic. Fo
 
 ## Translating user count to QPS
 
-Load comes from activity. To convert daily active users (DAU) into requests per second:
+Load is not really about how many people exist in a database. It comes from activity, from what those people actually do and how often. Converting daily active users (DAU) into requests per second is a small piece of arithmetic:
 
 ```text
 average QPS = (DAU x requests_per_user_per_day) / 86,400
@@ -166,9 +166,9 @@ peak QPS    = average QPS x peak_multiplier (typically 10x)
 peak at 10x        = ~120 QPS
 ```
 
-At 10 requests per user per day: ~1,157 peak QPS.
+At 10 requests per user per day, the same million users settle at around 1,157 peak QPS.
 
-A reference table for a few common cases:
+A reference table for a few common cases, worth glancing at slowly:
 
 | Daily users | Requests/user/day | Average QPS | 10x peak QPS |
 | --- | ---: | ---: | ---: |
@@ -177,7 +177,7 @@ A reference table for a few common cases:
 | 10M | 10 | 1,157 | 11,574 |
 | 100M | 10 | 11,574 | 115,741 |
 
-Quick estimation script:
+If you would rather let the numbers run themselves, here is a short script to do the same work:
 
 ```python
 SECONDS_PER_DAY = 86_400
@@ -202,24 +202,24 @@ for users in [1_000_000, 10_000_000, 100_000_000]:
     print(users, estimate_peak_qps(users, avg_requests_per_user=10))
 ```
 
-What this makes clear is that load follows request frequency. 1,000 users refreshing a feed every 10 seconds each issue 6 requests per minute, which sustains roughly 100 QPS continuously. 1M users checking email once a day spread their 1M requests across 86,400 seconds, landing near 12 average QPS.
+The quiet lesson here is that load follows frequency, not headcount. A thousand users refreshing a feed every ten seconds each issue six requests per minute, which sustains roughly 100 QPS continuously. A million users checking email once a day spread that million requests across all 86,400 seconds and land near 12 average QPS. The smaller crowd creates the heavier load. It is a good thing to remember the next time a large user number feels alarming on its own.
 
 ## Four metrics for scaling decisions
 
-These metrics establish the quantitative foundation for architecture decisions:
+These four numbers are the foundation everything else rests on:
 
 1. **QPS** - how much work arrives per second
 2. **Data volume** - how much state the system stores and scans
-3. **Concurrent connections** - how many things stay open simultaneously
+3. **Concurrent connections** - how many things stay open at once
 4. **Latency percentiles** - p50, p95, p99
 
-Percentiles show the full distribution. With p50 at 40ms and p99 at 4 seconds, roughly 1 in 100 requests takes 4 seconds, and the average alone keeps that tail out of view.
+Percentiles are worth pausing on, because they show the whole distribution rather than a comfortable summary. With p50 at 40ms and p99 at 4 seconds, roughly 1 in 100 requests takes a full 4 seconds. The average alone keeps that tail politely out of view, which is exactly why averages can mislead.
 
-These four pressures move independently. A system can run at low QPS while holding a large dataset, run at high QPS over a small one, or carry light traffic with heavy concurrency because every client holds a socket open. Each pressure calls for its own scaling strategy.
+These four pressures move independently of one another. A system can run at low QPS while holding an enormous dataset, run at high QPS over a tiny one, or carry light traffic with heavy concurrency simply because every client is holding a socket open. None of them stands in for the others, and each one asks for its own response.
 
 ## Common bottlenecks
 
-Early bottlenecks usually show up at the code or query level:
+Before reaching for anything distributed, it helps to know where the early trouble actually tends to live. More often than not it is at the code or query level, close to home:
 
 - N+1 queries
 - Missing database indexes
@@ -230,13 +230,13 @@ Early bottlenecks usually show up at the code or query level:
 - CPU-intensive work per request
 - Missing pagination on list endpoints
 
-Per-request overhead multiplies by the request rate. At 50 QPS the overhead sits in the background. At 500 QPS it shows up in the latency profile. At 5,000 QPS it accounts for most of the work the system does.
+The thing to notice is that per-request overhead multiplies by the request rate. At 50 QPS that overhead sits quietly in the background. At 500 QPS it begins to show up in the latency profile. At 5,000 QPS it accounts for most of the work the system does. Nothing about the overhead changed; only the rate it was multiplied by did.
 
-Distributing into microservices carries this same per-request overhead along, copying it into each service that runs the work.
+This is also why splitting into microservices does not make such overhead disappear. The work simply travels with you, copied into each service that runs it. Moving a problem is not the same as resolving it.
 
 ## Single server capacity
 
-A single modern server carries substantial headroom:
+It is easy to underestimate a single machine. A single modern server carries far more headroom than most architecture diagrams assume:
 
 ```python
 SINGLE_POSTGRES_RULES_OF_THUMB = {
@@ -251,11 +251,11 @@ SINGLE_POSTGRES_RULES_OF_THUMB = {
 - Cached reads: 10k+ QPS per server (Note that some hyper efficient backends can 2x this such as Actix written in Rust, as of 2026)
 - Postgres: hundreds of millions of rows with proper indexes and partitioning
 
-Database scalability depends on: database type, hardware specifications, schema design, query patterns, latency percentiles, and write patterns.
+Database scalability is not a single number but a product of several things together: database type, hardware specifications, schema design, query patterns, latency percentiles, and write patterns. When someone asks how much a database can handle, the honest answer usually begins with which of these they mean.
 
 ## Common resource limits
 
-A few common resource-exhaustion failure modes:
+When a system does finally reach a wall, it is usually one of a small, familiar set. Knowing them in advance takes a lot of the surprise out of the moment it happens:
 
 | Resource | What happens |
 | --- | --- |
@@ -268,6 +268,8 @@ A few common resource-exhaustion failure modes:
 
 ## Where vertical scaling reaches its limit
 
+A bigger machine answers many problems, until it doesn't. The point where it stops helping is usually clear once you know what to look for:
+
 ### Vertical scaling reaches its limit when:
 
 - **CPU-bound**: workload doesn't parallelize (global locks, single-threaded sections)
@@ -277,6 +279,8 @@ A few common resource-exhaustion failure modes:
 - **Operationally-bound**: backups take too long, schema changes lock tables, restores are impractical (this can force distribution before hardware limits do)
 
 ### Scaling decision framework
+
+What follows is less a set of rules than a set of conditions worth checking honestly against your own system. Each move makes sense only when its conditions are genuinely met.
 
 **Stay monolith when:**
 - One team can understand the codebase
@@ -308,30 +312,34 @@ A few common resource-exhaustion failure modes:
 - Queries naturally include a partition key
 - Cross-partition operations are rare
 
-Distribution is a trade. You buy headroom and pay for it with coordination cost, more failure modes, and more operational surface area.
+Distribution is always a trade, never a free upgrade. You buy headroom, and you pay for it in coordination cost, in new failure modes, and in a wider operational surface to look after. Knowing the price in advance makes the decision a calm one rather than a regret.
 
 ## From 1M to 100M DAU
 
-Across the span from 1M to 100M DAU, the operating model itself shifts along with the scale.
+Across the span from 1M to 100M DAU, what changes is not only the size of the numbers but the operating model itself. It is worth seeing the two ends side by side.
 
-**At 1M DAU**: vertical scaling carries the load. The usual approaches apply: larger database instances, connection pooling, a CDN, read replicas, and background job queues. Missing indexes degrade performance while staying recoverable.
+**At 1M DAU**, vertical scaling carries the load comfortably. The familiar moves are enough: larger database instances, connection pooling, a CDN, read replicas, and background job queues. A missing index will slow things down, but the situation stays recoverable, and that recoverability is part of why this stage feels forgiving.
 
-**At 100M DAU**: 10 requests/user/day works out to roughly 115k peak QPS. An endpoint with 20ms of CPU work per request consumes about 2,300 CPU-seconds per second at peak. 100M new rows per day pushes retention policies, index strategies, and backfill infrastructure into the design rather than leaving them as afterthoughts.
+**At 100M DAU**, the arithmetic asks more of the design. Ten requests per user per day works out to roughly 115k peak QPS. An endpoint doing 20ms of CPU work per request then consumes about 2,300 CPU-seconds per second at peak. And 100M new rows arriving each day pulls retention policies, index strategies, and backfill infrastructure forward into the design, rather than leaving them as things to handle later.
 
-Distribution becomes warranted once the arithmetic shows single-server limits have actually been reached.
+Distribution becomes warranted once the arithmetic actually shows single-server limits have been reached, and not really before that. The numbers, not the anxiety, are what give permission.
 
 ## Summary
 
-1. Convert user counts to QPS for architecture decisions
-2. Establish four metrics: QPS, data volume, concurrency, latency percentiles
-3. Address code-level bottlenecks (N+1 queries, missing indexes, oversized payloads) before distributing
-4. Single servers and single databases hold substantial capacity once they are reasonably tuned
-5. Scale vertically until measured resource limits point toward distribution
-6. Each additional component introduces new failure modes, so distribute when the arithmetic supports it
+If you carry away nothing else, let it be that scaling becomes calm once it becomes arithmetic:
+
+1. Convert user counts to QPS, and let that number, not the user count, guide the architecture
+2. Establish the four metrics: QPS, data volume, concurrency, and latency percentiles
+3. Address code-level bottlenecks (N+1 queries, missing indexes, oversized payloads) before reaching for distribution
+4. Trust that single servers and single databases hold substantial capacity once they are reasonably tuned
+5. Scale vertically until measured resource limits genuinely point toward distribution
+6. Remember that each new component brings new failure modes, so distribute only when the arithmetic supports it
 
 ---
 
-## Pop quiz
+## A few questions to sit with
+
+No pressure here, and nothing to prove. These are just a quiet way to let the ideas settle.
 
 <Quiz
   title="Scaling arithmetic check"
