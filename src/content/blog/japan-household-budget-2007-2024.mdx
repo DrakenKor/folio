@@ -1,0 +1,103 @@
+---
+title: "Eighteen Years of the Japanese Household Budget"
+description: "An interactive reading of Japan's Family Income and Expenditure Survey, 2007-2024: where the monthly budget goes, the rise of the Engel coefficient, and what workers' households keep."
+date: "2026-06-12"
+tags: ["Data Visualization", "Japan", "Economics"]
+---
+
+Japan's Statistics Bureau asks households to keep a diary. Every purchase, every month, sorted into categories that range from "cereals" down to "fish-paste products". The diaries become the Family Income and Expenditure Survey, published yearly since the 1950s. This post reads the annual reports from 2007 through 2024.
+
+The unit throughout is the average household's month, in nominal yen. One number per item per year. Eighteen years of where the money went.
+
+<JapanBudgetExplorer />
+
+## The food share
+
+The Engel coefficient is food spending as a share of consumption spending. In the share view above it is the top edge of the yellow band.
+
+In 2007 it was 22.9%. In 2014 it was 24.0%. In 2020 it reached 27.0%. In 2024 it was 27.7%, the highest value in this dataset.
+
+Food spending in 2024 was ¥69,530 a month. In 2007 it was ¥59,961 — for a household that was a third of a person larger. The yen amount rose while the rest of the budget did not.
+
+## Spending without growth
+
+Total consumption in 2007 was ¥261,526 a month. In 2024 it was ¥250,929. Seventeen years later, the average household spends less in nominal terms.
+
+Part of this is who the average household is. In 2007 it had 2.54 persons and a 55.5-year-old head. In 2024 it had 2.17 persons and a 59.8-year-old head. The survey averages over a population that is getting smaller and older household by household.
+
+Some categories carried the decline. Clothing went from ¥11,385 to ¥7,826. Education went from ¥9,162 to ¥7,293.
+
+## Inside the basket
+
+The "What changed" view indexes individual commodities to 2007 = 100. The detail is where the period shows itself.
+
+Rice fell 19%. Fish and shellfish fell 20%. Cooked food — prepared meals brought home — rose 49%, from ¥7,329 to ¥10,922. Bread rose 21% and meat rose 22%. Within the food budget, spending moved from rice and fish toward bread, meat, and meals cooked elsewhere.
+
+Books and reading material fell 34%. Package tours fell from ¥3,988 in 2007 to ¥798 in 2020 and ¥531 in 2021, and stood at ¥2,020 in 2024 — half the 2007 level. Eating out dropped from ¥11,601 in 2019 to ¥8,387 in 2020, and passed its 2019 level in 2024.
+
+Communication peaked at ¥11,323 in 2020 and fell to ¥9,736 by 2024, the years in which the government pressed carriers to cut mobile fees. Electricity went from ¥8,606 in 2021 to ¥10,559 in 2022, the year import energy prices rose.
+
+## The workers' ledger
+
+The survey publishes a separate table for workers' households — those headed by an employee. It records both sides of the ledger: what comes in, what the state takes, what gets spent, what remains.
+
+Monthly income went from ¥480,074 in 2007 to ¥542,886 in 2024. Non-consumption expenditure — direct taxes plus social insurance premiums — went from ¥77,958 to ¥96,289. As a share of income that is 16.2% in 2007 and 17.7% in 2024, with a peak near 18.8% in 2015.
+
+The average propensity to consume — consumption as a share of disposable income — was 72.1% in 2007. It fell through the late 2010s, dropped to 60.7% in 2020, and was 61.7% in 2024. The monthly surplus went from ¥112,294 to ¥171,029. Workers' households earn more, are deducted more, and bank a larger share of what is left than at any earlier point in this series.
+
+## Reading the data
+
+Three things to hold while reading the chart.
+
+The survey diary was revised in January 2018, and the Bureau advises care when comparing across that boundary. The 2018 event marker in the chart is a methodology line, not an economic one.
+
+All values are nominal yen. Japan's consumer prices were close to flat for most of 2007-2019 and rose from 2022. The recent food numbers contain price increases as well as quantity choices, and the Engel coefficient rises in part because food inflation outpaced the rest of the basket.
+
+The unit is the household, and the household changed. A series that falls per household can rise per person. Household counts, sizes, and head ages are in the dataset for anyone who wants to redo the arithmetic per capita.
+
+<Quiz
+  title="The household budget, checked"
+  description="Three questions on the numbers in this post."
+  questionCount={3}>
+  <QuizQuestion
+    id="engel-2024"
+    prompt="What was Japan's Engel coefficient (food share of consumption) in 2024?"
+    explanation="The Engel coefficient rose from 22.9% in 2007 to 27.7% in 2024, the highest value in this dataset.">
+    <QuizChoice>22.9%</QuizChoice>
+    <QuizChoice correct>27.7%</QuizChoice>
+    <QuizChoice>31.2%</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="nominal-spending"
+    prompt="How did total monthly consumption per household in 2024 relate to 2007, in nominal yen?"
+    explanation="Total consumption was ¥261,526 in 2007 and ¥250,929 in 2024. Households also shrank from 2.54 to 2.17 persons over the period.">
+    <QuizChoice>About 20% higher</QuizChoice>
+    <QuizChoice>About the same</QuizChoice>
+    <QuizChoice correct>Lower than in 2007</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="cooked-food"
+    prompt="Which food item rose 49% between 2007 and 2024?"
+    explanation="Cooked food (prepared meals brought home) rose from ¥7,329 to ¥10,922 a month. Rice fell 19% and fish fell 20% over the same period.">
+    <QuizChoice>Rice</QuizChoice>
+    <QuizChoice>Fish &amp; shellfish</QuizChoice>
+    <QuizChoice correct>Cooked food</QuizChoice>
+  </QuizQuestion>
+
+  <QuizQuestion
+    id="workers-keep"
+    prompt="What happened to workers' households' average propensity to consume between 2007 and 2024?"
+    explanation="Consumption as a share of disposable income fell from 72.1% to 61.7%, with the largest single drop in 2020.">
+    <QuizChoice>It rose from 62% to 72%</QuizChoice>
+    <QuizChoice correct>It fell from 72% to 62%</QuizChoice>
+    <QuizChoice>It stayed near 70%</QuizChoice>
+  </QuizQuestion>
+</Quiz>
+
+## Data source
+
+The underlying workbooks are the annual-report Excel files of the [Family Income and Expenditure Survey](https://www.e-stat.go.jp/en/stat-search/files?page=1&layout=datalist&toukei=00200561&tstat=000000330001&cycle=7&tclass1=000000330001&tclass2=000000330019&tclass3=000000330021&tclass4val=0) (Statistics Bureau of Japan, via e-Stat), Total Households branch, 2007-2024. Each year's value is taken from that year's own report: Table 1-1 (time series of disbursements, Total Households) and Table 1-2 (receipts and disbursements, Workers' Households).
+
+The tidy series used by the chart is [jp-household-budget.json](/blog/jp-household-budget/jp-household-budget.json). The extraction script is `scripts/extract-jp-household-budget.py` in this site's repository. The full set of downloaded workbooks, including the 2007-2014 income-quintile and regional tables not used here, is under [/jp-family-income-expenditure-survey/](/jp-family-income-expenditure-survey/README.md).

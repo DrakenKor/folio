@@ -1,3 +1,6 @@
+# Blog Post Writing Style
+Please write in a neutral understated style with minimal adjectives or words to that emphasise/dramatize. Avoid drama. Keep it to the facts, plainly asserting what is and letting that stand by itself. Avoid using compare/contrast/comparison techniques, and only assert what is.
+
 # Blog MDX Quiz Authoring
 
 Posts live in this directory as `*.mdx` files. A quiz is written directly in a post with the curated MDX tags:

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { ScrollProgress } from '@/components/blog/ScrollProgress'
 import './blog.css'
 
 export const metadata: Metadata = {
@@ -17,6 +18,7 @@ export default function BlogLayout({
 }) {
   return (
     <div className="blog-shell">
+      <ScrollProgress />
       <div className="blog-shell-inner">{children}</div>
     </div>
   )

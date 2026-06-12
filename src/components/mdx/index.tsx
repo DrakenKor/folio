@@ -3,6 +3,7 @@ import React from 'react'
 import Link from 'next/link'
 import { slugifyHeading } from '@/lib/blog-helpers'
 import { Demo } from './Demo'
+import { JapanBudgetExplorer } from './JapanBudgetExplorer'
 import { KyotoBlossomExplorer } from './KyotoBlossomExplorer'
 import { Quiz, QuizAnswer, QuizChoice, QuizQuestion } from './Quiz'
 
@@ -233,7 +234,8 @@ export const mdxComponents = {
   QuizQuestion,
   QuizChoice,
   QuizAnswer,
-  KyotoBlossomExplorer
+  KyotoBlossomExplorer,
+  JapanBudgetExplorer
 }
 
 export { Demo }
