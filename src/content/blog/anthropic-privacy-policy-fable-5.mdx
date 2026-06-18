@@ -1,0 +1,87 @@
+---
+title: "Anthropic's Privacy Policy in the Fable 5 Moment"
+description: "Anthropic's July 2026 privacy policy describes a Claude product where chats, code sessions, integrations, safety review, training, and legal demands all touch the same data flow."
+date: "2026-06-18"
+tags: ["AI", "Privacy", "Anthropic", "Policy"]
+---
+
+Anthropic published a new [Privacy Policy](https://www.anthropic.com/legal/privacy) on June 8, 2026. It takes effect on July 8, 2026.
+
+Read it next to the Fable 5 shutdown.
+
+On June 12, Anthropic said the US government had issued an export-control directive requiring the company to suspend access to Fable 5 and Mythos 5 for foreign nationals, including foreign national Anthropic employees. Anthropic said it disabled both models for all users to comply. [AP](https://apnews.com/article/d9cc7df5c02e93837d0f0bfb24d5cfd2) described it as the US government's most significant restriction on advanced AI model access so far. The [Washington Post](https://www.washingtonpost.com/technology/2026/06/13/anthropic-shuts-down-newest-ai-model-after-us-bans-foreign-use/) reported that the order was tied to hacking concerns and that Anthropic said the letter did not specify the government's concern. [The Verge](https://www.theverge.com/ai-artificial-intelligence/951703/anthropic-shutdown-export-controls) focused on the uncertainty around applying export controls to cloud model access. [Al Jazeera and Reuters](https://www.aljazeera.com/news/2026/6/14/us-asks-anthropic-to-block-global-access-to-top-ai-models-why-it-matters) framed it as part of US export-control policy over advanced technology. [Axios](https://www.axios.com/2026/06/12/anthropic-trump-mythos-fable-national-security) had the early report on the foreign-access block.
+
+The privacy policy covers user data across Claude services. It gives useful context for the Fable 5 event because it describes the data system under the product.
+
+<Callout type="info" title="June 12, 2026">
+  Anthropic's own statement says the directive applied to foreign nationals and that the company disabled Fable 5 and Mythos 5 for all users while it worked to restore access.
+</Callout>
+
+## Claude as an agent
+
+The policy defines user content broadly. Inputs include chat, coding, agentic sessions, connected services, uploaded files, third-party applications, and content you ask Claude to retrieve or act on. Outputs can also create effects outside Claude, including sending messages, modifying files, or interacting with third-party services.
+
+That is the privacy surface of an assistant that can read, write, retrieve, and act across services.
+
+If Claude reads a repository, that repository content can become an Input. If Claude works through a connected service, data from that service can become an Input. If Claude sends instructions to another service, that third party receives the data and processes it under its own privacy policy. Some integrations can keep access until the user disconnects them.
+
+The policy also puts responsibility on the user to have the rights and authority to provide the content. That matters for work accounts, shared documents, customer data, private code, and anything pulled in through connectors.
+
+## The training boundary has exceptions
+
+Anthropic says it may use Inputs and Outputs to train and improve models unless the user opts out in account settings. The opt-out has exceptions. Anthropic still uses materials for model improvement when conversations are flagged for safety review or when the user explicitly reports material through feedback mechanisms.
+
+Feedback can include the related conversation. If a user rates an output, Anthropic may store the related conversation as part of that feedback.
+
+The policy says Anthropic uses personal data for research, service improvement, model training, safety review, policy enforcement, debugging, fraud prevention, and security work. Those purposes overlap in practice. The same conversation can be a user support issue, a safety-review item, a training example, or evidence in an account-enforcement decision depending on what happened in it.
+
+This is where the Fable 5 event is relevant. Anthropic's [June 12 statement](https://www.anthropic.com/news/fable-mythos-access) says Fable 5 required 30-day retention of customer data so Anthropic could research and mitigate jailbreaks. That is a product decision tied to safety monitoring. It sits naturally inside the privacy policy's language about logs, troubleshooting, safety review, and model improvement.
+
+## Retention and re-identification
+
+Anthropic says it applies aggregation and de-identification where appropriate. Feedback can be disassociated from a user ID before being used for training. Inputs and Outputs flagged for harmful content or policy issues can also be disassociated before being used to train trust-and-safety systems.
+
+There is an enforcement carve-out. The policy says Anthropic may re-identify flagged content if needed to enforce its Terms of Service or Usage Policy.
+
+That is a normal safety-policy structure. It also means de-identification is a process boundary. Flagged material can point back to the responsible account when Anthropic uses it for enforcement.
+
+Deletion has a defined lifecycle. The policy says deleted conversations disappear immediately from conversation history and are automatically deleted from the back end within 30 days. The policy separately reserves processing purposes for safety, fraud, legal, debugging, and de-identified analysis.
+
+## Legal process and model access
+
+The policy says Anthropic may share personal data with government authorities, law enforcement, or other third parties when it has a good-faith belief that disclosure is reasonably necessary to comply with law, prevent harm, address fraud or illegal activity, enforce terms, or protect rights and safety.
+
+The Fable 5 directive was about access to a model. It shows that national-security authorities can reach into the availability of an AI service quickly. Anthropic said it received the directive at 5:21pm ET and disabled access. For users, that makes the policy's government and legal-process language part of the product environment.
+
+The same policy also says personal data is transferred to servers in the US or to other countries for service provision, model training, and research. Users outside the US are using a service whose data flows, access rules, and legal exposure are partly routed through US infrastructure and US legal process.
+
+## Enterprise accounts sit outside this policy
+
+One important carve-out is at the top. Anthropic says this policy does not apply to content it processes on behalf of customers of business offerings, such as Enterprise accounts. That data is governed by customer agreements.
+
+This carve-out leaves consumer accounts with their own practical risk. If someone uses a personal Claude account for work content, or connects services that contain work material, this consumer policy is the visible baseline. If someone uses an organization-owned email address, the policy says the account may be linked to the organization's enterprise account as described in the consumer terms.
+
+For developers, that is the practical rule. The account boundary matters. The connector boundary matters. The model boundary matters. Those boundaries can diverge.
+
+## What I would assume as a Claude user
+
+I would assume anything placed in Claude, connected to Claude, or retrieved by Claude can be processed as an Input.
+
+I would assume an opt-out reduces model-training use while leaving safety-review, feedback, legal, security, debugging, and enforcement processing in place.
+
+I would assume connectors move data into other companies' privacy policies.
+
+I would assume high-capability models may come with extra monitoring and retention rules, especially when Anthropic is trying to manage jailbreak and misuse risk.
+
+I would assume US legal and national-security process is part of the service's operating environment, even for users outside the US.
+
+None of that requires guessing what Anthropic will do. It is what the policy says, read in the week when the US government treated Anthropic's newest models as controlled technology.
+
+## Reporting worth reading
+
+- [Anthropic: Statement on the US government directive to suspend access to Fable 5 and Mythos 5](https://www.anthropic.com/news/fable-mythos-access)
+- [AP: Anthropic says it has taken its latest AI models offline to comply with new export controls](https://apnews.com/article/d9cc7df5c02e93837d0f0bfb24d5cfd2)
+- [Washington Post: Anthropic shuts down newest AI model after U.S. bans foreign use](https://www.washingtonpost.com/technology/2026/06/13/anthropic-shuts-down-newest-ai-model-after-us-bans-foreign-use/)
+- [The Verge: Anthropic got hit by export rules nobody understands](https://www.theverge.com/ai-artificial-intelligence/951703/anthropic-shutdown-export-controls)
+- [Al Jazeera/Reuters: US asks Anthropic to block global access to top AI models](https://www.aljazeera.com/news/2026/6/14/us-asks-anthropic-to-block-global-access-to-top-ai-models-why-it-matters)
+- [Axios: Trump admin blocks foreign access to Anthropic's most powerful AI](https://www.axios.com/2026/06/12/anthropic-trump-mythos-fable-national-security)
