@@ -55,3 +55,42 @@ svg {
 svg:hover {
   opacity: 1;
 }
+
+/* ── Cognitive bias checklist + voodoo doll ── */
+.biases-page {
+  font-variant: normal;
+}
+.biases-page svg {
+  opacity: 1;
+}
+.voodoo-doll {
+  width: 132px;
+  height: auto;
+  overflow: visible;
+  transform-origin: center bottom;
+}
+@media (min-width: 640px) {
+  .voodoo-doll {
+    width: 160px;
+  }
+}
+.voodoo-shake {
+  animation: voodoo-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@keyframes voodoo-shake {
+  10%, 90% { transform: translateX(-1px) rotate(-1.2deg); }
+  20%, 80% { transform: translateX(2px) rotate(1.6deg); }
+  30%, 50%, 70% { transform: translateX(-3px) rotate(-2deg); }
+  40%, 60% { transform: translateX(3px) rotate(2deg); }
+}
+.needle-stab {
+  animation: needle-stab 0.35s cubic-bezier(0.22, 1.4, 0.5, 1) both;
+}
+@keyframes needle-stab {
+  0% { transform: translateY(-22px); opacity: 0; }
+  55% { transform: translateY(4px); opacity: 1; }
+  100% { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voodoo-shake, .needle-stab { animation: none; }
+}
