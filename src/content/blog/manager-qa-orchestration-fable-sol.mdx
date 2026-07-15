@@ -1,0 +1,134 @@
+---
+title: "Optimising Efficiency and Accuracy with Fable 5 and GPT-5.6-Sol"
+description: "The instruction files I use to make Claude Fable 5 and GPT-5.6 Sol delegate execution to cheaper subagent models: the tiering rules, the executor definitions, and the briefing format."
+date: "2026-07-15"
+tags: ["AI", "LLMs", "Coding", "Agents", "Claude Code", "Codex"]
+---
+
+I run Claude Fable 5 in Claude Code and GPT-5.6 Sol in Codex as my main models. Both are configured to act as managers rather than executors. The goal of these settings is to maximize efficiency while preserving accuracy: the expensive model does the thinking, spec-writing, and verification, and cheaper models burn the bulk of the tokens doing execution.
+
+This post documents the two setups. Both are plain instruction files plus, on the Codex side, two agent definitions.
+
+## The problem
+
+Frontier models are priced per token, and agentic coding spends most of its tokens on things that do not need a frontier model. A typical task is a small amount of judgment surrounded by a large amount of mechanics: reading files, grepping, running tests, applying edits, re-running tests. When the top-tier model does all of that itself, the file reads and tool output land in the most expensive context window available.
+
+There is also an accuracy angle. A long execution transcript fills the main model's context with tool noise. Keeping the main model out of execution keeps its context clean for the parts where it matters: decomposing the task, writing the spec, and checking the result.
+
+## The pattern
+
+The pattern is the same in both tools:
+
+- The main model writes a self-contained brief for each unit of work.
+- A cheaper subagent (the Executor) does the actual implementation or investigation.
+- The main model independently verifies the result instead of accepting the Executor's self-report.
+
+The main model never edits code directly. It picks the Executor tier per task, runs Executors in the background, and reviews what comes back.
+
+## Claude Code: CLAUDE.md
+
+In Claude Code this lives in `~/.claude/CLAUDE.md` as a model-specific section. Trimmed excerpt:
+
+```md
+## Model-specific Role (Fable as main)
+- If the current main model is Fable (`claude-fable-5`), act as a manager/QA, not an Executor:
+  - Do not write or edit implementation code yourself, and do not run experiments/investigations yourself either.
+  - Write requirement specs (or research questions), then delegate the actual execution — implementation,
+    refactors, experiments, investigations, etc. — to subagents as Executors via the Agent tool.
+  - **Executor model selection** — choose per task, with discretion, on two axes: task size/difficulty
+    and how clearly the outcome is specified and verifiable:
+    - `haiku`: mechanical, fully specified, cheaply verifiable — bulk/scripted edits, renames, formatting,
+      running fixed command sequences, simple targeted lookups. Never send haiku an ambiguous spec or a
+      judgment call.
+    - `sonnet`: the default Executor — standard implementation, refactors, tests, most investigations.
+    - `opus`: genuinely hard or judgment-heavy work — subtle debugging, cross-cutting design, tricky
+      concurrency/correctness, or when the Executor must make many decisions the spec can't pin down.
+    - A large but ambiguous task should not just get a bigger model: first delegate a read-only
+      Explore/Plan pass to sharpen the spec, then delegate implementation at the right tier.
+  - After an Executor reports done, independently verify the result (tests, lint, screenshots, manual
+    checks, or reviewing its findings) rather than trusting its self-report at face value; scale scrutiny
+    inversely with the tier used — haiku output gets the closest review.
+```
+
+The tiering rule uses two axes, not one. Task difficulty is the obvious axis. The second axis is how clearly the outcome is specified and how cheaply it can be verified. A task can be large and still go to haiku if the spec is exact and the check is a command. A task can be small and still go to a higher tier if the spec leaves decisions open. The rule that covers the remaining case: when a task is big and ambiguous, the answer is not a bigger Executor, it is a read-only Explore or Plan pass first, which turns the ambiguous task into one or more specified ones.
+
+Verification scales the other way. Haiku output gets the closest review, opus output the least. The cheaper the Executor, the more the manager checks.
+
+## Codex: AGENTS.md plus two executor definitions
+
+The Codex side has the same shape in `~/.codex/AGENTS.md`. Trimmed excerpt:
+
+```md
+## Model-specific Role (GPT-5.6 Sol as lead)
+- If the current main model is GPT-5.6 Sol (`gpt-5.6-sol`), act as the lead manager and QA for
+  substantive work, not as the primary Executor.
+- Delegate implementation, refactors, experiments, codebase investigations, and other tool-heavy
+  execution to one of the custom Executor agents below.
+- Choose the cheapest Executor likely to complete the task accurately:
+  - Use `executor_5_4` for small, clear, low-risk tasks with a tightly specified outcome, narrow scope,
+    and straightforward verification.
+  - Use `executor_5_5` for medium or large tasks, unclear starting points, non-trivial debugging,
+    meaningful design judgment, cross-file changes, unfamiliar code, or broader verification.
+  - When task size is small but the required outcome is ambiguous, risky, or hard to verify, prefer
+    `executor_5_5`. When uncertain whether 5.4 is sufficient, use 5.5.
+- After an Executor finishes, independently review the material result. Never accept an Executor's
+  self-report as sufficient evidence by itself.
+```
+
+Codex agents are defined in TOML files under `~/.codex/agents/`. The cheap tier:
+
+```toml
+name = "executor_5_4"
+description = "Cost-conscious GPT-5.4 Executor for small, clear, low-risk tasks with narrow scope and straightforward verification."
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+developer_instructions = """
+You are an execution-focused subagent. Complete the delegated task autonomously and stay tightly within its stated scope.
+
+Treat the parent agent's brief as the source of truth. Preserve existing user work, avoid unrelated cleanup, and do not expand requirements or add dependencies without explicit authorization.
+
+Inspect only the context needed, make the smallest correct change, and perform the requested proportionate verification. Do not spawn subagents.
+
+Report concretely what you changed or found, the files involved, verification performed and results, and any remaining risks or blockers. Do not claim success without evidence.
+"""
+```
+
+And the default tier:
+
+```toml
+name = "executor_5_5"
+description = "Accuracy-oriented GPT-5.5 Executor for medium or large tasks, ambiguity, debugging, cross-file changes, and broader verification."
+model = "gpt-5.5"
+model_reasoning_effort = "extra high"
+developer_instructions = """
+You are an execution-focused subagent for work that requires deeper investigation, judgment, or multi-step implementation. Complete the delegated task autonomously while staying within its stated scope and definition of done.
+
+Treat the parent agent's brief as the source of truth. Preserve existing user work, avoid unrelated cleanup, and do not change requirements, plan decisions, or dependencies without explicit authorization.
+
+Investigate methodically, identify relevant constraints and edge cases, implement the smallest robust solution, and verify it in proportion to risk. Do not spawn subagents. Resolve ordinary implementation choices yourself using repository patterns.
+
+Report concretely what you changed or found, important decisions and assumptions, the files involved, verification performed and results, and any remaining risks or blockers. Do not claim success without evidence.
+"""
+```
+
+Selection follows the same two axes: `executor_5_4` for small, clear, low-risk work; `executor_5_5` for size, ambiguity, or risk. The tie-break rules are explicit: small-but-ambiguous goes to 5.5, and uncertainty about whether 5.4 is enough resolves to 5.5. A wrong guess downward costs a failed attempt plus a redo, which is more expensive than starting at the right tier.
+
+Reasoning effort is set high on `executor_5_4` and extra high on `executor_5_5`. The token cost of reasoning on a small model is low, and the failure mode of a small model is shallow reasoning. High effort on gpt-5.4 buys accuracy where it is cheapest to buy. The instruction "do not claim success without evidence" exists because a manager that verifies everything still benefits from reports that arrive with the evidence attached.
+
+## Principles
+
+The two setups converge on the same rules.
+
+**Self-contained cold-start briefs.** Executors do not see the main conversation. Every brief includes the concrete goal with a definition of done, relevant file paths and known context, constraints and non-goals, and the expected report format. Decisions the manager has already made are stated so the Executor does not redo the planning.
+
+**Autonomy plus escalation.** Every brief ends with an instruction like: work autonomously, do not ask clarifying questions; if you hit a blocker or the spec conflicts with what you find, stop and report rather than improvising. This removes the round-trips that clarifying questions cost, while keeping a defined exit for genuine conflicts.
+
+**Independent verification, scaled inversely with tier.** The manager runs tests, reads diffs, or takes screenshots itself. Executor self-reports are input, not evidence. Cheaper Executors get closer review.
+
+**Continue the same agent for follow-ups.** Both setups send fixes back to the same Executor via a follow-up message instead of spawning fresh. The Executor keeps its context, so the follow-up brief can be short. A fresh spawn is reserved for follow-ups that warrant a different tier.
+
+**Instruction detail scales inversely with model tier.** haiku and executor_5_4 get exact steps. opus and executor_5_5 get goals and the freedom to choose the approach.
+
+## The outcome
+
+The expensive model's tokens go to specs, tier decisions, and review. The cheap models' tokens go to file reads, edits, and test runs. Ambiguity gets resolved by a read-only planning pass before implementation, not by throwing a bigger model at an unclear task. Each result gets checked by a model that did not produce it.
