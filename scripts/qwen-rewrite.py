@@ -2,7 +2,7 @@
 """
 Rewrites a post's prose through the local Qwen model in LM Studio.
 
-    npm run blog:rewrite -- ../folio-sealed/posts/my-post.mdx
+    npm run blog:rewrite -- folio-sealed/posts/my-post.mdx
 
 Writes <post>.rewritten.mdx next to the source and leaves the original alone.
 Read the diff, then replace the original yourself. The model is not trusted to
@@ -24,9 +24,11 @@ import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 URL = "http://127.0.0.1:1234/v1/chat/completions"
 MODEL = "qwen3.8-27b"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
 WORKERS = 4
 SECTION_BUDGET = 8000
 PARAGRAPH_BUDGET = 6000
@@ -143,11 +145,26 @@ def split_sections(body):
     return [section for section in sections if section]
 
 
+def resolve_source(argument):
+    """Resolves a path against the workspace root as well as the cwd.
+
+    npm run blog:rewrite proxies through "npm --prefix folio", so this runs
+    with folio/ as the cwd and the workspace-root paths the READMEs document
+    would not otherwise resolve. The cwd wins when both exist.
+    """
+    if not Path(argument).exists():
+        from_root = WORKSPACE_ROOT / argument
+        if from_root.exists():
+            return str(from_root)
+
+    return argument
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit("usage: qwen-rewrite.py <path-to-post.mdx>")
 
-    source = sys.argv[1]
+    source = resolve_source(sys.argv[1])
     raw = open(source).read()
 
     match = re.match(r"^(---\n.*?\n---\n)(.*)$", raw, flags=re.S)
