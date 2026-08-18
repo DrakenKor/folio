@@ -10,6 +10,12 @@ import type {
   RawBlogSource
 } from '../types/blog'
 
+/** Raw contents of a src/content/stubs/<slug>.json file, before parsing. */
+export interface RawBlogStubSource {
+  fileName: string
+  source: string
+}
+
 const BLOG_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 interface NormalizedDateParts {
@@ -133,13 +139,15 @@ function normalizeFrontmatter(
   parseDateParts(date, fileName)
 
   const normalizedTags = normalizeTags(frontmatter.tags, fileName)
+  const sealed = frontmatter.sealed === true
 
   return {
     title,
     description,
     date,
     tags: normalizedTags.tags,
-    tagSlugs: normalizedTags.tagSlugs
+    tagSlugs: normalizedTags.tagSlugs,
+    sealed
   }
 }
 
@@ -187,9 +195,29 @@ function getSlugFromFileName(fileName: string): string {
   return ensureValidSlug(path.basename(fileName, path.extname(fileName)), fileName)
 }
 
-export function createBlogDataFromSources(rawSources: RawBlogSource[]): BlogDataSnapshot {
+/**
+ * Sorts, derives postMeta and builds the tag index for an already-assembled
+ * post list. Shared by the MDX loader and by blog.ts, which merges in sealed
+ * stub posts before calling this — so tag counts, tag pages and adjacency all
+ * see the full set.
+ */
+export function createBlogDataFromPosts(posts: BlogPost[]): BlogDataSnapshot {
+  const sortedPosts = [...posts]
+  sortPostsDescending(sortedPosts)
+
+  const postMeta = sortedPosts.map(({ content, ...meta }) => meta)
+
+  return {
+    posts: sortedPosts,
+    postMeta,
+    tags: buildTagIndex(postMeta)
+  }
+}
+
+function parseMdxPosts(rawSources: RawBlogSource[]): BlogPost[] {
   const seenSlugs = new Set<string>()
-  const posts: BlogPost[] = rawSources.map(({ fileName, source }) => {
+
+  return rawSources.map(({ fileName, source }) => {
     if (!fileName.endsWith('.mdx')) {
       throw new Error(`Unsupported blog source "${fileName}": only .mdx files are allowed.`)
     }
@@ -207,18 +235,79 @@ export function createBlogDataFromSources(rawSources: RawBlogSource[]): BlogData
 
     return {
       slug,
-      content: content.trim(),
+      // Defence in depth: a sealed post's body must never render, even if a
+      // plaintext body somehow slipped into the source file.
+      content: normalizedFrontmatter.sealed ? '' : content.trim(),
       ...normalizedFrontmatter
     }
   })
+}
 
-  sortPostsDescending(posts)
+export function createBlogDataFromSources(rawSources: RawBlogSource[]): BlogDataSnapshot {
+  return createBlogDataFromPosts(parseMdxPosts(rawSources))
+}
 
-  const postMeta = posts.map(({ content, ...meta }) => meta)
+/**
+ * Parses a stub file (public metadata for a sealed post) into a BlogPost with
+ * an empty body. Reuses the same field validators and the same slug check as
+ * the MDX path, so a malformed stub fails the same way a malformed post would.
+ */
+export function createSealedPostFromStubSource({ fileName, source }: RawBlogStubSource): BlogPost {
+  const slug = getSlugFromFileName(fileName)
+
+  let parsed: unknown
+
+  try {
+    parsed = JSON.parse(source)
+  } catch {
+    throw new Error(`Invalid blog stub in "${fileName}": not valid JSON.`)
+  }
+
+  if (!isRecord(parsed)) {
+    throw new Error(`Invalid blog stub in "${fileName}": stub must be an object.`)
+  }
+
+  const title = assertNonEmptyString(parsed.title, 'title', fileName)
+  const description = assertNonEmptyString(parsed.description, 'description', fileName)
+  const date = assertNonEmptyString(parsed.date, 'date', fileName)
+
+  parseDateParts(date, fileName)
+
+  const normalizedTags = normalizeTags(parsed.tags, fileName)
 
   return {
-    posts,
-    postMeta,
-    tags: buildTagIndex(postMeta)
+    slug,
+    title,
+    description,
+    date,
+    tags: normalizedTags.tags,
+    tagSlugs: normalizedTags.tagSlugs,
+    sealed: true,
+    content: ''
   }
+}
+
+/**
+ * Merges MDX-authored posts with sealed stub posts before sorting and
+ * building the tag index, so tag counts, tag pages and adjacency all include
+ * sealed posts naturally.
+ */
+export function createBlogDataFromSourcesAndStubs(
+  rawSources: RawBlogSource[],
+  rawStubSources: RawBlogStubSource[]
+): BlogDataSnapshot {
+  const mdxPosts = parseMdxPosts(rawSources)
+  const sealedPosts = rawStubSources.map(createSealedPostFromStubSource)
+
+  const seenSlugs = new Set<string>()
+
+  for (const post of [...mdxPosts, ...sealedPosts]) {
+    if (seenSlugs.has(post.slug)) {
+      throw new Error(`Duplicate blog slug "${post.slug}" detected.`)
+    }
+
+    seenSlugs.add(post.slug)
+  }
+
+  return createBlogDataFromPosts([...mdxPosts, ...sealedPosts])
 }

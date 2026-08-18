@@ -15,7 +15,8 @@ const posts: BlogPostMeta[] = [
     description: 'My writing.',
     date: '2026-03-01',
     tags: ['Writing'],
-    tagSlugs: ['writing']
+    tagSlugs: ['writing'],
+    sealed: false
   }
 ]
 

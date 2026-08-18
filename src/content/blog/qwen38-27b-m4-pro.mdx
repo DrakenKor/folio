@@ -1,0 +1,120 @@
+---
+title: "Qwen3.8-27B on an M4 Pro"
+description: "Throughput, memory and benchmark scores for Qwen3.8-27B at 4-bit on a 48 GB MacBook Pro, and the generation cap that was setting most of the accuracy numbers."
+date: "2026-08-18"
+tags: ["AI", "LLMs", "Benchmarks", "Apple Silicon", "Performance"]
+---
+
+I ran Qwen3.8-27B at 4-bit MLX quantisation on a MacBook Pro — M4 Pro, 12-core CPU, 16-core GPU, 48 GB unified memory — via LM Studio's local server. The following content contains 172 benchmark items, two throughput configurations, and a context sizing calculation. All of these were measured on that machine.
+
+## The numbers
+
+| Measure | Value | Conditions |
+| --- | --- | --- |
+| Decode throughput | 15.2 tok/s | single stream, steady state |
+| Prefill throughput | 1,351 tok/s | 3.8k-token prompt, warm |
+| Aggregate accuracy | 89.5% | 154 of 172 items, four suites |
+| Resident memory | 14.98 GiB | weights at 32K context |
+
+Decode speed is what you notice during use. Prefill sets the delay for ingesting a large prompt.
+
+## The token cap was setting the scores
+
+The first pass limited generation to 2,000 to 2,500 tokens. Qwen3.8 is a reasoning model. It produces a thinking trace before the answer, and that trace draws on the same budget. If an item was still thinking when the cap landed, it produced no final answer. Items with no answer were graded wrong. That outcome happened for 31 of 172 items.
+
+I re-ran only the cut-off items using an 8,192-token budget.
+
+| Benchmark | First pass | Cut off | At 8,192 tok | Δ |
+| --- | --- | --- | --- | --- |
+| GSM8K | 92.5% | 2 | 97.5% | +5.0 |
+| ARC-Challenge | 95.0% | 1 | 97.5% | +2.5 |
+| MMLU | 75.0% | 15 | 90.0% | +15.0 |
+| HumanEval | 56.2% | 13 | 68.8% | +12.5 |
+
+Aggregate accuracy changed from 80.2% to 89.5%. The weights stayed unchanged. The cap accounted for 9.3 points, because almost every first-pass wrong answer was an unfinished one with no final answer. HumanEval received the largest correction. Its solutions needed the longest traces.
+
+Items that had already ended on their own were left alone. The cap never constrained them, so re-running could not systematically alter their grades.
+
+## Quality
+
+The evaluation uses four open benchmarks with 172 items in total. Scoring counts only the final answer and excludes the reasoning trace.
+
+| Benchmark | Correct | Accuracy | 95% CI | Think tok | Cut off |
+| --- | --- | --- | --- | --- | --- |
+| GSM8K | 39/40 | 97.5% | 87–100% | 397 | 0 |
+| ARC-Challenge | 39/40 | 97.5% | 87–100% | 199 | 0 |
+| MMLU | 54/60 | 90.0% | 80–95% | 1,796 | 6 |
+| HumanEval | 22/32 | 68.8% | 51–82% | 3,170 | 9 |
+
+<Callout type="warning" title="Read the intervals">
+  Each suite has 32 to 60 items, so one item changes the score by 1.7 to 3.1 points. The results are a smoke test that the quantised weights behave sanely on this machine. Published leaderboard results use the full splits and standardised prompts, so they are not comparable with these numbers.
+</Callout>
+
+## Throughput
+
+Three runs were used per configuration. The first run was discarded as Metal-kernel warmup.
+
+| Configuration | TTFT | Decode tok/s | Prefill tok/s |
+| --- | --- | --- | --- |
+| Short prompt (62 tok) → 320 tok generation | 0.95 s | 15.2 | 65 |
+| Long prompt (3,803 tok) → 64 tok generation | 2.82 s | 15.3 | 1,351 |
+
+The session's first long-prompt request took 38.6 s to first token, versus 2.82 s when warm. This was one-time Metal kernel compilation for the prompt's batch shape, not steady-state behaviour. That is why each configuration discards its first run.
+
+Apple Silicon generation is constrained by memory bandwidth. The M4 Pro delivers roughly 273 GB/s, and each token requires streaming the full active weight set. The 4-bit weights occupy 15.0 GiB. The 8-bit build occupies 29.5 GiB. On a 48 GB machine, the 8-bit build fits and runs at close to half speed.
+
+## The reasoning tax
+
+The model generated 243,912 completion tokens in the evaluation. Of those, 233,052 were reasoning. 96% of generated output was thinking.
+
+With 15.2 tok/s for single-stream decode, this overhead is the main cost of a response. A multiple-choice question may need several minutes. Plan for this cost, or turn off thinking for latency-sensitive work.
+
+## What the remaining failures are
+
+15 items did not produce an answer with 8,192 tokens. They were not repetition loops. Their traces were 22,000 to 39,000 characters each. A shingle scan found zero repeated 60-character spans. The model deliberated coherently throughout: it examined a suspected date typo, the boundary between two political traditions, which bases make Miller–Rabin exact, and whether a bracket-balance rule holds at the edges.
+
+It does not commit. One capped MMLU trace reached "I lean C". That was the correct answer. It continued deliberating past the budget. It did not emit its final line.
+
+On hard items, the practical failure mode is not producing wrong answers. It is failing to stop.
+
+## Context sizing
+
+The model uses an unusual attention shape of 64 layers, 4 KV heads, `head_dim 256`. The per-token KV cache is roughly 256 KB, about four times what a 27B usually carries per token. The listed window is 262,144 tokens. The cache size determines usable context here.
+
+| Context | KV cache | + weights | Against a 37.4 GiB GPU budget |
+| --- | --- | --- | --- |
+| 16K | 4 GB | 19 GB | comfortable |
+| 32K | 8 GB | 23 GB | comfortable |
+| 64K | 16 GB | 31 GB | tight |
+| 128K | 32 GB | 47 GB | exceeds budget |
+| 256K | 64 GB | 79 GB | exceeds budget |
+
+The run setting is 32K. The measured total is 20.97 GiB, and it leaves headroom for the rest of the system. The full 256K window requires 64 GB of KV cache by itself.
+
+## Configuration
+
+| Setting | Value | Note |
+| --- | --- | --- |
+| Model | `mlx-community/Qwen3.8-27B-4bit` | 4-bit affine, group size 64 |
+| Runtime | `mlx-llm 1.11.0 (Metal)` | MLX is the native path on Apple Silicon |
+| Context length | `32,768` | KV cache is 256 KB/token |
+| GPU offload | `100%` | all 64 layers resident on the GPU |
+| Parallel slots | `4 first pass · 2 re-run` | lowered for the re-run so each stream got more tok/s |
+| Sampling | `temp 1.0 · top-p 0.95 · top-k 20` | the model's shipped `generation_config.json` defaults |
+| Seed | `1234` | fixed, but does not pin output under batching |
+
+## Caveats
+
+Run-to-run reproducibility is absent for these numbers. A fixed seed leaves the output unpinned here; identical prompts re-issued at another concurrency produced different traces and sometimes different grades. MLX batches concurrent requests together; the resulting batch composition changes floating-point reduction order. Each score above is one sample rather than a fixed property of the build.
+
+Item selection used sampling instead of the front of each split: random contiguous chunks at a fixed seed, so MMLU does not favour the subject that sorts first.
+
+Grading relies on the final answer alone. Multiple-choice answers come from an explicit `Answer: X` line, with regex fallbacks. GSM8K grades the final number on a numeric basis. HumanEval executes the generated function in a subprocess with a 15-second timeout, using the suite's own unit tests.
+
+Four concurrent requests were running during evaluation; the 22 tok/s aggregate rate observed there is above the single-stream decode figure and should not be treated as that figure.
+
+15 items still exceeded the 8,192-token budget and remain graded wrong; the figures above are a slight under-estimate.
+
+Qwen3.8-27B is multimodal; measurement covered only its text path, leaving the vision tower unexercised.
+
+The first pass covered 172 items in 93 minutes at 4 concurrent requests, then a re-run of 31 cut-off items occurred at 2 concurrent requests.

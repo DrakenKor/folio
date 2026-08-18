@@ -15,6 +15,14 @@ export function PostCard({ post, activeTagSlug }: PostCardProps) {
       <h2 className="blog-card-title">
         <Link href={`/blog/${post.slug}`}>{post.title}</Link>
       </h2>
+      {post.sealed ? (
+        <p className="blog-card-lock">
+          <span className="blog-card-lock-glyph" aria-hidden="true">
+            ⚿
+          </span>
+          {post.tags[0] ? `Unlocks with ${post.tags[0]}` : 'Sealed'}
+        </p>
+      ) : null}
       <p className="blog-card-description">{post.description}</p>
       <div className="blog-card-tags">
         {post.tags.map((tag, index) => (

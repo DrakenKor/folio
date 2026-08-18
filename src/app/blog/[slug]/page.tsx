@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { MDXRemote } from 'next-mdx-remote/rsc'
 import { notFound } from 'next/navigation'
+import { LockedPost } from '@/components/blog/LockedPost'
 import { TagBadge } from '@/components/blog/TagBadge'
 import { mdxComponents } from '@/components/mdx'
 import { getAdjacentPosts, getAllPostMeta, getPostBySlug } from '@/lib/blog'
@@ -41,7 +42,8 @@ export async function generateMetadata({
   return {
     title: post.title,
     description: post.description,
-    keywords: post.tags,
+    ...(post.sealed ? {} : { keywords: post.tags }),
+    ...(post.sealed ? { robots: { index: false, follow: true } } : {}),
     alternates: {
       canonical: `/blog/${post.slug}`
     },
@@ -84,13 +86,17 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         </div>
       </header>
 
-      <div className="blog-prose">
-        <MDXRemote
-          source={post.content}
-          components={mdxComponents}
-          options={blogMdxOptions}
-        />
-      </div>
+      {post.sealed ? (
+        <LockedPost slug={post.slug} />
+      ) : (
+        <div className="blog-prose">
+          <MDXRemote
+            source={post.content}
+            components={mdxComponents}
+            options={blogMdxOptions}
+          />
+        </div>
+      )}
 
       <nav className="blog-adjacent-nav" aria-label="Adjacent posts">
         {adjacentPosts.previous ? (
