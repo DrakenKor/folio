@@ -1,0 +1,385 @@
+/* ── Pinned visual: three layers that crossfade ── */
+
+.crypto-visual {
+  position: relative;
+  height: 100%;
+}
+
+.crypto-layer {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 32px 32px 32px;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 240ms var(--ease),
+    visibility 0s linear 240ms;
+}
+
+.crypto-layer[data-active='true'] {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 240ms var(--ease);
+}
+
+.crypto-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 0;
+  margin: 0;
+  color: var(--demo-white);
+}
+
+.crypto-figure figcaption {
+  text-align: center;
+}
+
+.crypto-layer .demo-ledger {
+  justify-self: center;
+  width: min(100%, 420px);
+  color: var(--demo-text);
+}
+
+/* ── The avalanche wall ── */
+
+.crypto-wall,
+.crypto-tree,
+.crypto-chart {
+  display: block;
+  width: min(100%, 440px);
+  height: auto;
+  min-height: 0;
+  max-height: 100%;
+}
+
+.crypto-bit {
+  fill: none;
+  stroke: var(--demo-bone);
+  stroke-width: 1;
+}
+
+.crypto-bit[data-on='1'] {
+  fill: var(--demo-white);
+  stroke: var(--demo-white);
+}
+
+.crypto-bit[data-flash='a'] {
+  animation: crypto-flash-a 300ms linear;
+}
+
+.crypto-bit[data-flash='b'] {
+  animation: crypto-flash-b 300ms linear;
+}
+
+@keyframes crypto-flash-a {
+  from {
+    fill: var(--signal-change);
+    stroke: var(--signal-change);
+  }
+}
+
+@keyframes crypto-flash-b {
+  from {
+    fill: var(--signal-change);
+    stroke: var(--signal-change);
+  }
+}
+
+/* ── The key tree ── */
+
+.crypto-edge {
+  stroke: var(--demo-dim);
+  stroke-width: 1;
+}
+
+.crypto-edge[data-lit='true'] {
+  stroke: var(--demo-white);
+}
+
+.crypto-edge-label {
+  fill: var(--demo-dim);
+  font-size: 11px;
+}
+
+.crypto-node rect {
+  fill: var(--demo-black);
+  stroke: var(--demo-dim);
+  transition:
+    fill 240ms var(--ease),
+    stroke 240ms var(--ease);
+}
+
+.crypto-node text {
+  fill: var(--demo-dim);
+  font-size: 12px;
+}
+
+.crypto-node[data-lit='true'] rect {
+  stroke: var(--demo-white);
+}
+
+.crypto-node[data-lit='true'] text {
+  fill: var(--demo-white);
+}
+
+.crypto-node[data-active='true'] rect {
+  fill: var(--demo-white);
+}
+
+.crypto-node[data-active='true'] text {
+  fill: var(--demo-black);
+}
+
+.crypto-node[data-altered='true'] rect {
+  fill: var(--demo-black);
+  stroke: var(--signal-change);
+}
+
+.crypto-node[data-altered='true'] text {
+  fill: var(--signal-change);
+}
+
+/* ── Letter frequencies ── */
+
+.crypto-bar {
+  fill: var(--demo-bone);
+  transition:
+    y 120ms linear,
+    height 120ms linear;
+}
+
+.crypto-outline {
+  fill: none;
+  stroke: var(--demo-white);
+  stroke-width: 1;
+  transition:
+    y 120ms linear,
+    height 120ms linear;
+}
+
+.crypto-letter {
+  fill: var(--demo-dim);
+  font-size: 11px;
+}
+
+.crypto-axis {
+  stroke: var(--demo-dim);
+}
+
+.crypto-chart-empty {
+  max-width: 32ch;
+  text-align: center;
+}
+
+/* ── The scrolling column ── */
+
+.crypto-column h3 {
+  margin: 32px 0 8px;
+  color: var(--demo-white);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.crypto-column h2:not(:first-child) {
+  margin-top: 96px;
+}
+
+.crypto-form {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 16px;
+}
+
+.crypto-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--demo-white);
+  font: inherit;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-control);
+}
+
+.crypto-label {
+  color: var(--demo-dim);
+  font-size: 12px;
+}
+
+.crypto-column code {
+  font: inherit;
+  color: var(--demo-white);
+  overflow-wrap: anywhere;
+}
+
+.crypto-digest {
+  display: grid;
+  gap: 2px;
+}
+
+.crypto-digest code {
+  white-space: pre;
+}
+
+.crypto-bytes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 8px;
+  max-height: 260px;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.crypto-byte {
+  position: relative;
+  min-width: 28px;
+  padding: 0;
+  color: var(--demo-white);
+  font: inherit;
+  font-size: 12px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--demo-dim);
+  cursor: pointer;
+}
+
+/* Grows the hit area to 44 px without growing the grid */
+.crypto-byte::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
+}
+
+.crypto-byte:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.crypto-locks {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.crypto-sealed > * + * {
+  margin-top: 8px;
+}
+
+.crypto-sealed p,
+.crypto-form p {
+  margin-bottom: 0;
+}
+
+/* ── Benchmark ── */
+
+.crypto-table {
+  width: 100%;
+  margin-top: 12px;
+  border-collapse: collapse;
+}
+
+.crypto-table caption {
+  padding-bottom: 8px;
+  color: var(--demo-dim);
+  font-size: 12px;
+  text-align: left;
+}
+
+.crypto-table th,
+.crypto-table td {
+  padding: 10px 0;
+  vertical-align: top;
+  text-align: left;
+  border-top: 1px solid var(--demo-line);
+}
+
+.crypto-table th {
+  width: 6ch;
+  color: var(--demo-white);
+  font-weight: 400;
+}
+
+.crypto-table td p {
+  margin: 6px 0 0;
+}
+
+.crypto-lane {
+  display: grid;
+  grid-template-columns: 14ch minmax(0, 1fr) 9ch;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.crypto-lane-name {
+  color: var(--demo-white);
+}
+
+.crypto-lane-track {
+  display: block;
+  height: 10px;
+}
+
+.crypto-lane-bar {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--demo-white);
+}
+
+.crypto-lane-bar[data-lane='rust'] {
+  background: var(--signal-compiled);
+}
+
+.crypto-lane-bar[data-lane='js'] {
+  background: var(--signal-interpreted);
+}
+
+.crypto-lane-ms {
+  color: var(--demo-white);
+  text-align: right;
+}
+
+/* ── Phones: the visual is the top 40%, so the ledger runs along one line ── */
+
+@media (max-width: 767px) {
+  .crypto-layer {
+    gap: 8px;
+    padding: 12px var(--demo-gutter);
+  }
+
+  .crypto-layer .demo-ledger {
+    width: 100%;
+    font-size: 11px;
+  }
+
+  .crypto-layer .demo-ledger dl {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 16px;
+  }
+
+  .crypto-layer .demo-ledger dl > div {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .crypto-layer .demo-ledger dt {
+    min-width: 0;
+  }
+
+  .crypto-figure {
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .crypto-lane {
+    grid-template-columns: 12ch minmax(0, 1fr) 8ch;
+  }
+}

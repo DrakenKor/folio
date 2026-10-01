@@ -1,27 +1,47 @@
 import {
-  ShaderProgram,
   ShaderUniforms,
   ShaderType,
   ShaderCompilationError
 } from '../../types/shader'
 
+type GL = WebGLRenderingContext | WebGL2RenderingContext
+
+interface UniformInfo {
+  location: WebGLUniformLocation
+  // True for int, bool and sampler uniforms, which take uniform1i
+  integer: boolean
+}
+
+// GL_INT, GL_BOOL, and the sampler types
+const INTEGER_TYPES = new Set([0x1404, 0x8b56, 0x8b5e, 0x8b60, 0x8b5f, 0x8dc1])
+
+// djb2 over the source: the cache key, so an edited shader recompiles
+const hashSource = (source: string): string => {
+  let hash = 5381
+  for (let i = 0; i < source.length; i++) {
+    hash = ((hash << 5) + hash + source.charCodeAt(i)) | 0
+  }
+  return (hash >>> 0).toString(36)
+}
+
 export class ShaderManager {
-  private gl: WebGLRenderingContext | WebGL2RenderingContext
+  private gl: GL
   private programs: Map<string, WebGLProgram> = new Map()
   private shaderCache: Map<string, WebGLShader> = new Map()
-  private uniformLocations: Map<
-    string,
-    Map<string, WebGLUniformLocation | null>
-  > = new Map()
+  private uniforms: Map<string, Map<string, UniformInfo>> = new Map()
 
-  constructor(gl: WebGLRenderingContext | WebGL2RenderingContext) {
+  constructor(gl: GL) {
     this.gl = gl
   }
 
   /**
-   * Compile a shader from source code
+   * Compile a shader from source code, reusing an identical one if cached
    */
   private compileShader(source: string, type: ShaderType): WebGLShader {
+    const cacheKey = `${type}:${hashSource(source)}:${source.length}`
+    const cached = this.shaderCache.get(cacheKey)
+    if (cached) return cached
+
     const shader = this.gl.createShader(
       type === 'vertex' ? this.gl.VERTEX_SHADER : this.gl.FRAGMENT_SHADER
     )
@@ -38,81 +58,69 @@ export class ShaderManager {
       throw new ShaderCompilationError(`Shader compilation failed: ${error}`)
     }
 
+    this.shaderCache.set(cacheKey, shader)
     return shader
   }
 
   /**
-   * Create and link a shader program
+   * Create and link a shader program. If the id is already taken, the old
+   * program is deleted only once the new one has linked, so a failed compile
+   * leaves the last good program in place.
    */
   createProgram(
     id: string,
     vertexSource: string,
     fragmentSource: string
   ): WebGLProgram {
-    try {
-      // Check cache first
-      const cacheKey = `${id}_vertex`
-      const fragmentCacheKey = `${id}_fragment`
+    const vertexShader = this.compileShader(vertexSource, 'vertex')
+    const fragmentShader = this.compileShader(fragmentSource, 'fragment')
 
-      let vertexShader = this.shaderCache.get(cacheKey)
-      if (!vertexShader) {
-        vertexShader = this.compileShader(vertexSource, 'vertex')
-        this.shaderCache.set(cacheKey, vertexShader)
-      }
-
-      let fragmentShader = this.shaderCache.get(fragmentCacheKey)
-      if (!fragmentShader) {
-        fragmentShader = this.compileShader(fragmentSource, 'fragment')
-        this.shaderCache.set(fragmentCacheKey, fragmentShader)
-      }
-
-      const program = this.gl.createProgram()
-      if (!program) {
-        throw new ShaderCompilationError('Failed to create shader program')
-      }
-
-      this.gl.attachShader(program, vertexShader)
-      this.gl.attachShader(program, fragmentShader)
-      this.gl.linkProgram(program)
-
-      if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
-        const error = this.gl.getProgramInfoLog(program)
-        this.gl.deleteProgram(program)
-        throw new ShaderCompilationError(`Program linking failed: ${error}`)
-      }
-
-      this.programs.set(id, program)
-      this.cacheUniformLocations(id, program)
-
-      return program
-    } catch (error) {
-      console.error(`Failed to create shader program "${id}":`, error)
-      throw error
+    const program = this.gl.createProgram()
+    if (!program) {
+      throw new ShaderCompilationError('Failed to create shader program')
     }
+
+    this.gl.attachShader(program, vertexShader)
+    this.gl.attachShader(program, fragmentShader)
+    this.gl.linkProgram(program)
+
+    if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
+      const error = this.gl.getProgramInfoLog(program)
+      this.gl.deleteProgram(program)
+      throw new ShaderCompilationError(`Program linking failed: ${error}`)
+    }
+
+    const existing = this.programs.get(id)
+    if (existing) this.gl.deleteProgram(existing)
+
+    this.programs.set(id, program)
+    this.cacheUniforms(id, program)
+
+    return program
   }
 
   /**
-   * Cache uniform locations for efficient access
+   * Cache uniform locations and types for efficient access
    */
-  private cacheUniformLocations(
-    programId: string,
-    program: WebGLProgram
-  ): void {
+  private cacheUniforms(programId: string, program: WebGLProgram): void {
     const uniformCount = this.gl.getProgramParameter(
       program,
       this.gl.ACTIVE_UNIFORMS
     )
-    const locations = new Map<string, WebGLUniformLocation | null>()
+    const uniforms = new Map<string, UniformInfo>()
 
     for (let i = 0; i < uniformCount; i++) {
-      const uniformInfo = this.gl.getActiveUniform(program, i)
-      if (uniformInfo) {
-        const location = this.gl.getUniformLocation(program, uniformInfo.name)
-        locations.set(uniformInfo.name, location)
-      }
+      const info = this.gl.getActiveUniform(program, i)
+      if (!info) continue
+      const location = this.gl.getUniformLocation(program, info.name)
+      if (!location) continue
+      const entry = { location, integer: INTEGER_TYPES.has(info.type) }
+      uniforms.set(info.name, entry)
+      // Arrays are reported as "name[0]"; accept the bare name too
+      if (info.name.endsWith('[0]')) uniforms.set(info.name.slice(0, -3), entry)
     }
 
-    this.uniformLocations.set(programId, locations)
+    this.uniforms.set(programId, uniforms)
   }
 
   /**
@@ -136,33 +144,37 @@ export class ShaderManager {
   }
 
   /**
-   * Set uniform values for the currently active program
+   * Whether the linked program kept a uniform of this name
+   */
+  hasUniform(programId: string, name: string): boolean {
+    return this.uniforms.get(programId)?.has(name) ?? false
+  }
+
+  /**
+   * Set uniform values for the currently active program. A name the program
+   * does not have is skipped: the compiler drops uniforms a shader never
+   * reads, and warning about that every frame helps nobody.
    */
   setUniforms(programId: string, uniforms: ShaderUniforms): void {
-    const locations = this.uniformLocations.get(programId)
-    if (!locations) {
-      return
-      // throw new Error(`Uniform locations for program "${programId}" not found`)
-    }
+    const known = this.uniforms.get(programId)
+    if (!known) return
 
     Object.entries(uniforms).forEach(([name, value]) => {
-      const location = locations.get(name)
-      if (location === null || location === undefined) {
-        console.warn(`Uniform "${name}" not found in program "${programId}"`)
-        return
-      }
-
-      this.setUniform(location, value)
+      const uniform = known.get(name)
+      if (uniform) this.setUniform(uniform, value)
     })
   }
 
   /**
    * Set individual uniform value
    */
-  private setUniform(location: WebGLUniformLocation, value: any): void {
-    if (typeof value === 'number') {
-      this.gl.uniform1f(location, value)
-    } else if (Array.isArray(value)) {
+  private setUniform({ location, integer }: UniformInfo, value: unknown): void {
+    if (typeof value === 'boolean') {
+      this.gl.uniform1i(location, value ? 1 : 0)
+    } else if (typeof value === 'number') {
+      if (integer) this.gl.uniform1i(location, value)
+      else this.gl.uniform1f(location, value)
+    } else if (Array.isArray(value) || value instanceof Float32Array) {
       switch (value.length) {
         case 2:
           this.gl.uniform2fv(location, value)
@@ -179,62 +191,43 @@ export class ShaderManager {
         case 16:
           this.gl.uniformMatrix4fv(location, false, value)
           break
-        default:
-          console.warn(`Unsupported uniform array length: ${value.length}`)
       }
     } else if (value && typeof value === 'object' && 'x' in value) {
       // Vector-like object
-      if ('w' in value) {
-        this.gl.uniform4f(location, value.x, value.y, value.z, value.w)
-      } else if ('z' in value) {
-        this.gl.uniform3f(location, value.x, value.y, value.z)
-      } else if ('y' in value) {
-        this.gl.uniform2f(location, value.x, value.y)
+      const vector = value as { x: number; y?: number; z?: number; w?: number }
+      if (vector.w !== undefined) {
+        this.gl.uniform4f(location, vector.x, vector.y ?? 0, vector.z ?? 0, vector.w)
+      } else if (vector.z !== undefined) {
+        this.gl.uniform3f(location, vector.x, vector.y ?? 0, vector.z)
+      } else if (vector.y !== undefined) {
+        this.gl.uniform2f(location, vector.x, vector.y)
       }
     }
   }
 
   /**
-   * Hot reload a shader program
+   * Replace a program's shaders. Throws, and keeps the old program, if the
+   * new source does not compile.
    */
   async reloadProgram(
     id: string,
     vertexSource: string,
     fragmentSource: string
   ): Promise<void> {
-    try {
-      // Remove from cache to force recompilation
-      this.shaderCache.delete(`${id}_vertex`)
-      this.shaderCache.delete(`${id}_fragment`)
-
-      // Delete existing program
-      const existingProgram = this.programs.get(id)
-      if (existingProgram) {
-        this.gl.deleteProgram(existingProgram)
-        this.programs.delete(id)
-        this.uniformLocations.delete(id)
-      }
-
-      // Create new program
-      this.createProgram(id, vertexSource, fragmentSource)
-      console.log(`Successfully reloaded shader program: ${id}`)
-    } catch (error) {
-      console.error(`Failed to reload shader program "${id}":`, error)
-      throw error
-    }
+    this.createProgram(id, vertexSource, fragmentSource)
   }
 
   /**
    * Get program info for debugging
    */
-  getProgramInfo(id: string): any {
+  getProgramInfo(id: string): { id: string; program: WebGLProgram; uniforms: string[]; isValid: boolean } | null {
     const program = this.programs.get(id)
     if (!program) return null
 
     return {
       id,
       program,
-      uniforms: Array.from(this.uniformLocations.get(id)?.keys() || []),
+      uniforms: Array.from(this.uniforms.get(id)?.keys() || []),
       isValid: this.gl.getProgramParameter(program, this.gl.LINK_STATUS)
     }
   }
@@ -243,18 +236,16 @@ export class ShaderManager {
    * Dispose of all resources
    */
   dispose(): void {
-    // Delete all programs
     this.programs.forEach((program) => {
       this.gl.deleteProgram(program)
     })
 
-    // Delete all cached shaders
     this.shaderCache.forEach((shader) => {
       this.gl.deleteShader(shader)
     })
 
     this.programs.clear()
     this.shaderCache.clear()
-    this.uniformLocations.clear()
+    this.uniforms.clear()
   }
 }

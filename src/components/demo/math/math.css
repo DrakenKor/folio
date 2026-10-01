@@ -1,0 +1,386 @@
+/* Math gallery: four exhibits on one stage. Tokens come from demos.css. */
+
+/* ── Stage: one canvas of each kind, and a copy of the last frame for the cross-fade ── */
+
+.math-stage {
+  cursor: crosshair;
+}
+
+.math-stage:focus-visible {
+  outline-offset: -4px;
+}
+
+.math-canvas,
+.math-ghost {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.math-canvas[data-shown='false'] {
+  visibility: hidden;
+}
+
+.math-ghost {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Tabs: text under the bar, the exhibit on show underlined ── */
+
+.math-tabs {
+  position: absolute;
+  top: var(--demo-bar);
+  left: var(--demo-gutter);
+  z-index: 4;
+  display: flex;
+  gap: 18px;
+}
+
+.math-tabs button {
+  min-height: 44px;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-quick) ease;
+}
+
+.math-tabs button:hover {
+  color: var(--demo-white);
+}
+
+.math-tabs button[aria-selected='true'] {
+  color: var(--demo-white);
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+
+/* ── What an exhibit lays over its canvas. It arrives with the exhibit. ── */
+
+.math-overlay {
+  position: absolute;
+  inset: 0 0 var(--demo-sheet) 0;
+  z-index: 2;
+  pointer-events: none;
+  animation: math-arrive 240ms var(--ease);
+}
+
+@keyframes math-arrive {
+  from {
+    opacity: 0;
+  }
+}
+
+.math-inset {
+  position: absolute;
+  border: 1px solid var(--demo-line);
+}
+
+.math-inset p {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin: 0 0 6px;
+  padding: 2px 8px;
+  color: var(--demo-text);
+  font-size: 12px;
+  white-space: nowrap;
+  background: var(--demo-veil);
+  border-radius: var(--radius-control);
+}
+
+/* Sorting: a name and live counts over each panel of bars */
+
+.math-panel {
+  position: absolute;
+  padding: 8px 10px;
+  color: var(--demo-dim);
+  font-size: 11px;
+  line-height: 16px;
+  border: 1px solid var(--demo-line);
+  border-radius: var(--radius-control);
+}
+
+.math-panel p {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  margin: 0;
+}
+
+.math-panel strong {
+  color: var(--demo-white);
+  font-weight: 500;
+}
+
+.math-panel[data-state='Finished'] strong {
+  color: var(--demo-dim);
+}
+
+.math-mute {
+  position: absolute;
+  top: var(--demo-bar);
+  left: 50%;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--demo-white);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: translateX(-50%);
+}
+
+/* Neural net: the network as nodes and lines */
+
+.math-diagram {
+  position: absolute;
+  background: var(--demo-veil);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--demo-line);
+  border-radius: var(--radius-control);
+  pointer-events: auto;
+}
+
+.math-diagram svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.math-diagram line {
+  stroke: var(--demo-bone);
+  stroke-opacity: 0.45;
+}
+
+.math-diagram g {
+  fill: var(--demo-bone);
+  cursor: pointer;
+  outline: none;
+}
+
+.math-diagram g[data-lit='true'],
+.math-diagram g:focus-visible {
+  fill: var(--demo-white);
+  stroke: var(--demo-white);
+  stroke-width: 3px;
+}
+
+.math-diagram-target {
+  fill: transparent;
+  stroke: none;
+}
+
+/* ── Bottom left: the placard above the ledger, on the veil ── */
+
+.math-corner {
+  position: absolute;
+  left: var(--demo-gutter);
+  bottom: calc(var(--demo-sheet) + 24px);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, calc(100% - 320px - 3 * var(--demo-gutter)));
+  font-size: 12px;
+}
+
+.math-card,
+.math-spectrum {
+  padding: 12px 14px;
+  background: var(--demo-veil);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: var(--radius-control);
+}
+
+.math-placard {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--demo-line);
+}
+
+.math-placard summary {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 12px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.math-placard summary::-webkit-details-marker {
+  display: none;
+}
+
+.math-placard h2 {
+  margin: 0;
+  color: var(--demo-white);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.math-placard-formula {
+  grid-column: 1;
+  color: var(--demo-bone);
+  font-size: 13px;
+}
+
+.math-placard-fold {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.math-placard p {
+  margin: 4px 0 0;
+}
+
+.math-placard .math-placard-note {
+  color: var(--demo-white);
+}
+
+/* Fourier: one bar per frequency */
+
+.math-spectrum svg {
+  display: block;
+  width: 100%;
+  height: 44px;
+  cursor: crosshair;
+}
+
+.math-spectrum rect {
+  fill: var(--demo-dim);
+  fill-opacity: 0.35;
+}
+
+.math-spectrum rect[data-used='true'] {
+  fill: var(--demo-bone);
+  fill-opacity: 1;
+}
+
+.math-spectrum rect[data-lit='true'] {
+  fill: var(--demo-white);
+  stroke: var(--demo-white);
+  stroke-width: 1.5px;
+}
+
+.math-spectrum p {
+  margin: 6px 0 0;
+}
+
+/* ── In the rail ── */
+
+.math-group > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 12px;
+}
+
+.math-group legend {
+  padding: 10px 0 0;
+}
+
+.math-loss {
+  padding-top: 10px;
+  font-size: 12px;
+}
+
+.math-loss p {
+  margin: 0;
+}
+
+.math-loss svg {
+  display: block;
+  width: 100%;
+  height: 72px;
+  margin: 8px 0 4px;
+  border-bottom: 1px solid var(--demo-line);
+}
+
+.math-loss polyline {
+  fill: none;
+  stroke: var(--demo-white);
+  stroke-width: 1.5px;
+}
+
+.math-loss .math-loss-range {
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ── In the notes: the race as a table ── */
+
+.math-results {
+  width: 100%;
+  margin: 0 0 16px;
+  font-size: 13px;
+  border-collapse: collapse;
+}
+
+.math-results caption {
+  padding-bottom: 8px;
+  color: var(--demo-dim);
+  text-align: left;
+}
+
+.math-results th,
+.math-results td {
+  padding: 6px 12px 6px 0;
+  font-weight: 400;
+  text-align: left;
+  border-bottom: 1px solid var(--demo-line);
+}
+
+.math-results thead th {
+  color: var(--demo-dim);
+}
+
+.math-results tbody th {
+  color: var(--demo-white);
+}
+
+/* ── Phones: the rail is a sheet, so the corner has the full width ── */
+
+@media (max-width: 767px) {
+  .math-tabs {
+    gap: 14px;
+  }
+
+  .math-corner {
+    width: calc(100% - 2 * var(--demo-gutter));
+    bottom: calc(var(--demo-sheet) + 12px);
+  }
+
+  .math-card,
+  .math-spectrum {
+    padding: 10px 12px;
+  }
+
+  .math-spectrum svg {
+    height: 32px;
+  }
+
+  .math-mute {
+    left: auto;
+    right: 4px;
+    transform: none;
+  }
+
+  .math-mute span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .math-overlay {
+    animation: none;
+  }
+}

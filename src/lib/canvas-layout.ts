@@ -10,11 +10,14 @@ interface PointerPositionOptions {
 export function syncCanvasToDisplaySize(
   canvas: HTMLCanvasElement,
   gl?: WebGLRenderingContext | null,
-  fallbackDimensions?: CanvasDimensions
+  fallbackDimensions?: CanvasDimensions,
+  ratioCap: number = Infinity
 ): CanvasDimensions {
   const rect = canvas.getBoundingClientRect()
-  const devicePixelRatio =
-    typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+  const devicePixelRatio = Math.min(
+    typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1,
+    ratioCap
+  )
 
   const width = Math.max(
     1,

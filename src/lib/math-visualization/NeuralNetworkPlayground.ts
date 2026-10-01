@@ -1,565 +1,539 @@
-import { BaseMathVisualization } from './BaseMathVisualization'
-import { InteractionEvent, VisualizationControl } from '../../types/math-visualization'
+import { ExhibitEvent, ExhibitSize, Placard, Readout, VisualizationControl } from '@/types/math-visualization'
+import { BaseMathVisualization, roomier } from './BaseMathVisualization'
+import { COLORS, insetSlot, mulberry32, rgb } from './tokens'
 
-interface Neuron {
-  id: string
+export type Activation = 'tanh' | 'relu' | 'sigmoid' | 'leaky_relu'
+
+export interface Sample {
   x: number
   y: number
-  value: number
-  bias: number
-  layer: number
-  index: number
-  activation: number
-  isActive: boolean
+  label: 0 | 1
 }
 
-interface Connection {
-  from: string
-  to: string
-  weight: number
-  isActive: boolean
+const sigmoid = (z: number) => 1 / (1 + Math.exp(-z))
+
+const activate = (kind: Activation, z: number) => {
+  if (kind === 'tanh') return Math.tanh(z)
+  if (kind === 'relu') return Math.max(0, z)
+  if (kind === 'leaky_relu') return z > 0 ? z : 0.01 * z
+  return sigmoid(z)
 }
 
-interface TrainingData {
-  inputs: number[]
-  outputs: number[]
+// The slope of the activation, from its input z and its output a
+const slope = (kind: Activation, z: number, a: number) => {
+  if (kind === 'tanh') return 1 - a * a
+  if (kind === 'relu') return z > 0 ? 1 : 0
+  if (kind === 'leaky_relu') return z > 0 ? 1 : 0.01
+  return a * (1 - a)
 }
 
-export class NeuralNetworkPlayground extends BaseMathVisualization {
-  private neurons: Neuron[] = []
-  private connections: Connection[] = []
-  private layers: number[] = [2, 4, 3, 1] // Default network structure
-  private isTraining = false
-  private trainingData: TrainingData[] = []
-  private currentEpoch = 0
-  private learningRate = 0.1
-  private selectedNeuron: Neuron | null = null
-  private selectedConnection: Connection | null = null
+/**
+ * A small fully connected network with two inputs and one output. Hidden
+ * layers use the chosen activation; the output is a sigmoid, read as the
+ * probability of class 1.
+ */
+export class Network {
+  // weights[l][j * fanIn + i] joins neuron i of layer l to neuron j of layer l + 1
+  readonly weights: Float32Array[] = []
+  readonly biases: Float32Array[] = []
+  private inputs: Float32Array[] = []
+  private outputs: Float32Array[]
+  private deltas: Float32Array[] = []
+  private weightSteps: Float32Array[] = []
+  private biasSteps: Float32Array[] = []
 
-  constructor() {
-    super(
-      'neural-network-playground',
-      'Neural Network Playground',
-      'Build and train neural networks with interactive topology editing and real-time visualization',
-      'neural'
-    )
+  constructor(
+    readonly layers: number[],
+    readonly activation: Activation,
+    random: () => number
+  ) {
+    this.outputs = [new Float32Array(layers[0])]
+    for (let l = 1; l < layers.length; l++) {
+      const size = layers[l]
+      this.weights.push(Float32Array.from({ length: size * layers[l - 1] }, () => random() * 2 - 1))
+      this.biases.push(Float32Array.from({ length: size }, () => random() * 2 - 1))
+      this.weightSteps.push(new Float32Array(size * layers[l - 1]))
+      this.biasSteps.push(new Float32Array(size))
+      this.inputs.push(new Float32Array(size))
+      this.outputs.push(new Float32Array(size))
+      this.deltas.push(new Float32Array(size))
+    }
   }
 
-  protected setupDefaultParameters(): void {
-    this.parameters = {
-      learningRate: 0.1,
-      activationFunction: 'sigmoid',
-      networkStructure: '2,4,3,1',
-      trainingSpeed: 50,
-      showWeights: true,
-      showBiases: true,
-      showActivations: true,
-      datasetType: 'xor'
+  get parameterCount(): number {
+    return this.weights.reduce((sum, layer) => sum + layer.length, 0) + this.biases.reduce((sum, layer) => sum + layer.length, 0)
+  }
+
+  private kind(layer: number): Activation {
+    return layer === this.layers.length - 1 ? 'sigmoid' : this.activation
+  }
+
+  forward(x: number, y: number): number {
+    this.outputs[0][0] = x
+    this.outputs[0][1] = y
+    for (let l = 1; l < this.layers.length; l++) {
+      const from = this.outputs[l - 1]
+      const weights = this.weights[l - 1]
+      const kind = this.kind(l)
+      for (let j = 0; j < this.layers[l]; j++) {
+        let sum = this.biases[l - 1][j]
+        for (let i = 0; i < from.length; i++) sum += from[i] * weights[j * from.length + i]
+        this.inputs[l - 1][j] = sum
+        this.outputs[l][j] = activate(kind, sum)
+      }
     }
+    return this.outputs[this.layers.length - 1][0]
+  }
+
+  // One neuron's output from the last forward pass. Layer 0 is the input.
+  neuron(layer: number, index: number): number {
+    return this.outputs[layer][index]
+  }
+
+  /**
+   * One step of backpropagation over a mini-batch. Each sample's error is
+   * carried back through the layers as before; the nudges are summed over
+   * the batch and applied together.
+   */
+  train(batch: Sample[], rate: number): void {
+    const last = this.layers.length - 1
+    this.weightSteps.forEach(layer => layer.fill(0))
+    this.biasSteps.forEach(layer => layer.fill(0))
+
+    for (const sample of batch) {
+      const output = this.forward(sample.x, sample.y)
+      this.deltas[last - 1][0] = (sample.label - output) * slope('sigmoid', this.inputs[last - 1][0], output)
+      for (let l = last - 1; l >= 1; l--) {
+        const next = this.deltas[l]
+        const weights = this.weights[l]
+        const width = this.layers[l]
+        for (let i = 0; i < width; i++) {
+          let error = 0
+          for (let j = 0; j < next.length; j++) error += next[j] * weights[j * width + i]
+          this.deltas[l - 1][i] = error * slope(this.kind(l), this.inputs[l - 1][i], this.outputs[l][i])
+        }
+      }
+      for (let l = 1; l <= last; l++) {
+        const from = this.outputs[l - 1]
+        for (let j = 0; j < this.layers[l]; j++) {
+          const delta = this.deltas[l - 1][j]
+          this.biasSteps[l - 1][j] += delta
+          for (let i = 0; i < from.length; i++) this.weightSteps[l - 1][j * from.length + i] += delta * from[i]
+        }
+      }
+    }
+
+    this.weights.forEach((layer, l) => {
+      for (let k = 0; k < layer.length; k++) layer[k] += rate * this.weightSteps[l][k]
+    })
+    this.biases.forEach((layer, l) => {
+      for (let k = 0; k < layer.length; k++) layer[k] += rate * this.biasSteps[l][k]
+    })
+  }
+}
+
+export const BATCH = 16
+
+/** `steps` mini-batches of 16, drawn from `data` with `random`. */
+export function trainSteps(network: Network, data: Sample[], rate: number, steps: number, random: () => number): void {
+  if (!data.length) return
+  const batch: Sample[] = new Array(BATCH)
+  for (let step = 0; step < steps; step++) {
+    for (let k = 0; k < BATCH; k++) batch[k] = data[Math.floor(random() * data.length)]
+    network.train(batch, rate)
+  }
+}
+
+/** Mean squared error and the share classified correctly, over all of `data`. */
+export function score(network: Network, data: Sample[]): { loss: number; accuracy: number } {
+  if (!data.length) return { loss: 0, accuracy: 0 }
+  let loss = 0
+  let correct = 0
+  for (const sample of data) {
+    const output = network.forward(sample.x, sample.y)
+    loss += (output - sample.label) ** 2
+    if (output > 0.5 === (sample.label === 1)) correct += 1
+  }
+  return { loss: loss / data.length, accuracy: correct / data.length }
+}
+
+/** The network read at the centre of every cell of a size-by-size grid over a rectangle of the plane. */
+export function sampleGrid(
+  network: Network,
+  size: number,
+  bounds: { left: number; top: number; right: number; bottom: number },
+  read: (network: Network, output: number) => number = (_, output) => output
+): Float32Array {
+  const grid = new Float32Array(size * size)
+  for (let row = 0; row < size; row++) {
+    const y = bounds.top + ((row + 0.5) / size) * (bounds.bottom - bounds.top)
+    for (let column = 0; column < size; column++) {
+      const x = bounds.left + ((column + 0.5) / size) * (bounds.right - bounds.left)
+      grid[row * size + column] = read(network, network.forward(x, y))
+    }
+  }
+  return grid
+}
+
+/** The preset datasets, inside the square from -1 to 1. */
+export function makeData(kind: string, random: () => number): Sample[] {
+  const jitter = (scale: number) => (random() * 2 - 1) * scale
+  const data: Sample[] = []
+  if (kind === 'xor') {
+    for (let i = 0; i < 120; i++) {
+      const x = (0.12 + random() * 0.78) * (random() < 0.5 ? -1 : 1)
+      const y = (0.12 + random() * 0.78) * (random() < 0.5 ? -1 : 1)
+      data.push({ x, y, label: x * y > 0 ? 1 : 0 })
+    }
+  } else if (kind === 'circle') {
+    for (let i = 0; i < 160; i++) {
+      const inside = i % 2 === 0
+      const radius = inside ? 0.4 * Math.sqrt(random()) : 0.65 + 0.3 * random()
+      const angle = random() * 2 * Math.PI
+      data.push({ x: radius * Math.cos(angle), y: radius * Math.sin(angle), label: inside ? 1 : 0 })
+    }
+  } else if (kind === 'moons') {
+    for (let i = 0; i < 70; i++) {
+      const t = (Math.PI * i) / 69
+      data.push({ x: (Math.cos(t) - 0.5) / 1.6 + jitter(0.05), y: -(Math.sin(t) - 0.25) / 1.6 + jitter(0.05), label: 1 })
+      data.push({ x: (0.5 - Math.cos(t)) / 1.6 + jitter(0.05), y: -(0.25 - Math.sin(t)) / 1.6 + jitter(0.05), label: 0 })
+    }
+  } else if (kind === 'spirals') {
+    for (let i = 0; i < 80; i++) {
+      const radius = 0.1 + (0.85 * i) / 79
+      const angle = (1.75 * 2 * Math.PI * i) / 79
+      const x = radius * Math.cos(angle)
+      const y = radius * Math.sin(angle)
+      data.push({ x: x + jitter(0.02), y: y + jitter(0.02), label: 1 })
+      data.push({ x: -x + jitter(0.02), y: -y + jitter(0.02), label: 0 })
+    }
+  }
+  return data
+}
+
+type NeuralParameters = {
+  data: string
+  layers: string
+  activation: string
+  // The slider runs on a logarithm: -3 to 0 is 0.001 to 1
+  learningRate: number
+  stepsPerFrame: number
+}
+
+const DATASETS = [
+  { label: 'XOR', value: 'xor' },
+  { label: 'Circle', value: 'circle' },
+  { label: 'Two moons', value: 'moons' },
+  { label: 'Two spirals', value: 'spirals' },
+  { label: 'Your own', value: 'own' }
+]
+const LAYERS = ['2-4-1', '2-4-3-1', '2-8-8-1', '2-8-8-8-1'].map(value => ({ label: value, value }))
+const ACTIVATIONS = [
+  { label: 'tanh', value: 'tanh' },
+  { label: 'ReLU', value: 'relu' },
+  { label: 'sigmoid', value: 'sigmoid' },
+  { label: 'leaky ReLU', value: 'leaky_relu' }
+]
+
+export const GRID = 96
+export const DIAGRAM = { width: 260, height: 170 }
+const HISTORY = 240
+const TEAL = rgb(COLORS.teal)
+const AMBER = rgb(COLORS.amber)
+
+export class NeuralNetworkPlayground extends BaseMathVisualization<NeuralParameters> {
+  readonly id = 'neural'
+  readonly name = 'Neural net'
+  readonly description =
+    'The input plane, coloured by what a small neural network predicts at each point, with the data it is learning on top.'
+
+  private seed: number
+  private random: () => number
+  private network!: Network
+  private data: Sample[] = []
+  private training = false
+  private steps = 0
+  private loss = 0
+  private accuracy = 0
+  private history: { step: number; loss: number }[] = []
+  private diverged = false
+  private probe: { layer: number; index: number } | null = null
+  private press: { x: number; y: number; time: number; fingers: number; moved: boolean } | null = null
+
+  // The boundary: a 96x96 picture stretched over the stage
+  private picture: HTMLCanvasElement | null = null
+  private stale = true
+  private frame = 0
+  private boundaryMs = 0
+
+  constructor(seed = 1) {
+    super({ data: 'circle', layers: '2-8-8-1', activation: 'tanh', learningRate: Math.log10(0.03), stepsPerFrame: 20 })
+    this.seed = seed
+    this.random = mulberry32(seed)
+    this.data = makeData(this.parameters.data, this.random)
+    this.build()
   }
 
   protected async initializeVisualization(): Promise<void> {
-    this.generateNetwork()
-    this.generateTrainingData()
-
-    // Perform initial forward pass to set activations
-    if (this.trainingData.length > 0) {
-      this.forwardPass(this.trainingData[0].inputs)
-    }
+    this.stale = true
   }
 
-  private generateNetwork(): void {
-    this.neurons = []
-    this.connections = []
-
-    const structure = this.parameters.networkStructure.split(',').map(Number)
-    this.layers = structure
-
-    const { width, height } = this.getCanvasSize()
-    const layerSpacing = (width - 100) / (structure.length - 1)
-
-    // Create neurons
-    structure.forEach((layerSize: number, layerIndex: number) => {
-      const neuronSpacing = (height - 100) / (layerSize + 1)
-
-      for (let i = 0; i < layerSize; i++) {
-        const neuron: Neuron = {
-          id: `${layerIndex}-${i}`,
-          x: 50 + layerIndex * layerSpacing,
-          y: 50 + (i + 1) * neuronSpacing,
-          value: 0,
-          bias: (Math.random() - 0.5) * 2,
-          layer: layerIndex,
-          index: i,
-          activation: 0,
-          isActive: false
-        }
-        this.neurons.push(neuron)
-      }
-    })
-
-    // Create connections
-    for (let layerIndex = 0; layerIndex < structure.length - 1; layerIndex++) {
-      const currentLayer = this.neurons.filter(n => n.layer === layerIndex)
-      const nextLayer = this.neurons.filter(n => n.layer === layerIndex + 1)
-
-      currentLayer.forEach(fromNeuron => {
-        nextLayer.forEach(toNeuron => {
-          const connection: Connection = {
-            from: fromNeuron.id,
-            to: toNeuron.id,
-            weight: (Math.random() - 0.5) * 2,
-            isActive: false
-          }
-          this.connections.push(connection)
-        })
-      })
-    }
+  cleanup(): void {
+    this.press = null
+    this.picture = null
+    super.cleanup()
   }
 
-  private generateTrainingData(): void {
-    this.trainingData = []
-
-    switch (this.parameters.datasetType) {
-      case 'xor':
-        this.trainingData = [
-          { inputs: [0, 0], outputs: [0] },
-          { inputs: [0, 1], outputs: [1] },
-          { inputs: [1, 0], outputs: [1] },
-          { inputs: [1, 1], outputs: [0] }
-        ]
-        break
-      case 'and':
-        this.trainingData = [
-          { inputs: [0, 0], outputs: [0] },
-          { inputs: [0, 1], outputs: [0] },
-          { inputs: [1, 0], outputs: [0] },
-          { inputs: [1, 1], outputs: [1] }
-        ]
-        break
-      case 'or':
-        this.trainingData = [
-          { inputs: [0, 0], outputs: [0] },
-          { inputs: [0, 1], outputs: [1] },
-          { inputs: [1, 0], outputs: [1] },
-          { inputs: [1, 1], outputs: [1] }
-        ]
-        break
-      case 'circle':
-        // Generate circular classification data
-        for (let i = 0; i < 100; i++) {
-          const x = (Math.random() - 0.5) * 2
-          const y = (Math.random() - 0.5) * 2
-          const distance = Math.sqrt(x * x + y * y)
-          this.trainingData.push({
-            inputs: [x, y],
-            outputs: [distance < 0.5 ? 1 : 0]
-          })
-        }
-        break
-    }
+  private build(): void {
+    this.network = new Network(this.parameters.layers.split('-').map(Number), this.parameters.activation as Activation, this.random)
+    this.steps = 0
+    this.history = []
+    this.diverged = false
+    this.probe = null
+    this.measure()
   }
 
-  private activationFunction(x: number): number {
-    switch (this.parameters.activationFunction) {
-      case 'sigmoid':
-        return 1 / (1 + Math.exp(-x))
-      case 'tanh':
-        return Math.tanh(x)
-      case 'relu':
-        return Math.max(0, x)
-      case 'leaky_relu':
-        return x > 0 ? x : 0.01 * x
-      default:
-        return 1 / (1 + Math.exp(-x))
-    }
+  private measure(): void {
+    const { loss, accuracy } = score(this.network, this.data)
+    this.loss = loss
+    this.accuracy = accuracy
+    this.stale = true
+    if (!this.data.length) return
+    this.history.push({ step: this.steps, loss })
+    // Keep the chart light: past 240 points, drop every other one
+    if (this.history.length > HISTORY) this.history = this.history.filter((_, i) => i % 2 === 0)
   }
 
-  private activationDerivative(x: number): number {
-    switch (this.parameters.activationFunction) {
-      case 'sigmoid':
-        const sigmoid = this.activationFunction(x)
-        return sigmoid * (1 - sigmoid)
-      case 'tanh':
-        const tanh = this.activationFunction(x)
-        return 1 - tanh * tanh
-      case 'relu':
-        return x > 0 ? 1 : 0
-      case 'leaky_relu':
-        return x > 0 ? 1 : 0.01
-      default:
-        const sig = this.activationFunction(x)
-        return sig * (1 - sig)
+  // Pixels per plane unit, and where the plane's origin sits on the stage
+  private get plane(): { unit: number; x: number; y: number } {
+    const { above, beside } = this.clearRects()
+    // Keep the data clear of the network diagram, which sits at the bottom
+    // beside the rail on a wide stage and under the tabs on a narrow one
+    const diagram = this.getInsetSlot()
+    if (diagram.y > this.size.height / 2) beside.height = diagram.y - 12 - beside.y
+    else {
+      above.height -= diagram.height + 12
+      above.y += diagram.height + 12
     }
-  }
-
-  private forwardPass(inputs: number[]): number[] {
-    // Set input layer
-    const inputNeurons = this.neurons.filter(n => n.layer === 0)
-    inputNeurons.forEach((neuron, index) => {
-      neuron.value = inputs[index] || 0
-      neuron.activation = neuron.value
-    })
-
-    // Forward propagation
-    for (let layerIndex = 1; layerIndex < this.layers.length; layerIndex++) {
-      const currentLayer = this.neurons.filter(n => n.layer === layerIndex)
-
-      currentLayer.forEach(neuron => {
-        let sum = neuron.bias
-
-        // Sum weighted inputs
-        this.connections
-          .filter(c => c.to === neuron.id)
-          .forEach(connection => {
-            const fromNeuron = this.neurons.find(n => n.id === connection.from)
-            if (fromNeuron) {
-              sum += fromNeuron.activation * connection.weight
-            }
-          })
-
-        neuron.value = sum
-        neuron.activation = this.activationFunction(sum)
-      })
-    }
-
-    // Return output layer activations
-    const outputLayer = this.neurons.filter(n => n.layer === this.layers.length - 1)
-    return outputLayer.map(n => n.activation)
-  }
-
-  private trainStep(): void {
-    if (this.trainingData.length === 0) return
-
-    const data = this.trainingData[Math.floor(Math.random() * this.trainingData.length)]
-    const outputs = this.forwardPass(data.inputs)
-
-    // Backpropagation
-    this.backpropagate(data.outputs, outputs)
-    this.currentEpoch++
-  }
-
-  private backpropagate(targetOutputs: number[], actualOutputs: number[]): void {
-    const neuronErrors = new Map<string, number>()
-
-    // Calculate output layer errors
-    const outputLayer = this.neurons.filter(n => n.layer === this.layers.length - 1)
-    outputLayer.forEach((neuron, index) => {
-      const error = targetOutputs[index] - actualOutputs[index]
-      const derivative = this.activationDerivative(neuron.value)
-      neuronErrors.set(neuron.id, error * derivative)
-    })
-
-    // Backpropagate errors
-    for (let layerIndex = this.layers.length - 2; layerIndex >= 0; layerIndex--) {
-      const currentLayer = this.neurons.filter(n => n.layer === layerIndex)
-
-      currentLayer.forEach(neuron => {
-        let error = 0
-
-        // Sum errors from next layer
-        this.connections
-          .filter(c => c.from === neuron.id)
-          .forEach(connection => {
-            const nextNeuronError = neuronErrors.get(connection.to) || 0
-            error += nextNeuronError * connection.weight
-          })
-
-        const derivative = this.activationDerivative(neuron.value)
-        neuronErrors.set(neuron.id, error * derivative)
-      })
-    }
-
-    // Update weights and biases
-    this.connections.forEach(connection => {
-      const fromNeuron = this.neurons.find(n => n.id === connection.from)
-      const toNeuronError = neuronErrors.get(connection.to) || 0
-
-      if (fromNeuron) {
-        connection.weight += this.parameters.learningRate * toNeuronError * fromNeuron.activation
-      }
-    })
-
-    this.neurons.forEach(neuron => {
-      if (neuron.layer > 0) {
-        const error = neuronErrors.get(neuron.id) || 0
-        neuron.bias += this.parameters.learningRate * error
-      }
-    })
+    const rect = roomier(above, beside)
+    return { unit: Math.min(rect.width, rect.height) * 0.46, x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
   }
 
   update(deltaTime: number): void {
-    if (!this.ctx || !this.canvas) return
-
-    this.clearCanvas()
-
-    // Set background
-    this.ctx.fillStyle = '#0f172a'
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
-
-    this.drawNetwork()
-    this.drawInfo()
-
-    // Training step
-    if (this.isTraining) {
-      this.trainStep()
-    }
-  }
-
-  private drawNetwork(): void {
-    if (!this.ctx) return
-
-    // Ensure we have neurons to draw
-    if (this.neurons.length === 0) {
-      this.generateNetwork()
-      if (this.trainingData.length > 0) {
-        this.forwardPass(this.trainingData[0].inputs)
-      }
-    }
-
-    // Draw connections
-    this.connections.forEach(connection => {
-      const fromNeuron = this.neurons.find(n => n.id === connection.from)
-      const toNeuron = this.neurons.find(n => n.id === connection.to)
-
-      if (fromNeuron && toNeuron) {
-        this.ctx!.strokeStyle = connection.weight > 0 ? '#4ade80' : '#ef4444'
-        this.ctx!.lineWidth = Math.abs(connection.weight) * 2 + 0.5
-        this.ctx!.globalAlpha = connection.isActive ? 1 : 0.6
-
-        this.ctx!.beginPath()
-        this.ctx!.moveTo(fromNeuron.x, fromNeuron.y)
-        this.ctx!.lineTo(toNeuron.x, toNeuron.y)
-        this.ctx!.stroke()
-
-        // Draw weight if enabled
-        if (this.parameters.showWeights) {
-          const midX = (fromNeuron.x + toNeuron.x) / 2
-          const midY = (fromNeuron.y + toNeuron.y) / 2
-
-          this.ctx!.fillStyle = '#ffffff'
-          this.ctx!.font = '8px Arial'
-          this.ctx!.textAlign = 'center'
-          this.ctx!.fillText(connection.weight.toFixed(2), midX, midY)
-        }
-      }
-    })
-
-    this.ctx.globalAlpha = 1
-
-    // Draw neurons
-    this.neurons.forEach(neuron => {
-      const radius = 15
-
-      // Neuron circle
-      if (this.parameters.showActivations) {
-        const intensity = Math.max(0, Math.min(1, Math.abs(neuron.activation)))
-        const r = neuron.activation > 0 ? 59 : 239
-        const g = neuron.activation > 0 ? 130 : 68
-        const b = neuron.activation > 0 ? 246 : 68
-        this.ctx!.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.5 + intensity * 0.5})`
+    if (this.training && deltaTime > 0 && this.data.length) {
+      trainSteps(this.network, this.data, Math.pow(10, this.parameters.learningRate), this.parameters.stepsPerFrame, this.random)
+      this.steps += this.parameters.stepsPerFrame
+      this.measure()
+      if (!Number.isFinite(this.loss)) {
+        this.training = false
+        this.diverged = true
+        this.emit()
       } else {
-        this.ctx!.fillStyle = neuron.isActive ? '#fbbf24' : '#3b82f6'
+        this.emitSoon()
       }
+    }
 
-      this.ctx!.beginPath()
-      this.ctx!.arc(neuron.x, neuron.y, radius, 0, 2 * Math.PI)
-      this.ctx!.fill()
+    const ctx = this.begin()
+    if (!ctx) return
+    const { width, height } = this.size
+    const { unit, x: ox, y: oy } = this.plane
+    this.frame += 1
+    // The grid is re-read every third frame while training, and at once otherwise
+    if (this.stale && (!this.training || this.frame % 3 === 0)) this.paint(width, height)
+    if (this.picture) {
+      ctx.imageSmoothingEnabled = true
+      ctx.drawImage(this.picture, 0, 0, width, height)
+    }
 
-      // Neuron border
-      this.ctx!.strokeStyle = neuron === this.selectedNeuron ? '#fbbf24' : '#1e293b'
-      this.ctx!.lineWidth = 2
-      this.ctx!.stroke()
-
-      // Activation value
-      this.ctx!.fillStyle = '#ffffff'
-      this.ctx!.font = '10px Arial'
-      this.ctx!.textAlign = 'center'
-      this.ctx!.fillText(neuron.activation.toFixed(2), neuron.x, neuron.y + 3)
-
-      // Bias if enabled
-      if (this.parameters.showBiases && neuron.layer > 0) {
-        this.ctx!.fillStyle = '#94a3b8'
-        this.ctx!.font = '8px Arial'
-        this.ctx!.fillText(`b:${neuron.bias.toFixed(2)}`, neuron.x, neuron.y + radius + 12)
-      }
-    })
-  }
-
-  private drawInfo(): void {
-    if (!this.ctx) return
-
-    this.ctx.fillStyle = '#ffffff'
-    this.ctx.font = '14px Arial'
-    this.ctx.textAlign = 'left'
-    this.ctx.fillText(`Epoch: ${this.currentEpoch}`, 20, 30)
-    this.ctx.fillText(`Learning Rate: ${this.parameters.learningRate}`, 20, 50)
-    this.ctx.fillText(`Dataset: ${this.parameters.datasetType.toUpperCase()}`, 20, 70)
-    this.ctx.fillText(`Status: ${this.isTraining ? 'Training' : 'Stopped'}`, 200, 30)
-
-    // Network structure
-    this.ctx.fillText(`Structure: ${this.layers.join(' → ')}`, 200, 50)
-  }
-
-  handleInteraction(event: InteractionEvent): void {
-    if (event.type === 'mouse' && event.position) {
-      // Check if clicking on a neuron
-      const clickedNeuron = this.neurons.find(neuron => {
-        const distance = Math.sqrt(
-          Math.pow(event.position!.x - neuron.x, 2) +
-          Math.pow(event.position!.y - neuron.y, 2)
-        )
-        return distance <= 15
-      })
-
-      if (clickedNeuron) {
-        this.selectedNeuron = this.selectedNeuron === clickedNeuron ? null : clickedNeuron
-        clickedNeuron.isActive = !clickedNeuron.isActive
-      } else {
-        this.selectedNeuron = null
-      }
+    // Class 1 is a filled diamond, class 0 a hollow one
+    ctx.lineWidth = 1.5
+    for (const sample of this.data) {
+      const x = ox + sample.x * unit
+      const y = oy + sample.y * unit
+      ctx.beginPath()
+      ctx.moveTo(x, y - 5)
+      ctx.lineTo(x + 5, y)
+      ctx.lineTo(x, y + 5)
+      ctx.lineTo(x - 5, y)
+      ctx.closePath()
+      ctx.fillStyle = sample.label ? COLORS.white : COLORS.black
+      ctx.strokeStyle = sample.label ? COLORS.black : COLORS.white
+      ctx.fill()
+      ctx.stroke()
     }
   }
 
-  private startTraining(): void {
-    this.isTraining = true
-    this.currentEpoch = 0
+  private paint(width: number, height: number): void {
+    const started = performance.now()
+    const { unit, x, y } = this.plane
+    const probe = this.probe
+    const squash = probe && probe.layer < this.network.layers.length - 1 && this.parameters.activation !== 'sigmoid'
+    // Every value lands between -1 (amber) and 1 (teal); zero is black
+    const grid = sampleGrid(
+      this.network,
+      GRID,
+      { left: -x / unit, top: -y / unit, right: (width - x) / unit, bottom: (height - y) / unit },
+      (network, output) => {
+        if (!probe) return 2 * output - 1
+        const value = network.neuron(probe.layer, probe.index)
+        return squash ? Math.tanh(value) : 2 * value - 1
+      }
+    )
+    if (!this.picture) {
+      this.picture = document.createElement('canvas')
+      this.picture.width = GRID
+      this.picture.height = GRID
+    }
+    const target = this.picture.getContext('2d')
+    if (!target) return
+    const image = target.createImageData(GRID, GRID)
+    for (let i = 0; i < grid.length; i++) {
+      const color = grid[i] > 0 ? TEAL : AMBER
+      const strength = Math.min(1, Math.abs(grid[i])) * 0.5
+      image.data[i * 4] = color[0] * strength
+      image.data[i * 4 + 1] = color[1] * strength
+      image.data[i * 4 + 2] = color[2] * strength
+      image.data[i * 4 + 3] = 255
+    }
+    target.putImageData(image, 0, 0)
+    this.stale = false
+    this.boundaryMs = performance.now() - started
   }
 
-  private stopTraining(): void {
-    this.isTraining = false
+  resize(size: ExhibitSize): void {
+    super.resize(size)
+    this.stale = true
   }
 
-  private resetNetwork(): void {
-    this.generateNetwork()
-    this.currentEpoch = 0
-    this.isTraining = false
+  handleInteraction(event: ExhibitEvent): boolean {
+    if (event.type === 'down') {
+      // A second finger makes it a two-finger tap, placed between the two
+      if (this.press && event.touches >= 2) {
+        this.press = { ...this.press, x: (this.press.x + event.x) / 2, y: (this.press.y + event.y) / 2, fingers: 2 }
+      } else {
+        this.press = { x: event.x, y: event.y, time: performance.now(), fingers: 1, moved: false }
+      }
+      return true
+    }
+    if (event.type === 'move') {
+      const press = this.press
+      if (event.pressed && press && press.fingers === 1 && Math.hypot(event.x - press.x, event.y - press.y) > 12) press.moved = true
+      return false
+    }
+    if (event.type === 'up' && this.press && event.touches === 0) {
+      const press = this.press
+      this.press = null
+      if (press.moved || performance.now() - press.time > 600) return true
+      const { unit, x, y } = this.plane
+      // A click is class 1. Shift-click, or a tap with two fingers, is class 0.
+      this.addPoint((press.x - x) / unit, (press.y - y) / unit, event.shift || press.fingers > 1 ? 0 : 1)
+      return true
+    }
+    return false
+  }
+
+  addPoint(x: number, y: number, label: 0 | 1): void {
+    this.data.push({ x, y, label })
+    this.measure()
+    this.emit()
+  }
+
+  // Hovering a neuron in the diagram puts its output on the stage
+  setProbe(probe: { layer: number; index: number } | null): void {
+    this.probe = probe
+    this.stale = true
+    this.emit()
+  }
+
+  getDiagram(): { layers: number[]; weights: Float32Array[]; probe: { layer: number; index: number } | null } {
+    return { layers: this.network.layers, weights: this.network.weights, probe: this.probe }
+  }
+
+  // Where the diagram sits over the stage
+  getInsetSlot(width = DIAGRAM.width, height = DIAGRAM.height) {
+    return insetSlot(this.size.width, this.size.height, width, height)
+  }
+
+  getHistory(): { step: number; loss: number }[] {
+    return this.history
+  }
+
+  protected onParameterChange(key: keyof NeuralParameters): void {
+    if (key === 'data') this.data = makeData(this.parameters.data, this.random)
+    if (key === 'data' || key === 'layers' || key === 'activation') this.build()
   }
 
   getControls(): VisualizationControl[] {
+    const running = this.training && !this.paused
     return [
-      {
-        id: 'networkStructure',
-        label: 'Network Structure (comma-separated)',
-        type: 'select',
-        value: this.parameters.networkStructure,
-        options: [
-          { label: '2,4,3,1 (Default)', value: '2,4,3,1' },
-          { label: '2,3,1 (Simple)', value: '2,3,1' },
-          { label: '2,5,5,1 (Deep)', value: '2,5,5,1' },
-          { label: '2,8,4,1 (Wide)', value: '2,8,4,1' }
-        ],
-        onChange: (value) => {
-          this.setParameter('networkStructure', value)
-          this.generateNetwork()
-          this.generateTrainingData()
-          if (this.trainingData.length > 0) {
-            this.forwardPass(this.trainingData[0].inputs)
-          }
-        }
-      },
-      {
-        id: 'learningRate',
-        label: 'Learning Rate',
-        type: 'slider',
-        value: this.parameters.learningRate,
-        min: 0.01,
-        max: 1,
-        step: 0.01,
-        onChange: (value) => this.setParameter('learningRate', value)
-      },
-      {
-        id: 'activationFunction',
-        label: 'Activation Function',
-        type: 'select',
-        value: this.parameters.activationFunction,
-        options: [
-          { label: 'Sigmoid', value: 'sigmoid' },
-          { label: 'Tanh', value: 'tanh' },
-          { label: 'ReLU', value: 'relu' },
-          { label: 'Leaky ReLU', value: 'leaky_relu' }
-        ],
-        onChange: (value) => this.setParameter('activationFunction', value)
-      },
-      {
-        id: 'datasetType',
-        label: 'Dataset',
-        type: 'select',
-        value: this.parameters.datasetType,
-        options: [
-          { label: 'XOR', value: 'xor' },
-          { label: 'AND', value: 'and' },
-          { label: 'OR', value: 'or' },
-          { label: 'Circle Classification', value: 'circle' }
-        ],
-        onChange: (value) => {
-          this.setParameter('datasetType', value)
-          this.generateTrainingData()
-          if (this.trainingData.length > 0) {
-            this.forwardPass(this.trainingData[0].inputs)
-          }
-        }
-      },
-      {
-        id: 'showWeights',
-        label: 'Show Weights',
-        type: 'toggle',
-        value: this.parameters.showWeights,
-        onChange: (value) => this.setParameter('showWeights', value)
-      },
-      {
-        id: 'showBiases',
-        label: 'Show Biases',
-        type: 'toggle',
-        value: this.parameters.showBiases,
-        onChange: (value) => this.setParameter('showBiases', value)
-      },
-      {
-        id: 'showActivations',
-        label: 'Show Activations',
-        type: 'toggle',
-        value: this.parameters.showActivations,
-        onChange: (value) => this.setParameter('showActivations', value)
-      },
-      {
-        id: 'train',
-        label: this.isTraining ? 'Stop Training' : 'Start Training',
-        type: 'button',
-        value: null,
-        onChange: () => {
-          if (this.isTraining) {
-            this.stopTraining()
-          } else {
-            this.startTraining()
-          }
-        }
-      },
-      {
-        id: 'reset',
-        label: 'Reset Network',
-        type: 'button',
-        value: null,
-        onChange: () => this.resetNetwork()
-      }
+      this.choice('data', 'Data', DATASETS),
+      this.choice('layers', 'Layers', LAYERS),
+      this.choice('activation', 'Activation', ACTIVATIONS),
+      this.slider('learningRate', 'Learning rate', -3, 0, 0.01, { format: value => Math.pow(10, value).toPrecision(2) }),
+      this.slider('stepsPerFrame', 'Steps per frame', 1, 200, 1),
+      this.button(
+        'train',
+        running ? 'Pause' : 'Train',
+        () => {
+          this.training = !running
+          if (this.training) this.host?.setPaused(false)
+          this.emit()
+        },
+        { primary: true }
+      ),
+      this.button('reset', 'Reset weights', () => {
+        this.random = mulberry32(++this.seed)
+        this.build()
+        this.emit()
+      }),
+      ...(this.parameters.data === 'own'
+        ? [
+            this.button('clear', 'Clear points', () => {
+              this.data = []
+              this.build()
+              this.emit()
+            })
+          ]
+        : [])
     ]
   }
 
-  protected onParameterChange(key: string, value: any): void {
-    // Handle parameter changes immediately
-    if (key === 'networkStructure') {
-      // Regenerate network with new structure
-      this.generateNetwork()
-    } else if (key === 'datasetType') {
-      // Generate new training data
-      this.generateTrainingData()
-    } else if (key === 'learningRate') {
-      // Learning rate changes take effect immediately during training
-      this.learningRate = value
+  getPlacard(): Placard {
+    const note = this.diverged
+      ? 'The weights ran away. Lower the learning rate, then reset the weights.'
+      : this.probe
+        ? `Showing layer ${this.probe.layer}, neuron ${this.probe.index + 1} on its own.`
+        : !this.data.length
+          ? 'Click the stage to add a point. Shift-click, or tap with two fingers, adds the other class.'
+          : undefined
+    return {
+      title: 'Neural net',
+      formula: 'a′ = f(Wa + b), layer after layer',
+      text: 'The stage is the input plane: teal where the network predicts the filled diamonds, amber where it predicts the hollow ones, black where it cannot say. Press Train and the boundary bends around the data.',
+      note
     }
-    // Other parameters like activation function take effect during next training step
   }
 
-  protected onReset(): void {
-    this.resetNetwork()
+  getLedger(): Readout[] {
+    return [
+      { key: 'Steps', value: this.steps.toLocaleString('en-GB') },
+      { key: 'Loss', value: this.data.length ? this.loss.toFixed(4) : 'no data' },
+      { key: 'Accuracy', value: this.data.length ? `${Math.round(this.accuracy * 100)}%` : 'no data' },
+      { key: 'Parameters', value: String(this.network.parameterCount) }
+    ]
+  }
+
+  describe(): string {
+    const data = DATASETS.find(entry => entry.value === this.parameters.data)?.label ?? ''
+    return `${data} data, ${this.data.length} points, and a ${this.parameters.layers} network after ${this.steps} training steps: loss ${this.loss.toFixed(4)}, ${Math.round(this.accuracy * 100)}% classified correctly.`
+  }
+
+  getData(): Record<string, string> {
+    return {
+      training: this.training ? 'on' : 'off',
+      steps: String(this.steps),
+      points: String(this.data.length),
+      'boundary-ms': this.boundaryMs.toFixed(2)
+    }
   }
 }

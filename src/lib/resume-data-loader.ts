@@ -53,10 +53,8 @@ export class ResumeDataLoader {
     const personal: PersonalInfo = {
       name: 'Manav Dhindsa',
       title: 'Software Engineer',
-      email: 'manav.da@gmail.com',
       portfolio: 'https://manavda.net',
       linkedin: 'linkedin.com/in/manav-dhindsa',
-      phone: '+81-70-9186-9933',
       about: 'Versatile Software Engineer with over 8 years of experience developing and scaling high-performance applications in the cloud. Language agnostic engineer with expertise in front-end (React, Svelte, HTML, CSS) and back-end (Python, Golang, Typescript, NodeJS) technologies. Proven track record in architecting complex software solutions with focus on performance optimization.'
     }
 
@@ -345,11 +343,19 @@ export class ResumeDataLoader {
   }
 
   /**
+   * The roles, oldest first. Synchronous so the page can render them on the server.
+   */
+  public getExperiencesOldestFirst(): Experience[] {
+    this.resumeData ??= this.createResumeData()
+    return [...this.resumeData.experience].sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+  }
+
+  /**
    * Get experiences sorted by date (newest first)
    */
   public async getExperiencesSorted(): Promise<Experience[]> {
     const data = await this.loadResumeData()
-    return data.experience.sort((a, b) => {
+    return [...data.experience].sort((a, b) => {
       const aDate = a.endDate || new Date()
       const bDate = b.endDate || new Date()
       return bDate.getTime() - aDate.getTime()

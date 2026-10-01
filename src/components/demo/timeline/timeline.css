@@ -1,0 +1,314 @@
+/* Career timeline. Tokens come from the demo shell. */
+
+.timeline .demo-scroll-column {
+  padding: 0 64px 60dvh 32px;
+}
+
+/* The list starts 30% down the viewport, where the camera is held at the first station */
+.timeline-lede {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 16px;
+  height: calc(30dvh - var(--demo-bar));
+  padding-bottom: 20px;
+  color: var(--demo-dim);
+}
+
+.timeline-lede p {
+  margin: 0;
+}
+
+.timeline-roles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline-roles > li {
+  display: flex;
+  min-height: calc(100dvh - var(--demo-bar));
+}
+
+.timeline-role {
+  width: 100%;
+  padding: 16px 0 56px;
+  border-top: 1px solid var(--demo-line);
+  opacity: 0.7;
+  transition: opacity var(--dur-move) var(--ease);
+  scroll-margin-top: var(--demo-bar);
+}
+
+.timeline-role[data-active='true'] {
+  opacity: 1;
+}
+
+/* A chosen technology: roles that did not use it step back, but stay readable */
+.timeline-role[data-match='false'] {
+  opacity: 0.55;
+}
+
+.timeline-role[data-match='true'] h2 {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 8px;
+}
+
+.timeline-dates {
+  color: var(--demo-dim);
+}
+
+.timeline-achievements {
+  margin: 0 0 8px;
+  padding-left: 2ch;
+}
+
+.timeline-tech {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 2ch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline-tech button {
+  min-height: 44px;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.timeline-tech button:hover,
+.timeline-tech button[aria-pressed='true'] {
+  color: var(--demo-white);
+}
+
+.timeline-tech button[aria-pressed='true'] {
+  text-decoration-thickness: 2px;
+}
+
+/* ── The pinned visual ── */
+
+.timeline-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.timeline-canvas {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+  pointer-events: none;
+  animation: timeline-fade var(--dur-move) var(--ease);
+}
+
+.timeline-canvas[data-look='true'] {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+@keyframes timeline-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.timeline-label,
+.timeline-year,
+.timeline-place {
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.timeline-label {
+  transform: translate(26px, -50%);
+  color: var(--demo-bone);
+}
+
+.timeline-label[data-tone='active'] {
+  color: var(--demo-white);
+}
+
+.timeline-label[data-tone='dim'] {
+  color: var(--demo-dim);
+}
+
+.timeline-year {
+  transform: translate(6px, -50%);
+  color: var(--demo-dim);
+}
+
+.timeline-place {
+  transform: translate(calc(-100% - 18px), 18px);
+  color: var(--demo-dim);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (min-width: 768px) {
+  .timeline .demo-rail {
+    top: auto;
+    bottom: 16px;
+    width: min(320px, calc(100% - 32px));
+    max-height: calc(100% - 32px);
+  }
+}
+
+/* ── Year rail ── */
+
+.timeline-rail {
+  position: fixed;
+  top: var(--demo-bar);
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 44px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.timeline-rail[data-over='true'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.timeline-rail-track {
+  position: absolute;
+  top: 44px;
+  bottom: 44px;
+  left: 50%;
+  width: 1px;
+  background: var(--demo-line);
+}
+
+.timeline-rail-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: calc(var(--timeline-p, 0) * 100%);
+  background: var(--demo-bone);
+}
+
+.timeline-rail-diamond {
+  position: absolute;
+  left: 0;
+  width: 9px;
+  height: 9px;
+  background: var(--demo-black);
+  border: 1px solid var(--demo-dim);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.timeline-rail-diamond[data-active='true'] {
+  background: var(--demo-white);
+  border-color: var(--demo-white);
+}
+
+.timeline-rail-diamond[data-match='true'] {
+  border-color: var(--demo-white);
+}
+
+.timeline-rail-diamond[data-match='false'] {
+  opacity: 0.45;
+}
+
+.timeline-rail-year {
+  position: absolute;
+  left: 0;
+  right: 0;
+  font-size: 12px;
+  text-align: center;
+}
+
+.timeline-rail-year[data-end='start'] {
+  top: 12px;
+}
+
+.timeline-rail-year[data-end='end'] {
+  bottom: 12px;
+}
+
+/* ── Without WebGL: the column moves to the centre and a plain line with diamonds stands in for the helix ── */
+
+.timeline-nogl {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.timeline-nogl .demo-scroll-visual {
+  display: none;
+}
+
+.timeline-nogl .demo-scroll-column {
+  width: min(68ch, 100%);
+  margin: 0 auto;
+  border-left: 0;
+}
+
+.timeline-nogl .timeline-roles {
+  border-left: 1px solid var(--demo-dim);
+}
+
+.timeline-nogl .timeline-roles > li {
+  position: relative;
+  padding-left: 28px;
+}
+
+.timeline-nogl .timeline-roles > li::before {
+  content: '';
+  position: absolute;
+  top: 20px;
+  left: 0;
+  width: 9px;
+  height: 9px;
+  background: var(--demo-black);
+  border: 1px solid var(--demo-white);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.timeline-nogl .timeline-role {
+  border-top: 0;
+}
+
+@media (max-width: 767px) {
+  .timeline .demo-scroll-column {
+    padding: 0 36px 40dvh 16px;
+  }
+
+  .timeline-lede {
+    height: auto;
+    min-height: 64px;
+    padding: 20px 0 12px;
+  }
+
+  .timeline-roles > li {
+    min-height: 60dvh;
+  }
+
+  /* The sheet rests over the list, so it is opaque rather than a veil */
+  .timeline .demo-sheet {
+    background: var(--demo-black);
+  }
+
+  .timeline-rail {
+    width: 28px;
+  }
+
+  .timeline-rail-year {
+    font-size: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-canvas {
+    animation: none;
+  }
+}

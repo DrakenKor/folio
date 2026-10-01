@@ -1,699 +1,580 @@
+import { ExhibitEvent, Placard, Readout, VisualizationControl } from '@/types/math-visualization'
 import { BaseMathVisualization } from './BaseMathVisualization'
-import { InteractionEvent, VisualizationControl } from '../../types/math-visualization'
+import { COLORS, mulberry32 } from './tokens'
 
-interface Particle {
-  value: number
-  x: number
-  y: number
-  targetX: number
-  targetY: number
-  color: string
-  isComparing: boolean
-  isSwapping: boolean
-  isActive: boolean
-}
+export type SortId = 'bubble' | 'selection' | 'insertion' | 'merge' | 'quick' | 'heap'
 
-interface SortingAlgorithm {
-  name: string
-  id: string
-  description: string
-  timeComplexity: string
-}
+// What an algorithm did, in order. A swap is two writes, a set is one.
+export type SortStep =
+  | { type: 'compare'; i: number; j: number }
+  | { type: 'swap'; i: number; j: number }
+  | { type: 'set'; i: number; value: number; previous: number }
 
-export class AlgorithmVisualizer extends BaseMathVisualization {
-  private particles: Particle[] = []
-  private originalValues: number[] = [] // Store original unsorted values
-  private isRunning = false
-  private isPaused = false
-  private currentStep = 0
-  private animationSpeed = 50 // ms between steps
-  private lastStepTime = 0
-  private sortingSteps: any[] = []
-  private currentAlgorithm = 'bubble'
+export const ALGORITHMS: { id: SortId; name: string }[] = [
+  { id: 'bubble', name: 'Bubble' },
+  { id: 'selection', name: 'Selection' },
+  { id: 'insertion', name: 'Insertion' },
+  { id: 'merge', name: 'Merge' },
+  { id: 'quick', name: 'Quick' },
+  { id: 'heap', name: 'Heap' }
+]
 
-  private algorithms: SortingAlgorithm[] = [
-    {
-      name: 'Bubble Sort',
-      id: 'bubble',
-      description: 'Compares adjacent elements and swaps them if they are in wrong order',
-      timeComplexity: 'O(n²)'
-    },
-    {
-      name: 'Selection Sort',
-      id: 'selection',
-      description: 'Finds minimum element and places it at the beginning',
-      timeComplexity: 'O(n²)'
-    },
-    {
-      name: 'Insertion Sort',
-      id: 'insertion',
-      description: 'Builds sorted array one element at a time',
-      timeComplexity: 'O(n²)'
-    },
-    {
-      name: 'Quick Sort',
-      id: 'quick',
-      description: 'Divides array around pivot and recursively sorts',
-      timeComplexity: 'O(n log n)'
-    },
-    {
-      name: 'Merge Sort',
-      id: 'merge',
-      description: 'Divides array and merges sorted halves',
-      timeComplexity: 'O(n log n)'
-    }
-  ]
+const INPUTS = [
+  { label: 'Random', value: 'random' },
+  { label: 'Nearly sorted', value: 'nearly' },
+  { label: 'Reversed', value: 'reversed' },
+  { label: 'Few unique', value: 'few' }
+]
 
-  constructor() {
-    super(
-      'algorithm-visualizer',
-      'Algorithm Visualization',
-      'Watch sorting algorithms in action with interactive particle systems',
-      'algorithm'
-    )
+/** Every comparison and write `id` makes while sorting `input`, which is left untouched. */
+export function sortSteps(id: SortId, input: number[]): SortStep[] {
+  const a = [...input]
+  const n = a.length
+  const steps: SortStep[] = []
+  // Is a[i] smaller than a[j]?
+  const less = (i: number, j: number) => {
+    steps.push({ type: 'compare', i, j })
+    return a[i] < a[j]
+  }
+  const swap = (i: number, j: number) => {
+    if (i === j) return
+    steps.push({ type: 'swap', i, j })
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  const set = (i: number, value: number) => {
+    steps.push({ type: 'set', i, value, previous: a[i] })
+    a[i] = value
   }
 
-  protected setupDefaultParameters(): void {
-    this.parameters = {
-      algorithm: 'bubble',
-      arraySize: 30,
-      animationSpeed: 50,
-      particleSize: 8,
-      showComparisons: true,
-      showSwaps: true,
-      colorScheme: 'rainbow',
-      isRunning: false,
-      isPaused: false
+  if (id === 'bubble') {
+    for (let end = n - 1; end > 0; end--) {
+      let swapped = false
+      for (let j = 0; j < end; j++) {
+        if (less(j + 1, j)) {
+          swap(j, j + 1)
+          swapped = true
+        }
+      }
+      if (!swapped) break
     }
+  } else if (id === 'selection') {
+    for (let i = 0; i < n - 1; i++) {
+      let min = i
+      for (let j = i + 1; j < n; j++) if (less(j, min)) min = j
+      swap(i, min)
+    }
+  } else if (id === 'insertion') {
+    for (let i = 1; i < n; i++) {
+      for (let j = i; j > 0 && less(j, j - 1); j--) swap(j, j - 1)
+    }
+  } else if (id === 'merge') {
+    const merge = (low: number, high: number) => {
+      if (low >= high) return
+      const mid = (low + high) >> 1
+      merge(low, mid)
+      merge(mid + 1, high)
+      const left = a.slice(low, mid + 1)
+      const right = a.slice(mid + 1, high + 1)
+      let i = 0
+      let j = 0
+      for (let k = low; k <= high; k++) {
+        let takeLeft = j >= right.length
+        if (!takeLeft && i < left.length) {
+          steps.push({ type: 'compare', i: low + i, j: mid + 1 + j })
+          takeLeft = left[i] <= right[j]
+        }
+        set(k, takeLeft ? left[i++] : right[j++])
+      }
+    }
+    merge(0, n - 1)
+  } else if (id === 'quick') {
+    // The last element is the pivot, so sorted and reversed input hurt
+    const quick = (low: number, high: number) => {
+      if (low >= high) return
+      let boundary = low
+      for (let j = low; j < high; j++) {
+        if (less(j, high)) swap(boundary++, j)
+      }
+      swap(boundary, high)
+      quick(low, boundary - 1)
+      quick(boundary + 1, high)
+    }
+    quick(0, n - 1)
+  } else {
+    const sift = (root: number, size: number) => {
+      for (;;) {
+        let largest = root
+        const left = 2 * root + 1
+        const right = left + 1
+        if (left < size && less(largest, left)) largest = left
+        if (right < size && less(largest, right)) largest = right
+        if (largest === root) return
+        swap(root, largest)
+        root = largest
+      }
+    }
+    for (let i = (n >> 1) - 1; i >= 0; i--) sift(i, n)
+    for (let end = n - 1; end > 0; end--) {
+      swap(0, end)
+      sift(0, end)
+    }
+  }
+  return steps
+}
+
+/** Apply one step to `values`, or take it back. */
+export function applyStep(values: number[], step: SortStep, undo = false): void {
+  if (step.type === 'swap') [values[step.i], values[step.j]] = [values[step.j], values[step.i]]
+  else if (step.type === 'set') values[step.i] = undo ? step.previous : step.value
+}
+
+export function makeInput(shape: string, size: number, random: () => number): number[] {
+  const values = Array.from({ length: size }, (_, i) => i + 1)
+  const swap = (i: number, j: number) => {
+    ;[values[i], values[j]] = [values[j], values[i]]
+  }
+  if (shape === 'reversed') return values.reverse()
+  if (shape === 'few') return values.map(() => Math.ceil((1 + Math.floor(random() * 5)) * (size / 5)))
+  if (shape === 'nearly') {
+    // Sorted, then one neighbouring pair in eight changes places
+    for (let k = 0; k < size / 8; k++) {
+      const i = Math.floor(random() * (size - 1))
+      swap(i, i + 1)
+    }
+    return values
+  }
+  for (let i = size - 1; i > 0; i--) swap(i, Math.floor(random() * (i + 1)))
+  return values
+}
+
+const fingerprint = (values: number[]) => {
+  let hash = 2166136261
+  for (const value of values) hash = Math.imul(hash ^ value, 16777619) >>> 0
+  return hash.toString(16)
+}
+
+type SortingParameters = {
+  mode: string
+  algorithm: string
+  input: string
+  size: number
+  // The slider runs on a logarithm: 0 to 3 is 1 to 1000 steps a second
+  speed: number
+  sound: boolean
+} & Record<SortId, boolean>
+
+interface Panel {
+  id: SortId
+  name: string
+  steps: SortStep[]
+  values: number[]
+  inputFingerprint: string
+  position: number
+  comparisons: number
+  writes: number
+  // Finishing order, from 1. Zero while still sorting.
+  place: number
+}
+
+export interface PanelView {
+  id: SortId
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  comparisons: number
+  writes: number
+  state: 'Ready' | 'Running' | 'Paused' | 'Finished'
+  place: number
+  inputFingerprint: string
+}
+
+const GAP = 12
+const stepsPerSecond = (speed: number) => Math.round(Math.pow(10, speed))
+
+export class AlgorithmVisualizer extends BaseMathVisualization<SortingParameters> {
+  readonly id = 'sorting'
+  readonly name = 'Sorting'
+  readonly description = 'Sorting algorithms working on the same array, drawn as bars.'
+
+  private input: number[] = []
+  private sorted: number[] = []
+  private panels: Panel[] = []
+  private status: 'ready' | 'running' | 'finished' = 'ready'
+  private budget = 0
+  private finished = 0
+  private seed = 1
+  private opened = false
+  private audio: { context: AudioContext; oscillator: OscillatorNode; gain: GainNode } | null = null
+
+  constructor() {
+    super({
+      mode: 'race',
+      algorithm: 'quick',
+      input: 'random',
+      size: 64,
+      speed: Math.log10(120),
+      sound: false,
+      bubble: true,
+      selection: true,
+      insertion: true,
+      merge: true,
+      quick: true,
+      heap: true
+    })
+    this.shuffle()
   }
 
   protected async initializeVisualization(): Promise<void> {
-    this.generateRandomArray()
+    // The race is under way when the exhibit first opens. Under reduced
+    // motion the stage is paused, so it waits at the first step.
+    if (!this.opened) this.status = 'running'
+    this.opened = true
   }
 
-  private generateRandomArray(): void {
-    const size = this.parameters.arraySize
-    const { width, height } = this.getCanvasSize()
-
-    this.particles = []
-    this.originalValues = []
-    const particleWidth = Math.max(4, (width - 40) / size)
-
-    for (let i = 0; i < size; i++) {
-      const value = Math.floor(Math.random() * 200) - 100 // Values from -100 to 99
-      const x = 20 + i * particleWidth + particleWidth / 2
-
-      this.originalValues.push(value) // Store original value
-      this.particles.push({
-        value,
-        x,
-        y: 0, // Will be calculated dynamically
-        targetX: x,
-        targetY: 0, // Will be calculated dynamically
-        color: this.getParticleColor(value, i),
-        isComparing: false,
-        isSwapping: false,
-        isActive: false
-      })
-    }
-
-    this.calculateParticlePositions()
-    this.resetAnimation()
+  cleanup(): void {
+    this.setSound(false)
+    super.cleanup()
   }
 
-  private calculateParticlePositions(): void {
-    if (this.particles.length === 0) return
+  private shuffle(): void {
+    this.input = makeInput(this.parameters.input, this.parameters.size, mulberry32(this.seed++))
+    this.sorted = [...this.input].sort((a, b) => a - b)
+    this.deal()
+  }
 
-    const { height } = this.getCanvasSize()
-    const topMargin = 100
-    const bottomMargin = 60
-    const availableHeight = height - topMargin - bottomMargin
-
-    // Find min and max values for dynamic scaling
-    const values = this.particles.map(p => p.value)
-    const minValue = Math.min(...values)
-    const maxValue = Math.max(...values)
-    const valueRange = maxValue - minValue
-
-    // Avoid division by zero
-    const safeRange = valueRange === 0 ? 1 : valueRange
-
-    this.particles.forEach(particle => {
-      // Calculate Y position based on value relative to range
-      const normalizedValue = (particle.value - minValue) / safeRange
-      const y = height - bottomMargin - normalizedValue * availableHeight
-
-      particle.y = y
-      particle.targetY = y
+  // Every panel is handed its own copy of the same array
+  private deal(): void {
+    const single = this.parameters.mode === 'single'
+    const chosen = ALGORITHMS.filter(entry => (single ? entry.id === this.parameters.algorithm : this.parameters[entry.id]))
+    this.panels = chosen.map(entry => {
+      const values = [...this.input]
+      return {
+        ...entry,
+        values,
+        inputFingerprint: fingerprint(values),
+        steps: sortSteps(entry.id, values),
+        position: 0,
+        comparisons: 0,
+        writes: 0,
+        place: 0
+      }
     })
+    this.finished = 0
+    this.budget = 0
+    this.status = 'ready'
   }
 
-  private getParticleColor(value: number, index: number): string {
-    switch (this.parameters.colorScheme) {
-      case 'rainbow':
-        const hue = ((value + 100) / 200) * 360
-        return `hsl(${hue}, 70%, 60%)`
-      case 'gradient':
-        const intensity = Math.floor(((value + 100) / 200) * 255)
-        return `rgb(${intensity}, ${100}, ${255 - intensity})`
-      case 'monochrome':
-        const gray = Math.floor(((value + 100) / 200) * 200) + 55
-        return `rgb(${gray}, ${gray}, ${gray})`
-      default:
-        return '#3b82f6'
+  private forward(panel: Panel): SortStep | null {
+    if (panel.position >= panel.steps.length) return null
+    const step = panel.steps[panel.position++]
+    applyStep(panel.values, step)
+    if (step.type === 'compare') panel.comparisons += 1
+    else panel.writes += step.type === 'swap' ? 2 : 1
+    if (panel.position === panel.steps.length) panel.place = ++this.finished
+    return step
+  }
+
+  private back(panel: Panel): void {
+    if (panel.position === 0) return
+    if (panel.place) {
+      panel.place = 0
+      this.finished -= 1
     }
+    const step = panel.steps[--panel.position]
+    applyStep(panel.values, step, true)
+    if (step.type === 'compare') panel.comparisons -= 1
+    else panel.writes -= step.type === 'swap' ? 2 : 1
   }
 
-  private resetAnimation(): void {
-    this.isRunning = false
-    this.isPaused = false
-    this.currentStep = 0
-    this.sortingSteps = []
-    this.resetParticleStates()
-
-    // Update parameters to reflect state change
-    this.parameters.isRunning = false
-    this.parameters.isPaused = false
-  }
-
-  private generateSortingSteps(): void {
-    const values = this.particles.map(p => p.value)
-    this.sortingSteps = []
-
-    switch (this.parameters.algorithm) {
-      case 'bubble':
-        this.generateBubbleSortSteps([...values]) // Create copy
-        break
-      case 'selection':
-        this.generateSelectionSortSteps([...values]) // Create copy
-        break
-      case 'insertion':
-        this.generateInsertionSortSteps([...values]) // Create copy
-        break
-      case 'quick':
-        this.generateQuickSortSteps([...values], 0, values.length - 1) // Create copy
-        break
-      case 'merge':
-        this.generateMergeSortSteps([...values]) // Create copy
-        break
-    }
-  }
-
-  private generateBubbleSortSteps(arr: number[]): void {
-    const n = arr.length
-    for (let i = 0; i < n - 1; i++) {
-      for (let j = 0; j < n - i - 1; j++) {
-        this.sortingSteps.push({ type: 'compare', indices: [j, j + 1] })
-        if (arr[j] > arr[j + 1]) {
-          this.sortingSteps.push({ type: 'swap', indices: [j, j + 1] })
-          ;[arr[j], arr[j + 1]] = [arr[j + 1], arr[j]]
-        }
-      }
-      this.sortingSteps.push({ type: 'sorted', index: n - i - 1 })
-    }
-    this.sortingSteps.push({ type: 'complete' })
-  }
-
-  private generateSelectionSortSteps(arr: number[]): void {
-    const n = arr.length
-    for (let i = 0; i < n - 1; i++) {
-      let minIdx = i
-      this.sortingSteps.push({ type: 'active', index: i })
-
-      for (let j = i + 1; j < n; j++) {
-        this.sortingSteps.push({ type: 'compare', indices: [minIdx, j] })
-        if (arr[j] < arr[minIdx]) {
-          minIdx = j
-        }
-      }
-
-      if (minIdx !== i) {
-        this.sortingSteps.push({ type: 'swap', indices: [i, minIdx] })
-        ;[arr[i], arr[minIdx]] = [arr[minIdx], arr[i]]
-      }
-      this.sortingSteps.push({ type: 'sorted', index: i })
-    }
-    this.sortingSteps.push({ type: 'complete' })
-  }
-
-  private generateInsertionSortSteps(arr: number[]): void {
-    for (let i = 1; i < arr.length; i++) {
-      const key = arr[i]
-      let j = i - 1
-      this.sortingSteps.push({ type: 'active', index: i })
-
-      while (j >= 0 && arr[j] > key) {
-        this.sortingSteps.push({ type: 'compare', indices: [j, j + 1] })
-        this.sortingSteps.push({ type: 'swap', indices: [j, j + 1] })
-        arr[j + 1] = arr[j]
-        j--
-      }
-      arr[j + 1] = key
-    }
-    this.sortingSteps.push({ type: 'complete' })
-  }
-
-  private generateQuickSortSteps(arr: number[], low: number, high: number): void {
-    if (low < high) {
-      const pi = this.partition(arr, low, high)
-      this.generateQuickSortSteps(arr, low, pi - 1)
-      this.generateQuickSortSteps(arr, pi + 1, high)
-    }
-  }
-
-  private partition(arr: number[], low: number, high: number): number {
-    const pivot = arr[high]
-    let i = low - 1
-
-    this.sortingSteps.push({ type: 'pivot', index: high })
-
-    for (let j = low; j < high; j++) {
-      this.sortingSteps.push({ type: 'compare', indices: [j, high] })
-      if (arr[j] < pivot) {
-        i++
-        if (i !== j) {
-          this.sortingSteps.push({ type: 'swap', indices: [i, j] })
-          ;[arr[i], arr[j]] = [arr[j], arr[i]]
-        }
+  private advance(count: number): void {
+    // One voice: the first panel still sorting is the one heard
+    const voice = this.panels.find(panel => !panel.place)
+    let heard: number | null = null
+    for (const panel of this.panels) {
+      for (let i = 0; i < count && !panel.place; i++) {
+        const step = this.forward(panel)
+        if (panel === voice && step?.type === 'compare') heard = panel.values[step.i]
       }
     }
-
-    this.sortingSteps.push({ type: 'swap', indices: [i + 1, high] })
-    ;[arr[i + 1], arr[high]] = [arr[high], arr[i + 1]]
-    return i + 1
-  }
-
-  private generateMergeSortSteps(arr: number[]): void {
-    this.mergeSortRecursive(arr, 0, arr.length - 1)
-    this.sortingSteps.push({ type: 'complete' })
-  }
-
-  private mergeSortRecursive(arr: number[], left: number, right: number): void {
-    if (left < right) {
-      const mid = Math.floor((left + right) / 2)
-      this.mergeSortRecursive(arr, left, mid)
-      this.mergeSortRecursive(arr, mid + 1, right)
-      this.merge(arr, left, mid, right)
+    if (heard !== null) this.tone(heard)
+    if (this.finished === this.panels.length) {
+      this.status = 'finished'
+      this.emit()
+    } else {
+      this.emitSoon()
     }
   }
 
-  private merge(arr: number[], left: number, mid: number, right: number): void {
-    const leftArr = arr.slice(left, mid + 1)
-    const rightArr = arr.slice(mid + 1, right + 1)
+  // The panels' rectangles in stage pixels, shared by the bars and their labels
+  private layout(): { x: number; y: number; width: number; height: number; label: number }[] {
+    // Above the placard or beside it, whichever is larger
+    const { above, beside } = this.clearRects()
+    const safe = beside.width * beside.height > above.width * above.height ? beside : above
+    const count = this.panels.length
+    const columns = Math.min(count, safe.width < 600 ? 2 : 3)
+    const rows = Math.ceil(count / columns)
+    const width = (safe.width - GAP * (columns - 1)) / columns
+    const height = (safe.height - GAP * (rows - 1)) / rows
+    return this.panels.map((_, index) => ({
+      x: safe.x + (index % columns) * (width + GAP),
+      y: safe.y + Math.floor(index / columns) * (height + GAP),
+      width,
+      height,
+      // Room at the top of each panel for its name and counts
+      label: width < 240 ? 58 : 42
+    }))
+  }
 
-    let i = 0, j = 0, k = left
-
-    // Highlight the range being merged
-    this.sortingSteps.push({ type: 'active', index: left })
-    this.sortingSteps.push({ type: 'active', index: right })
-
-    while (i < leftArr.length && j < rightArr.length) {
-      // Compare elements from left and right subarrays
-      this.sortingSteps.push({ type: 'compare', indices: [left + i, mid + 1 + j] })
-
-      if (leftArr[i] <= rightArr[j]) {
-        arr[k] = leftArr[i]
-        this.sortingSteps.push({ type: 'place', index: k, value: leftArr[i] })
-        i++
-      } else {
-        arr[k] = rightArr[j]
-        this.sortingSteps.push({ type: 'place', index: k, value: rightArr[j] })
-        j++
-      }
-      k++
-    }
-
-    // Copy remaining elements from left subarray
-    while (i < leftArr.length) {
-      arr[k] = leftArr[i]
-      this.sortingSteps.push({ type: 'place', index: k, value: leftArr[i] })
-      i++
-      k++
-    }
-
-    // Copy remaining elements from right subarray
-    while (j < rightArr.length) {
-      arr[k] = rightArr[j]
-      this.sortingSteps.push({ type: 'place', index: k, value: rightArr[j] })
-      j++
-      k++
-    }
+  getPanels(): PanelView[] {
+    const layout = this.layout()
+    return this.panels.map((panel, index) => ({
+      id: panel.id,
+      name: panel.name,
+      x: layout[index].x,
+      y: layout[index].y,
+      width: layout[index].width,
+      height: layout[index].height,
+      comparisons: panel.comparisons,
+      writes: panel.writes,
+      place: panel.place,
+      inputFingerprint: panel.inputFingerprint,
+      state: panel.place ? 'Finished' : this.status === 'ready' ? 'Ready' : this.paused ? 'Paused' : 'Running'
+    }))
   }
 
   update(deltaTime: number): void {
-    if (!this.ctx || !this.canvas) return
-
-    this.clearCanvas()
-    this.updateParticlePositions(deltaTime)
-    this.drawParticles()
-    this.drawInfo()
-
-    // Process sorting steps
-    if (this.isRunning && !this.isPaused) {
-      this.lastStepTime += deltaTime
-      if (this.lastStepTime >= this.parameters.animationSpeed) {
-        this.processNextStep()
-        this.lastStepTime = 0
-      }
+    if (this.status === 'running' && deltaTime > 0) {
+      this.budget += deltaTime * stepsPerSecond(this.parameters.speed)
+      const count = Math.floor(this.budget)
+      this.budget -= count
+      if (count > 0) this.advance(count)
     }
-  }
 
-  private updateParticlePositions(deltaTime: number): void {
-    this.particles.forEach(particle => {
-      const speed = 0.01 * deltaTime
-      particle.x += (particle.targetX - particle.x) * speed
-      particle.y += (particle.targetY - particle.y) * speed
+    const ctx = this.begin()
+    if (!ctx) return
+    const layout = this.layout()
+    const top = Math.max(...this.input, 1)
+    this.panels.forEach((panel, index) => {
+      const rect = layout[index]
+      const pad = 10
+      const x0 = rect.x + pad
+      const base = rect.y + rect.height - pad - 5
+      const ceiling = rect.y + rect.label
+      const reach = base - ceiling - 10
+      const slot = (rect.width - 2 * pad) / panel.values.length
+      // Bars sit on whole device pixels, so thin ones stay crisp
+      const snap = (value: number) => Math.round(value * this.size.ratio) / this.size.ratio
+      const last = panel.place || !panel.position ? null : panel.steps[panel.position - 1]
+      // Finished panels dim
+      ctx.globalAlpha = panel.place ? 0.45 : 1
+
+      panel.values.forEach((value, i) => {
+        const x = snap(x0 + i * slot)
+        const bar = Math.max(1 / this.size.ratio, snap(x0 + (i + 1) * slot) - x - (slot > 3 ? 1 : 0))
+        const height = Math.max(1, (value / top) * reach)
+        const touched = last && (last.i === i || (last.type !== 'set' && last.j === i))
+        if (touched && last.type === 'compare') {
+          // Being compared: amber, with a mark floating above the bar
+          ctx.fillStyle = COLORS.amber
+          ctx.fillRect(x, base - height - 7, Math.max(bar, 2), 3)
+        } else if (touched) {
+          // Just written: pink, with a line up to the top of the panel
+          ctx.fillStyle = COLORS.pink
+          ctx.fillRect(x + bar / 2 - 0.5, ceiling, 1, reach + 10 - height)
+        } else if (value === this.sorted[i]) {
+          // In its final place: white, with a tick under the bar
+          ctx.fillStyle = COLORS.white
+          ctx.fillRect(x, base + 2, bar, 3)
+        } else {
+          ctx.fillStyle = COLORS.bone
+        }
+        ctx.fillRect(x, base - height, bar, height)
+      })
     })
+    ctx.globalAlpha = 1
   }
 
-  private drawParticles(): void {
-    if (!this.ctx) return
-    const { height } = this.getCanvasSize()
-    const topMargin = 100
-    const bottomMargin = 60
-    const availableHeight = height - topMargin - bottomMargin
-
-    // Find min and max values for dynamic scaling
-    const values = this.particles.map(p => p.value)
-    const minValue = Math.min(...values)
-    const maxValue = Math.max(...values)
-    const valueRange = maxValue - minValue
-    const safeRange = valueRange === 0 ? 1 : valueRange
-
-    // Calculate baseline (zero line) position
-    const zeroLineY = height - bottomMargin - ((-minValue) / safeRange) * availableHeight
-
-    // Draw zero line if we have negative values
-    if (minValue < 0) {
-      this.ctx.strokeStyle = '#666666'
-      this.ctx.lineWidth = 1
-      this.ctx.setLineDash([5, 5])
-      this.ctx.beginPath()
-      this.ctx.moveTo(10, zeroLineY)
-      this.ctx.lineTo(this.canvas!.width - 10, zeroLineY)
-      this.ctx.stroke()
-      this.ctx.setLineDash([])
-    }
-
-    this.particles.forEach((particle) => {
-      // Draw particle
-      this.ctx!.fillStyle = particle.color
-
-      if (particle.isComparing) {
-        this.ctx!.fillStyle = '#ff6b6b'
-      } else if (particle.isSwapping) {
-        this.ctx!.fillStyle = '#4ecdc4'
-      } else if (particle.isActive) {
-        this.ctx!.fillStyle = '#45b7d1'
-      }
-
-      const size = this.parameters.particleSize
-
-      // Calculate bar height and position based on value
-      let barY, barHeight
-      if (particle.value >= 0) {
-        // Positive values: draw from zero line upward
-        barHeight = zeroLineY - particle.y
-        barY = particle.y
-      } else {
-        // Negative values: draw from zero line downward
-        barHeight = particle.y - zeroLineY
-        barY = zeroLineY
-      }
-
-      this.ctx!.fillRect(
-        particle.x - size / 2,
-        barY,
-        size,
-        barHeight
-      )
-
-      // Draw value
-      this.ctx!.fillStyle = '#ffffff'
-      this.ctx!.font = '10px Arial'
-      this.ctx!.textAlign = 'center'
-
-      // Position text above positive bars, below negative bars
-      const textY = particle.value >= 0 ? particle.y - 5 : particle.y + 15
-      this.ctx!.fillText(
-        particle.value.toString(),
-        particle.x,
-        textY
-      )
-    })
+  // Hovering and clicking the bars do nothing: the rail runs the race
+  handleInteraction(event: ExhibitEvent): boolean {
+    if (event.type !== 'key' || this.parameters.mode !== 'single') return false
+    if (event.key === 'ArrowRight') this.step(1)
+    else if (event.key === 'ArrowLeft') this.step(-1)
+    else return false
+    return true
   }
 
-  private drawInfo(): void {
-    if (!this.ctx) return
-
-    const algorithm = this.algorithms.find(a => a.id === this.parameters.algorithm)
-    if (!algorithm) return
-
-    this.ctx.fillStyle = '#ffffff'
-    this.ctx.font = '16px Arial'
-    this.ctx.textAlign = 'left'
-    this.ctx.fillText(`Algorithm: ${algorithm.name}`, 20, 30)
-    this.ctx.fillText(`Time Complexity: ${algorithm.timeComplexity}`, 20, 50)
-    this.ctx.fillText(`Step: ${this.currentStep}/${this.sortingSteps.length}`, 20, 70)
-
-    if (this.isRunning) {
-      this.ctx.fillText('Status: Running', 300, 30)
-    } else if (this.isPaused) {
-      this.ctx.fillText('Status: Paused', 300, 30)
-    } else {
-      this.ctx.fillText('Status: Stopped', 300, 30)
-    }
-  }
-
-  private processNextStep(): void {
-    if (this.currentStep >= this.sortingSteps.length) {
-      this.isRunning = false
-      this.parameters.isRunning = false
-      this.parameters.isPaused = false
+  private toggleRun(): void {
+    if (this.status === 'running') {
+      this.host?.setPaused(!this.paused)
       return
     }
+    if (this.status === 'finished') this.deal()
+    this.status = 'running'
+    this.host?.setPaused(false)
+    this.emit()
+  }
 
-    const step = this.sortingSteps[this.currentStep]
-    this.resetParticleStates()
-
-    switch (step.type) {
-      case 'compare':
-        step.indices.forEach((index: number) => {
-          this.particles[index].isComparing = true
-        })
-        break
-      case 'swap':
-        this.swapParticles(step.indices[0], step.indices[1])
-        break
-      case 'active':
-        this.particles[step.index].isActive = true
-        break
-      case 'pivot':
-        // Highlight pivot element for quick sort
-        this.particles[step.index].isActive = true
-        break
-      case 'place':
-        // For merge sort - update particle value at specific position
-        if (step.index !== undefined && step.value !== undefined) {
-          const particle = this.particles[step.index]
-          particle.value = step.value
-          particle.color = this.getParticleColor(step.value, step.index)
-          particle.isActive = true
-
-          // Update all particle positions with new dynamic scaling
-          this.calculateParticlePositions()
-        }
-        break
-      case 'sorted':
-        // Mark as sorted (could add visual indicator)
-        break
-      case 'complete':
-        this.isRunning = false
-        this.parameters.isRunning = false
-        this.parameters.isPaused = false
-        break
+  // One step forward or back, in single mode. The stage pauses to wait for the next.
+  private step(direction: 1 | -1): void {
+    const panel = this.panels[0]
+    if (!panel) return
+    this.host?.setPaused(true)
+    if (direction === 1) {
+      const step = this.forward(panel)
+      if (step?.type === 'compare') this.tone(panel.values[step.i])
+    } else {
+      this.back(panel)
     }
-
-    this.currentStep++
+    this.status = panel.place ? 'finished' : panel.position ? 'running' : 'ready'
+    this.emit()
   }
 
-  private resetParticleStates(): void {
-    this.particles.forEach(particle => {
-      particle.isComparing = false
-      particle.isSwapping = false
-      particle.isActive = false
-    })
-  }
-
-  private swapParticles(i: number, j: number): void {
-    const particle1 = this.particles[i]
-    const particle2 = this.particles[j]
-
-    particle1.isSwapping = true
-    particle2.isSwapping = true
-
-    // Swap target positions
-    const tempX = particle1.targetX
-    particle1.targetX = particle2.targetX
-    particle2.targetX = tempX
-
-    // Swap particles in array
-    ;[this.particles[i], this.particles[j]] = [this.particles[j], this.particles[i]]
-  }
-
-  handleInteraction(event: InteractionEvent): void {
-    // Click to start/pause animation
-    if (event.type === 'mouse' && event.position && !event.delta) {
-      if (this.isRunning) {
-        this.isPaused = !this.isPaused
-      } else {
-        this.startAnimation()
-      }
+  private setSound(on: boolean): void {
+    if (on && !this.audio && typeof AudioContext !== 'undefined') {
+      const context = new AudioContext()
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      oscillator.type = 'triangle'
+      gain.gain.value = 0
+      oscillator.connect(gain).connect(context.destination)
+      oscillator.start()
+      this.audio = { context, oscillator, gain }
+    }
+    if (!on && this.audio) {
+      this.audio.context.close()
+      this.audio = null
+      if (this.parameters.sound) this.parameters = { ...this.parameters, sound: false }
     }
   }
 
-  private restoreOriginalArray(): void {
-    // Restore particles to their original unsorted state
-    this.particles.forEach((particle, index) => {
-      if (index < this.originalValues.length) {
-        particle.value = this.originalValues[index]
-        particle.color = this.getParticleColor(particle.value, index)
-      }
-    })
-    this.calculateParticlePositions()
-    this.resetParticleStates()
+  // A short tone, pitched by the value compared: two octaves from 220 Hz
+  private tone(value: number): void {
+    if (!this.audio) return
+    const { context, oscillator, gain } = this.audio
+    const now = context.currentTime
+    oscillator.frequency.setValueAtTime(220 * Math.pow(4, value / Math.max(...this.input, 1)), now)
+    gain.gain.cancelScheduledValues(now)
+    gain.gain.setTargetAtTime(0.08, now, 0.004)
+    gain.gain.setTargetAtTime(0, now + 0.03, 0.015)
   }
 
-  private startAnimation(): void {
-    // Restore original array state before generating steps
-    this.restoreOriginalArray()
-
-    // Generate sorting steps based on the original unsorted array
-    this.generateSortingSteps()
-    this.isRunning = true
-    this.isPaused = false
-    this.lastStepTime = 0
-    this.currentStep = 0
-
-    // Update parameters to reflect state change
-    this.parameters.isRunning = true
-    this.parameters.isPaused = false
-    this.onParameterChange('isRunning', true)
-    this.onParameterChange('isPaused', false)
-  }
-
-  private stopAnimation(): void {
-    this.isRunning = false
-    this.isPaused = false
-    this.currentStep = 0
-    this.resetParticleStates()
-
-    // Update parameters to reflect state change
-    this.parameters.isRunning = false
-    this.parameters.isPaused = false
+  protected onParameterChange(key: keyof SortingParameters): void {
+    if (key === 'sound') return this.setSound(this.parameters.sound)
+    if (key === 'speed') return
+    // At least one algorithm stays in the race
+    if (ALGORITHMS.every(entry => !this.parameters[entry.id])) this.parameters = { ...this.parameters, [key]: true }
+    if (key === 'input' || key === 'size') this.shuffle()
+    else this.deal()
   }
 
   getControls(): VisualizationControl[] {
+    const single = this.parameters.mode === 'single'
+    const running = this.status === 'running'
+    const panel = this.panels[0]
     return [
-      {
-        id: 'algorithm',
-        label: 'Algorithm',
-        type: 'select',
-        value: this.parameters.algorithm,
-        options: this.algorithms.map(a => ({ label: a.name, value: a.id })),
-        onChange: (value) => {
-          this.setParameter('algorithm', value)
-          this.resetAnimation()
-        }
-      },
-      {
-        id: 'arraySize',
-        label: 'Array Size',
-        type: 'slider',
-        value: this.parameters.arraySize,
-        min: 10,
-        max: 100,
-        step: 5,
-        onChange: (value) => {
-          this.setParameter('arraySize', value)
-          this.generateRandomArray()
-        }
-      },
-      {
-        id: 'animationSpeed',
-        label: 'Animation Speed (ms)',
-        type: 'slider',
-        value: this.parameters.animationSpeed,
-        min: 10,
-        max: 200,
-        step: 10,
-        onChange: (value) => this.setParameter('animationSpeed', value)
-      },
-      {
-        id: 'colorScheme',
-        label: 'Color Scheme',
-        type: 'select',
-        value: this.parameters.colorScheme,
-        options: [
-          { label: 'Rainbow', value: 'rainbow' },
-          { label: 'Gradient', value: 'gradient' },
-          { label: 'Monochrome', value: 'monochrome' }
+      this.choice(
+        'mode',
+        'Mode',
+        [
+          { label: 'Race', value: 'race' },
+          { label: 'Single', value: 'single' }
         ],
-        onChange: (value) => {
-          this.setParameter('colorScheme', value)
-          this.generateRandomArray()
-        }
-      },
-      {
-        id: 'start',
-        label: this.parameters.isRunning ? (this.parameters.isPaused ? 'Resume' : 'Pause') : 'Start',
-        type: 'button',
-        value: null,
-        onChange: () => {
-          if (this.isRunning) {
-            this.isPaused = !this.isPaused
-            this.parameters.isPaused = this.isPaused
-            this.onParameterChange('isPaused', this.isPaused)
-          } else {
-            this.startAnimation()
-          }
-        }
-      },
-      {
-        id: 'stop',
-        label: 'Stop',
-        type: 'button',
-        value: null,
-        onChange: () => this.stopAnimation()
-      },
-      {
-        id: 'shuffle',
-        label: 'Shuffle Array',
-        type: 'button',
-        value: null,
-        onChange: () => this.generateRandomArray()
-      }
+        'segmented'
+      ),
+      ...(single
+        ? [
+            this.choice(
+              'algorithm',
+              'Algorithm',
+              ALGORITHMS.map(entry => ({ label: entry.name, value: entry.id }))
+            )
+          ]
+        : ALGORITHMS.map(entry => this.toggle(entry.id, entry.name, { group: 'Algorithms' }))),
+      this.choice('input', 'Input', INPUTS),
+      this.slider('size', 'Size', 16, 256, 1),
+      this.slider('speed', 'Speed', 0, 3, 0.01, { format: value => `${stepsPerSecond(value)} steps a second` }),
+      this.toggle('sound', 'Sound'),
+      this.button(
+        'shuffle',
+        'Shuffle and start',
+        () => {
+          this.shuffle()
+          this.status = 'running'
+          this.host?.setPaused(false)
+          this.emit()
+        },
+        { primary: true }
+      ),
+      this.button('run', running ? (this.paused ? 'Resume' : 'Pause') : 'Start', () => this.toggleRun()),
+      this.button(
+        'stop',
+        'Stop',
+        () => {
+          // Back to the unsorted array
+          this.deal()
+          this.emit()
+        },
+        { disabled: this.status === 'ready' }
+      ),
+      ...(single
+        ? [
+            this.button('back', 'Step back', () => this.step(-1), { disabled: !panel?.position }),
+            this.button('forward', 'Step forward', () => this.step(1), { disabled: !!panel?.place })
+          ]
+        : [])
     ]
   }
 
-  protected onParameterChange(key: string, value: any): void {
-    // Handle parameter changes immediately
-    if (key === 'arraySize') {
-      // Regenerate array with new size
-      this.generateRandomArray()
-    } else if (key === 'colorScheme') {
-      // Update particle colors
-      this.particles.forEach((particle, index) => {
-        particle.color = this.getParticleColor(particle.value, index)
-      })
-    } else if (key === 'algorithm') {
-      // Reset animation when algorithm changes
-      this.resetAnimation()
+  getPlacard(): Placard {
+    return {
+      title: 'Sorting',
+      formula: 'n²/2 comparisons against n log₂ n',
+      text:
+        this.parameters.mode === 'single'
+          ? 'One algorithm, a step at a time. Amber bars are being compared, pink ones were just written, and white ones are where they will end up.'
+          : 'The same array goes to every algorithm, and all of them take steps at the same rate. Amber bars are being compared, pink ones were just written, and white ones are where they will end up.'
     }
-    // For other parameters like animationSpeed, no immediate visual change needed
   }
 
-  protected onReset(): void {
-    this.generateRandomArray()
+  // The panel furthest along: the first to finish, or the one nearest its end
+  private get leader(): Panel | undefined {
+    const progress = (panel: Panel) => (panel.place ? 2 - panel.place / 10 : panel.position / Math.max(1, panel.steps.length))
+    return [...this.panels].sort((a, b) => progress(b) - progress(a))[0]
+  }
+
+  getLedger(): Readout[] {
+    const leader = this.leader
+    const tag = this.panels.length > 1 && leader ? ` (${leader.name})` : ''
+    return [
+      { key: 'Array size', value: String(this.input.length) },
+      { key: 'Comparisons', value: `${(leader?.comparisons ?? 0).toLocaleString('en-GB')}${tag}` },
+      { key: 'Writes', value: `${(leader?.writes ?? 0).toLocaleString('en-GB')}${tag}` },
+      { key: 'Finished', value: `${this.finished} of ${this.panels.length}` }
+    ]
+  }
+
+  // For the table in the notes: finished panels in the order they finished
+  getResults(): { name: string; comparisons: number; writes: number; place: number }[] {
+    return this.panels
+      .filter(panel => panel.place)
+      .sort((a, b) => a.place - b.place)
+      .map(({ name, comparisons, writes, place }) => ({ name, comparisons, writes, place }))
+  }
+
+  describe(): string {
+    const names = this.panels.map(panel => panel.name).join(', ')
+    const input = INPUTS.find(entry => entry.value === this.parameters.input)?.label.toLowerCase()
+    return `${names} sort on ${this.input.length} values, ${input} to begin with. ${this.finished} of ${this.panels.length} finished.`
+  }
+
+  getData(): Record<string, string> {
+    return {
+      status: this.status,
+      sound: this.parameters.sound ? 'on' : 'off',
+      audio: this.audio ? 'open' : 'none',
+      steps: this.panels.map(panel => panel.position).join(',')
+    }
   }
 }
