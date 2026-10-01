@@ -13,10 +13,8 @@ export interface ResumeData {
 export interface PersonalInfo {
   name: string
   title: string
-  email: string
   portfolio: string
   linkedin: string
-  phone: string
   about: string
 }
 

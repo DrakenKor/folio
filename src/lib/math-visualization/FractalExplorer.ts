@@ -1,537 +1,644 @@
+import fragmentSource from '@/shaders/fractal.glsl'
+import { ExhibitEvent, Placard, Readout, VisualizationControl } from '@/types/math-visualization'
 import { BaseMathVisualization } from './BaseMathVisualization'
-import { InteractionEvent, VisualizationControl } from '../../types/math-visualization'
+import { clamp, insetSlot, rgb } from './tokens'
 
-interface ComplexNumber {
-  real: number
-  imaginary: number
+type Family = 'mandelbrot' | 'julia' | 'burning-ship' | 'newton'
+
+type FractalParameters = {
+  family: string
+  autoIterations: boolean
+  iterations: number
+  palette: string
+  smooth: boolean
+  juliaReal: number
+  juliaImaginary: number
+  relaxation: number
 }
 
-interface ColorPalette {
+interface View {
+  x: number
+  y: number
+  zoom: number
+}
+
+interface Place extends View {
   name: string
-  colors: string[]
+  family: Family
+  julia?: [number, number]
 }
 
-export class FractalExplorer extends BaseMathVisualization {
-  private imageData: ImageData | null = null
-  private isRendering = false
-  private renderWorker: Worker | null = null
-  private centerX = -0.5
-  private centerY = 0
-  private zoom = 1
-  private isDragging = false
-  private lastMousePos = { x: 0, y: 0 }
+// A triangle that covers the viewport, built from the vertex index alone
+const VERTEX_SOURCE = `#version 300 es
+void main() {
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`
 
-  private colorPalettes: ColorPalette[] = [
-    {
-      name: 'Classic',
-      colors: ['#000033', '#000055', '#0000ff', '#0055ff', '#00ffff', '#55ff00', '#ffff00', '#ff5500', '#ff0000', '#ffffff']
-    },
-    {
-      name: 'Fire',
-      colors: ['#000000', '#330000', '#660000', '#990000', '#cc0000', '#ff0000', '#ff3300', '#ff6600', '#ff9900', '#ffcc00', '#ffff00']
-    },
-    {
-      name: 'Ocean',
-      colors: ['#000033', '#003366', '#006699', '#0099cc', '#00ccff', '#33ddff', '#66eeff', '#99ffff', '#ccffff', '#ffffff']
-    },
-    {
-      name: 'Sunset',
-      colors: ['#1a0033', '#330066', '#660099', '#9900cc', '#cc00ff', '#ff00cc', '#ff3399', '#ff6666', '#ff9933', '#ffcc00']
-    }
-  ]
+const FAMILIES: { label: string; value: Family; formula: string }[] = [
+  { label: 'Mandelbrot', value: 'mandelbrot', formula: 'z → z² + c' },
+  { label: 'Julia', value: 'julia', formula: 'z → z² + c, with c held still' },
+  { label: 'Burning Ship', value: 'burning-ship', formula: 'z → (|Re z| + i|Im z|)² + c' },
+  { label: 'Newton', value: 'newton', formula: 'z → z − a(z³ − 1) / 3z²' }
+]
+
+// Bone runs black through the folio's bone to white. The other four are the
+// gallery's original palettes.
+const PALETTES: Record<string, string[]> = {
+  Bone: ['#000000', '#d1d1d1', '#ffffff'],
+  Classic: ['#000033', '#000055', '#0000ff', '#0055ff', '#00ffff', '#55ff00', '#ffff00', '#ff5500', '#ff0000', '#ffffff'],
+  Fire: ['#000000', '#330000', '#660000', '#990000', '#cc0000', '#ff0000', '#ff3300', '#ff6600', '#ff9900', '#ffcc00', '#ffff00'],
+  Ocean: ['#000033', '#003366', '#006699', '#0099cc', '#00ccff', '#33ddff', '#66eeff', '#99ffff', '#ccffff', '#ffffff'],
+  Sunset: ['#1a0033', '#330066', '#660099', '#9900cc', '#cc00ff', '#ff00cc', '#ff3399', '#ff6666', '#ff9933', '#ffcc00']
+}
+const PALETTE_SLOTS = 11
+
+const HOME: Record<Family, View> = {
+  mandelbrot: { x: -0.7, y: 0, zoom: 1 },
+  julia: { x: 0, y: 0, zoom: 1 },
+  'burning-ship': { x: -0.45, y: 0.5, zoom: 0.85 },
+  newton: { x: 0, y: 0, zoom: 1 }
+}
+
+const PLACES: Place[] = [
+  { name: 'Seahorse Valley', family: 'mandelbrot', x: -0.7445, y: 0.118, zoom: 55 },
+  { name: 'Elephant Valley', family: 'mandelbrot', x: 0.2815, y: 0.0115, zoom: 45 },
+  { name: 'The period-3 bulb', family: 'mandelbrot', x: -0.1225, y: 0.7849, zoom: 6 },
+  { name: 'A spiral', family: 'mandelbrot', x: -0.743644, y: 0.131826, zoom: 2500 },
+  { name: 'A minibrot on the needle', family: 'mandelbrot', x: -1.7549, y: 0, zoom: 40 },
+  { name: 'A Julia dendrite', family: 'julia', x: 0, y: 0, zoom: 1, julia: [0, 1] }
+]
+
+// Complex units across the shorter side of the stage at 1x
+const SPAN = 3.2
+const INSET = 240
+const FLIGHT_SECONDS = 3
+const ENTRANCE_SECONDS = 0.6
+const HOLD_MS = 400
+const DOUBLE_MS = 350
+const MIN_ZOOM = 0.2
+const MAX_ZOOM = 1e6
+const BAILOUT = 256
+
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 3)
+
+export class FractalExplorer extends BaseMathVisualization<FractalParameters> {
+  readonly id = 'fractal'
+  readonly name = 'Fractal'
+  readonly description = 'A fractal drawn in the complex plane. Drag to pan, scroll or pinch to zoom.'
+  renderer: 'webgl2' | '2d' = 'webgl2'
+
+  private view: View = { ...HOME.mandelbrot }
+  private gl: WebGL2RenderingContext | null = null
+  private program: WebGLProgram | null = null
+  private uniforms = new Map<string, WebGLUniformLocation | null>()
+
+  // The complex number under the pointer, shown as a Julia set in the inset
+  private juliaAt: [number, number] | null = null
+  private drag: { x: number; y: number; moved: boolean; inInset: boolean } | null = null
+  private holdTimer: ReturnType<typeof setTimeout> | null = null
+  private holding = false
+  private lastClick = { x: 0, y: 0, time: 0 }
+  private flight: { from: View; to: View; t: number } | null = null
+  private placeIndex = 0
+  private place: string | null = null
+  private entrance = 0
+
+  // The CPU fallback: half resolution, redrawn only when something changed
+  private buffer: HTMLCanvasElement | null = null
+  private cpuKey = ''
 
   constructor() {
-    super(
-      'fractal-explorer',
-      'Fractal Explorer',
-      'Dive into the infinite complexity of mathematical fractals - explore Mandelbrot, Julia, Burning Ship, and Newton\'s Method fractals with real-time interaction',
-      'fractal'
-    )
-  }
-
-  protected setupDefaultParameters(): void {
-    this.parameters = {
-      fractalType: 'mandelbrot',
-      maxIterations: 100,
-      colorPalette: 'Classic',
+    super({
+      family: 'mandelbrot',
+      autoIterations: true,
+      iterations: 300,
+      palette: 'Bone',
+      smooth: true,
       juliaReal: -0.7,
       juliaImaginary: 0.27015,
-      smoothColoring: true,
-      escapeRadius: 2,
-      newtonRelaxation: 1.0,
-      newtonTolerance: 0.01
-    }
+      relaxation: 1
+    })
   }
 
   protected async initializeVisualization(): Promise<void> {
-    // Initialize with default view
-    this.renderFractal()
-  }
-
-  private renderFractal(): void {
-    if (!this.canvas || !this.ctx) return
-
-    // Allow re-rendering even if currently rendering (for parameter changes)
-    this.isRendering = true
-    const { width, height } = this.getCanvasSize()
-
-    // Create image data if needed
-    if (!this.imageData || this.imageData.width !== width || this.imageData.height !== height) {
-      this.imageData = this.ctx.createImageData(width, height)
+    const host = this.host
+    if (!this.canvas || !host) return
+    if (this.renderer === 'webgl2' && !this.setupGL(this.canvas)) {
+      // No WebGL2: the same picture on the CPU, on the 2D canvas
+      this.renderer = '2d'
+      this.canvas = host.canvases['2d']
+      this.ctx = this.canvas.getContext('2d')
     }
-
-    // Render directly for immediate feedback
-    this.renderDirect(width, height)
+    if (host.reducedMotion) this.entrance = 1
+    this.cpuKey = ''
   }
 
-  private renderWithWorker(width: number, height: number): void {
-    // For now, render directly since setting up a worker is complex
-    this.renderDirect(width, height)
-  }
-
-  private renderDirect(width: number, height: number): void {
-    if (!this.imageData || !this.ctx) return
-
-    const data = this.imageData.data
-    const palette = this.getColorPalette(this.parameters.colorPalette)
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const pixelIndex = (y * width + x) * 4
-
-        // Convert screen coordinates to complex plane
-        const real = this.centerX + (x - width / 2) / (width / 4) / this.zoom
-        const imaginary = this.centerY + (y - height / 2) / (height / 4) / this.zoom
-
-        let iterations: number
-        switch (this.parameters.fractalType) {
-          case 'mandelbrot':
-            iterations = this.mandelbrotIterations(real, imaginary)
-            break
-          case 'julia':
-            iterations = this.juliaIterations(real, imaginary)
-            break
-          case 'burning-ship':
-            iterations = this.burningShipIterations(real, imaginary)
-            break
-          case 'newton':
-            iterations = this.newtonIterations(real, imaginary)
-            break
-          default:
-            iterations = this.mandelbrotIterations(real, imaginary)
-        }
-
-        // Color based on iterations
-        const color = this.getColor(iterations, palette)
-        data[pixelIndex] = color.r
-        data[pixelIndex + 1] = color.g
-        data[pixelIndex + 2] = color.b
-        data[pixelIndex + 3] = 255 // Alpha
-      }
+  private setupGL(canvas: HTMLCanvasElement): boolean {
+    const gl = canvas.getContext('webgl2', { antialias: false, alpha: false })
+    if (!gl) return false
+    const compile = (type: number, source: string) => {
+      const shader = gl.createShader(type)
+      if (!shader) return null
+      gl.shaderSource(shader, source)
+      gl.compileShader(shader)
+      return shader
     }
-
-    // Draw the image data to canvas immediately
-    this.ctx.putImageData(this.imageData, 0, 0)
-
-    this.isRendering = false
-  }
-
-  private mandelbrotIterations(cReal: number, cImaginary: number): number {
-    let zReal = 0
-    let zImaginary = 0
-    let iterations = 0
-    const maxIter = this.parameters.maxIterations
-    const escapeRadius = this.parameters.escapeRadius
-
-    while (iterations < maxIter && (zReal * zReal + zImaginary * zImaginary) < escapeRadius * escapeRadius) {
-      const tempReal = zReal * zReal - zImaginary * zImaginary + cReal
-      zImaginary = 2 * zReal * zImaginary + cImaginary
-      zReal = tempReal
-      iterations++
+    const vertex = compile(gl.VERTEX_SHADER, VERTEX_SOURCE)
+    const fragment = compile(gl.FRAGMENT_SHADER, fragmentSource)
+    const program = gl.createProgram()
+    if (!vertex || !fragment || !program) return false
+    gl.attachShader(program, vertex)
+    gl.attachShader(program, fragment)
+    gl.linkProgram(program)
+    gl.deleteShader(vertex)
+    gl.deleteShader(fragment)
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      gl.deleteProgram(program)
+      return false
     }
-
-    // Smooth coloring
-    if (this.parameters.smoothColoring && iterations < maxIter) {
-      const magnitude = Math.sqrt(zReal * zReal + zImaginary * zImaginary)
-      iterations += 1 - Math.log2(Math.log2(magnitude))
-    }
-
-    return iterations
-  }
-
-  private juliaIterations(zReal: number, zImaginary: number): number {
-    const cReal = this.parameters.juliaReal
-    const cImaginary = this.parameters.juliaImaginary
-    let iterations = 0
-    const maxIter = this.parameters.maxIterations
-    const escapeRadius = this.parameters.escapeRadius
-
-    while (iterations < maxIter && (zReal * zReal + zImaginary * zImaginary) < escapeRadius * escapeRadius) {
-      const tempReal = zReal * zReal - zImaginary * zImaginary + cReal
-      zImaginary = 2 * zReal * zImaginary + cImaginary
-      zReal = tempReal
-      iterations++
-    }
-
-    // Smooth coloring
-    if (this.parameters.smoothColoring && iterations < maxIter) {
-      const magnitude = Math.sqrt(zReal * zReal + zImaginary * zImaginary)
-      iterations += 1 - Math.log2(Math.log2(magnitude))
-    }
-
-    return iterations
-  }
-
-  private burningShipIterations(cReal: number, cImaginary: number): number {
-    let zReal = 0
-    let zImaginary = 0
-    let iterations = 0
-    const maxIter = this.parameters.maxIterations
-    const escapeRadius = this.parameters.escapeRadius
-
-    while (iterations < maxIter && (zReal * zReal + zImaginary * zImaginary) < escapeRadius * escapeRadius) {
-      // Burning Ship: z = (|Re(z)| + i|Im(z)|)² + c
-      const absReal = Math.abs(zReal)
-      const absImaginary = Math.abs(zImaginary)
-      const tempReal = absReal * absReal - absImaginary * absImaginary + cReal
-      zImaginary = 2 * absReal * absImaginary + cImaginary
-      zReal = tempReal
-      iterations++
-    }
-
-    // Smooth coloring
-    if (this.parameters.smoothColoring && iterations < maxIter) {
-      const magnitude = Math.sqrt(zReal * zReal + zImaginary * zImaginary)
-      iterations += 1 - Math.log2(Math.log2(magnitude))
-    }
-
-    return iterations
-  }
-
-  private newtonIterations(zReal: number, zImaginary: number): number {
-    let iterations = 0
-    const maxIter = this.parameters.maxIterations
-    const tolerance = this.parameters.newtonTolerance
-    const relaxation = this.parameters.newtonRelaxation
-
-    // Newton's method for z³ - 1 = 0
-    // The three roots are: 1, -1/2 + i√3/2, -1/2 - i√3/2
-    const roots = [
-      { real: 1, imaginary: 0 },
-      { real: -0.5, imaginary: Math.sqrt(3) / 2 },
-      { real: -0.5, imaginary: -Math.sqrt(3) / 2 }
-    ]
-
-    while (iterations < maxIter) {
-      // f(z) = z³ - 1
-      const z3Real = zReal * zReal * zReal - 3 * zReal * zImaginary * zImaginary - 1
-      const z3Imaginary = 3 * zReal * zReal * zImaginary - zImaginary * zImaginary * zImaginary
-
-      // f'(z) = 3z²
-      const derivReal = 3 * (zReal * zReal - zImaginary * zImaginary)
-      const derivImaginary = 6 * zReal * zImaginary
-
-      // Avoid division by zero
-      const derivMagnitudeSquared = derivReal * derivReal + derivImaginary * derivImaginary
-      if (derivMagnitudeSquared < 1e-10) break
-
-      // Newton step: z = z - relaxation * f(z) / f'(z)
-      const stepReal = (z3Real * derivReal + z3Imaginary * derivImaginary) / derivMagnitudeSquared
-      const stepImaginary = (z3Imaginary * derivReal - z3Real * derivImaginary) / derivMagnitudeSquared
-
-      zReal -= relaxation * stepReal
-      zImaginary -= relaxation * stepImaginary
-
-      // Check convergence to any root
-      let converged = false
-      for (let i = 0; i < roots.length; i++) {
-        const diffReal = zReal - roots[i].real
-        const diffImaginary = zImaginary - roots[i].imaginary
-        const distance = Math.sqrt(diffReal * diffReal + diffImaginary * diffImaginary)
-
-        if (distance < tolerance) {
-          // Color based on which root we converged to
-          return iterations + i * (maxIter / 3)
-        }
-      }
-
-      iterations++
-    }
-
-    return maxIter // Didn't converge
-  }
-
-  private getColorPalette(paletteName: string): string[] {
-    const palette = this.colorPalettes.find(p => p.name === paletteName)
-    return palette ? palette.colors : this.colorPalettes[0].colors
-  }
-
-  private getColor(iterations: number, palette: string[]): { r: number; g: number; b: number } {
-    const maxIter = this.parameters.maxIterations
-
-    if (iterations >= maxIter) {
-      return { r: 0, g: 0, b: 0 } // Black for points in the set
-    }
-
-    // Map iterations to color palette
-    const normalizedIter = (iterations / maxIter) * (palette.length - 1)
-    const colorIndex = Math.floor(normalizedIter)
-    const fraction = normalizedIter - colorIndex
-
-    const color1 = this.hexToRgb(palette[colorIndex])
-    const color2 = this.hexToRgb(palette[Math.min(colorIndex + 1, palette.length - 1)])
-
-    // Interpolate between colors
-    return {
-      r: Math.round(color1.r + (color2.r - color1.r) * fraction),
-      g: Math.round(color1.g + (color2.g - color1.g) * fraction),
-      b: Math.round(color1.b + (color2.b - color1.b) * fraction)
-    }
-  }
-
-  private hexToRgb(hex: string): { r: number; g: number; b: number } {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16)
-    } : { r: 0, g: 0, b: 0 }
-  }
-
-  update(deltaTime: number): void {
-    // Fractals are static - no continuous animation needed
-    // The fractal is rendered immediately when parameters change
-  }
-
-  handleInteraction(event: InteractionEvent): void {
-    if (event.type === 'mouse' && event.position) {
-      if (event.delta) {
-        // Dragging - pan the view
-        if (!this.isDragging) {
-          this.isDragging = true
-          this.lastMousePos = event.position
-        }
-
-        const { width, height } = this.getCanvasSize()
-        const deltaX = (event.position.x - this.lastMousePos.x) / (width / 4) / this.zoom
-        const deltaY = (event.position.y - this.lastMousePos.y) / (height / 4) / this.zoom
-
-        this.centerX -= deltaX
-        this.centerY -= deltaY
-        this.lastMousePos = event.position
-
-        // Re-render with new center
-        this.renderFractal()
-      } else {
-        // Mouse up - stop dragging
-        this.isDragging = false
-      }
-    }
-  }
-
-  private zoomIn(centerX?: number, centerY?: number): void {
-    if (centerX !== undefined && centerY !== undefined) {
-      // Zoom into specific point
-      const { width, height } = this.getCanvasSize()
-      const realX = this.centerX + (centerX - width / 2) / (width / 4) / this.zoom
-      const realY = this.centerY + (centerY - height / 2) / (height / 4) / this.zoom
-
-      this.centerX = realX
-      this.centerY = realY
-    }
-
-    this.zoom *= 2
-    this.renderFractal()
-  }
-
-  private zoomOut(): void {
-    this.zoom /= 2
-    this.renderFractal()
-  }
-
-  private resetView(): void {
-    switch (this.parameters.fractalType) {
-      case 'mandelbrot':
-        this.centerX = -0.5
-        this.centerY = 0
-        this.zoom = 1
-        break
-      case 'julia':
-        this.centerX = 0
-        this.centerY = 0
-        this.zoom = 1
-        break
-      case 'burning-ship':
-        this.centerX = -0.5
-        this.centerY = -0.5
-        this.zoom = 0.8
-        break
-      case 'newton':
-        this.centerX = 0
-        this.centerY = 0
-        this.zoom = 1.5
-        break
-      default:
-        this.centerX = -0.5
-        this.centerY = 0
-        this.zoom = 1
-    }
-
-    this.renderFractal()
-  }
-
-  getControls(): VisualizationControl[] {
-    return [
-      {
-        id: 'fractalType',
-        label: 'Fractal Type',
-        type: 'select',
-        value: this.parameters.fractalType,
-        options: [
-          { label: 'Mandelbrot Set', value: 'mandelbrot' },
-          { label: 'Julia Set', value: 'julia' },
-          { label: 'Burning Ship', value: 'burning-ship' },
-          { label: 'Newton\'s Method', value: 'newton' }
-        ],
-        onChange: (value) => {
-          this.setParameter('fractalType', value)
-        }
-      },
-      {
-        id: 'maxIterations',
-        label: 'Max Iterations',
-        type: 'slider',
-        value: this.parameters.maxIterations,
-        min: 50,
-        max: 500,
-        step: 10,
-        onChange: (value) => {
-          this.setParameter('maxIterations', value)
-        }
-      },
-      {
-        id: 'colorPalette',
-        label: 'Color Palette',
-        type: 'select',
-        value: this.parameters.colorPalette,
-        options: this.colorPalettes.map(p => ({ label: p.name, value: p.name })),
-        onChange: (value) => {
-          this.setParameter('colorPalette', value)
-        }
-      },
-      ...(this.parameters.fractalType === 'julia' ? [
-        {
-          id: 'juliaReal',
-          label: 'Julia Real Part',
-          type: 'slider' as const,
-          value: this.parameters.juliaReal,
-          min: -2,
-          max: 2,
-          step: 0.01,
-          onChange: (value: number) => {
-            this.setParameter('juliaReal', value)
-          }
-        },
-        {
-          id: 'juliaImaginary',
-          label: 'Julia Imaginary Part',
-          type: 'slider' as const,
-          value: this.parameters.juliaImaginary,
-          min: -2,
-          max: 2,
-          step: 0.01,
-          onChange: (value: number) => {
-            this.setParameter('juliaImaginary', value)
-          }
-        }
-      ] : []),
-      ...(this.parameters.fractalType === 'newton' ? [
-        {
-          id: 'newtonRelaxation',
-          label: 'Relaxation Factor',
-          type: 'slider' as const,
-          value: this.parameters.newtonRelaxation,
-          min: 0.5,
-          max: 2.0,
-          step: 0.1,
-          onChange: (value: number) => {
-            this.setParameter('newtonRelaxation', value)
-          }
-        },
-        {
-          id: 'newtonTolerance',
-          label: 'Convergence Tolerance',
-          type: 'slider' as const,
-          value: this.parameters.newtonTolerance,
-          min: 0.001,
-          max: 0.1,
-          step: 0.001,
-          onChange: (value: number) => {
-            this.setParameter('newtonTolerance', value)
-          }
-        }
-      ] : []),
-      {
-        id: 'smoothColoring',
-        label: 'Smooth Coloring',
-        type: 'toggle',
-        value: this.parameters.smoothColoring,
-        onChange: (value) => {
-          this.setParameter('smoothColoring', value)
-        }
-      },
-      {
-        id: 'zoomIn',
-        label: 'Zoom In (2x)',
-        type: 'button',
-        value: null,
-        onChange: () => this.zoomIn()
-      },
-      {
-        id: 'zoomOut',
-        label: 'Zoom Out (0.5x)',
-        type: 'button',
-        value: null,
-        onChange: () => this.zoomOut()
-      },
-      {
-        id: 'reset',
-        label: 'Reset View',
-        type: 'button',
-        value: null,
-        onChange: () => this.resetView()
-      }
-    ]
-  }
-
-  resize(width: number, height: number): void {
-    super.resize(width, height)
-    // Re-render with new dimensions
-    setTimeout(() => this.renderFractal(), 100)
-  }
-
-  protected onParameterChange(key: string, value: any): void {
-    // Re-render when any parameter changes
-    // Force immediate re-render for parameter changes
-    this.isRendering = false // Reset rendering flag
-
-    // Special handling for fractal type change
-    if (key === 'fractalType') {
-      this.resetView()
-    } else {
-      this.renderFractal()
-    }
-  }
-
-  protected onReset(): void {
-    this.resetView()
+    this.gl = gl
+    this.program = program
+    this.uniforms.clear()
+    return true
   }
 
   cleanup(): void {
+    if (this.holdTimer) clearTimeout(this.holdTimer)
+    this.holdTimer = null
+    this.drag = null
+    this.flight = null
+    if (this.gl && this.program) this.gl.deleteProgram(this.program)
+    this.gl = null
+    this.program = null
+    this.buffer = null
     super.cleanup()
-    if (this.renderWorker) {
-      this.renderWorker.terminate()
-      this.renderWorker = null
+  }
+
+  private get family(): Family {
+    return this.parameters.family as Family
+  }
+
+  // The zoom on screen: the entrance eases it from 0.8x up to the real value
+  private get shownZoom(): number {
+    return this.view.zoom * (0.8 + 0.2 * easeOut(Math.min(1, this.entrance)))
+  }
+
+  // The stage pixel the view is centred on: the middle of the part the rail
+  // leaves clear, and on a phone the part above the placard too
+  private get anchor(): { x: number; y: number; side: number } {
+    const { width, height } = this.size
+    const { above } = this.clearRects()
+    const phone = width < 768
+    return {
+      x: above.x + above.width / 2,
+      y: phone ? above.y + above.height / 2 : height / 2,
+      side: Math.max(1, Math.min(above.width, phone ? above.height : height))
+    }
+  }
+
+  // Complex units per CSS pixel: one scale for both axes
+  private get unit(): number {
+    return SPAN / (this.anchor.side * this.shownZoom)
+  }
+
+  get iterations(): number {
+    if (!this.parameters.autoIterations) return this.parameters.iterations
+    return Math.round(clamp(200 + 90 * Math.log2(Math.max(1, this.view.zoom)), 50, 2000))
+  }
+
+  // Stage pixel to complex number. The imaginary axis points up.
+  toComplex(x: number, y: number): [number, number] {
+    const unit = this.unit
+    const anchor = this.anchor
+    return [this.view.x + (x - anchor.x) * unit, this.view.y - (y - anchor.y) * unit]
+  }
+
+  // The inset's rectangle in stage pixels, while there is one to draw
+  getInset(): { x: number; y: number; width: number; height: number } | null {
+    if (this.family !== 'mandelbrot' || !this.juliaAt || this.renderer !== 'webgl2') return null
+    return insetSlot(this.size.width, this.size.height, INSET, INSET)
+  }
+
+  private overInset(x: number, y: number): boolean {
+    const inset = this.getInset()
+    return !!inset && x >= inset.x && x <= inset.x + inset.width && y >= inset.y && y <= inset.y + inset.height
+  }
+
+  update(deltaTime: number): void {
+    if (this.entrance < 1 && deltaTime > 0) {
+      this.entrance += deltaTime / ENTRANCE_SECONDS
+      this.emitSoon()
+    }
+    if (this.flight && deltaTime > 0) {
+      const flight = this.flight
+      flight.t = Math.min(1, flight.t + deltaTime / FLIGHT_SECONDS)
+      const e = easeInOut(flight.t)
+      // Zoom moves evenly in its logarithm while the target drifts to the
+      // middle of the screen, so the place being flown to stays in view
+      const zoom = Math.exp(Math.log(flight.from.zoom) + (Math.log(flight.to.zoom) - Math.log(flight.from.zoom)) * e)
+      const carry = (flight.from.zoom * (1 - e)) / zoom
+      this.view = {
+        x: flight.to.x + (flight.from.x - flight.to.x) * carry,
+        y: flight.to.y + (flight.from.y - flight.to.y) * carry,
+        zoom
+      }
+      if (flight.t >= 1) this.flight = null
+      this.emitSoon()
+    }
+    if (this.renderer === 'webgl2') this.drawGL()
+    else this.drawCPU()
+  }
+
+  private uniform(name: string): WebGLUniformLocation | null {
+    if (!this.uniforms.has(name)) this.uniforms.set(name, this.gl!.getUniformLocation(this.program!, name))
+    return this.uniforms.get(name) ?? null
+  }
+
+  private drawGL(): void {
+    const { gl, program, canvas } = this
+    if (!gl || !program || !canvas || gl.isContextLost()) return
+    const { ratio } = this.size
+    const colors = PALETTES[this.parameters.palette] ?? PALETTES.Bone
+    const flat = new Float32Array(PALETTE_SLOTS * 3)
+    colors.forEach((hex, index) => flat.set(rgb(hex).map(channel => channel / 255), index * 3))
+
+    gl.useProgram(program)
+    gl.uniform3fv(this.uniform('u_palette'), flat)
+    gl.uniform1i(this.uniform('u_paletteSize'), colors.length)
+    gl.uniform1i(this.uniform('u_iterations'), this.iterations)
+    gl.uniform1i(this.uniform('u_smooth'), this.parameters.smooth ? 1 : 0)
+    gl.uniform1f(this.uniform('u_relaxation'), this.parameters.relaxation)
+
+    const pass = (x: number, y: number, width: number, height: number, family: number, view: View, scale: number, julia: number[]) => {
+      gl.viewport(x, y, width, height)
+      gl.scissor(x, y, width, height)
+      gl.uniform2f(this.uniform('u_origin'), x, y)
+      gl.uniform2f(this.uniform('u_resolution'), width, height)
+      gl.uniform2f(this.uniform('u_center'), view.x, view.y)
+      gl.uniform1f(this.uniform('u_scale'), scale)
+      gl.uniform1i(this.uniform('u_family'), family)
+      gl.uniform2f(this.uniform('u_julia'), julia[0], julia[1])
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+    }
+
+    gl.enable(gl.SCISSOR_TEST)
+    const [x, y] = this.toComplex(this.size.width / 2, this.size.height / 2)
+    pass(
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+      FAMILIES.findIndex(family => family.value === this.family),
+      { x, y, zoom: 1 },
+      this.unit / ratio,
+      [this.parameters.juliaReal, this.parameters.juliaImaginary]
+    )
+    // The Julia inset: the same program through a second viewport
+    const inset = this.getInset()
+    if (inset && this.juliaAt) {
+      const side = Math.round(inset.width * ratio)
+      const left = Math.round(inset.x * ratio)
+      const bottom = canvas.height - Math.round(inset.y * ratio) - side
+      pass(left, bottom, side, side, 1, HOME.julia, SPAN / side, this.juliaAt)
+    }
+  }
+
+  private drawCPU(): void {
+    const { ctx, canvas } = this
+    if (!ctx || !canvas) return
+    const key = JSON.stringify([this.view, this.entrance < 1 ? this.entrance : 1, this.parameters, this.size])
+    if (key === this.cpuKey) return
+    this.cpuKey = key
+
+    const width = Math.max(1, canvas.width >> 1)
+    const height = Math.max(1, canvas.height >> 1)
+    if (!this.buffer) this.buffer = document.createElement('canvas')
+    this.buffer.width = width
+    this.buffer.height = height
+    const target = this.buffer.getContext('2d')
+    if (!target) return
+    const image = target.createImageData(width, height)
+    const data = image.data
+
+    const colors = (PALETTES[this.parameters.palette] ?? PALETTES.Bone).map(rgb)
+    const shade = (t: number, offset: number, gain = 1) => {
+      const x = clamp(t, 0, 1) * (colors.length - 1)
+      const i = Math.floor(x)
+      const j = Math.min(i + 1, colors.length - 1)
+      for (let channel = 0; channel < 3; channel++) {
+        data[offset + channel] = (colors[i][channel] + (colors[j][channel] - colors[i][channel]) * (x - i)) * gain
+      }
+    }
+
+    const family = this.family
+    const max = this.iterations
+    const { smooth, juliaReal, juliaImaginary, relaxation } = this.parameters
+    const unit = (this.unit * this.size.width) / width
+    const [midRe, midIm] = this.toComplex(this.size.width / 2, this.size.height / 2)
+    for (let py = 0; py < height; py++) {
+      const im = midIm - (py + 0.5 - height / 2) * unit
+      for (let px = 0; px < width; px++) {
+        const re = midRe + (px + 0.5 - width / 2) * unit
+        const offset = (py * width + px) * 4
+        data[offset + 3] = 255
+        if (family === 'newton') {
+          let zr = re
+          let zi = im
+          for (let n = 0; n < max; n++) {
+            const ar = zr * zr - zi * zi
+            const ai = 2 * zr * zi
+            const fr = ar * zr - ai * zi - 1
+            const fi = ar * zi + ai * zr
+            const m = 9 * (ar * ar + ai * ai)
+            if (m < 1e-12) break
+            zr -= (relaxation * 3 * (fr * ar + fi * ai)) / m
+            zi -= (relaxation * 3 * (fi * ar - fr * ai)) / m
+            let root = -1
+            for (let k = 0; k < 3; k++) {
+              const angle = (2 * Math.PI * k) / 3
+              if (Math.hypot(zr - Math.cos(angle), zi - Math.sin(angle)) < 0.001) root = k
+            }
+            if (root >= 0) {
+              shade((root + 1) / 3, offset, Math.exp(-0.09 * n))
+              break
+            }
+          }
+          continue
+        }
+        let zr = family === 'julia' ? re : 0
+        let zi = family === 'julia' ? im : 0
+        const cr = family === 'julia' ? juliaReal : re
+        const ci = family === 'julia' ? juliaImaginary : family === 'burning-ship' ? -im : im
+        let n = 0
+        for (; n < max; n++) {
+          if (zr * zr + zi * zi > BAILOUT) break
+          if (family === 'burning-ship') {
+            zr = Math.abs(zr)
+            zi = Math.abs(zi)
+          }
+          const next = zr * zr - zi * zi + cr
+          zi = 2 * zr * zi + ci
+          zr = next
+        }
+        if (n >= max) continue
+        const count = smooth ? n + 1 - Math.log2(0.5 * Math.log2(zr * zr + zi * zi)) : n
+        const x = Math.max(count, 0)
+        shade((Math.sqrt(x / max) * x) / (x + 4), offset)
+      }
+    }
+    target.putImageData(image, 0, 0)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.imageSmoothingEnabled = true
+    ctx.drawImage(this.buffer, 0, 0, canvas.width, canvas.height)
+  }
+
+  // The visitor has taken over: stop any flight and forget the named place
+  private takeOver(): void {
+    this.flight = null
+    this.place = null
+    this.entrance = 1
+  }
+
+  private zoomAbout(x: number, y: number, factor: number): void {
+    this.takeOver()
+    const [re, im] = this.toComplex(x, y)
+    const zoom = clamp(this.view.zoom * factor, MIN_ZOOM, MAX_ZOOM)
+    const kept = this.view.zoom / zoom
+    // The point under the pointer stays under the pointer
+    this.view = { x: re + (this.view.x - re) * kept, y: im + (this.view.y - im) * kept, zoom }
+    this.emitSoon()
+  }
+
+  handleInteraction(event: ExhibitEvent): boolean {
+    switch (event.type) {
+      case 'down': {
+        this.takeOver()
+        this.holding = false
+        this.drag = { x: event.x, y: event.y, moved: false, inInset: this.overInset(event.x, event.y) }
+        if (this.holdTimer) clearTimeout(this.holdTimer)
+        // Press and hold on touch shows the inset for the point held
+        if (event.pointerType !== 'mouse' && this.family === 'mandelbrot' && !this.drag.inInset) {
+          this.holdTimer = setTimeout(() => {
+            if (!this.drag || this.drag.moved) return
+            this.holding = true
+            this.juliaAt = this.toComplex(this.drag.x, this.drag.y)
+            this.emit()
+          }, HOLD_MS)
+        }
+        return true
+      }
+      case 'move': {
+        const drag = this.drag
+        if (!event.pressed || !drag) {
+          // A hovering mouse: the inset follows it, and nothing else happens
+          if (!event.pressed && this.family === 'mandelbrot' && !this.overInset(event.x, event.y)) {
+            this.juliaAt = this.toComplex(event.x, event.y)
+            this.emitSoon()
+          }
+          return false
+        }
+        const dx = event.x - drag.x
+        const dy = event.y - drag.y
+        if (this.holding) {
+          this.juliaAt = this.toComplex(event.x, event.y)
+        } else if (drag.moved || Math.hypot(dx, dy) > 4) {
+          drag.moved = true
+          // Two fingers zoom through `pinch`; one pans
+          if (event.touches < 2) {
+            this.view = { ...this.view, x: this.view.x - dx * this.unit, y: this.view.y + dy * this.unit }
+          }
+          drag.x = event.x
+          drag.y = event.y
+        }
+        this.emitSoon()
+        return true
+      }
+      case 'up': {
+        const drag = this.drag
+        this.drag = null
+        if (this.holdTimer) clearTimeout(this.holdTimer)
+        this.holdTimer = null
+        if (!drag || drag.moved || this.holding) {
+          this.holding = false
+          return true
+        }
+        if (drag.inInset && this.juliaAt) {
+          this.adoptJulia()
+          return true
+        }
+        const now = performance.now()
+        const double =
+          now - this.lastClick.time < DOUBLE_MS && Math.hypot(event.x - this.lastClick.x, event.y - this.lastClick.y) < 24
+        this.lastClick = double ? { x: 0, y: 0, time: 0 } : { x: event.x, y: event.y, time: now }
+        if (double) this.zoomAbout(event.x, event.y, 2)
+        // A single tap elsewhere puts a held inset away
+        else if (event.pointerType !== 'mouse' && this.juliaAt) {
+          this.juliaAt = null
+          this.emit()
+        }
+        return true
+      }
+      case 'wheel':
+        this.zoomAbout(event.x, event.y, Math.exp(-event.deltaY * (event.pinch ? 0.01 : 0.0015)))
+        return true
+      case 'pinch':
+        this.zoomAbout(event.x, event.y, event.scale)
+        return true
+      case 'key': {
+        const step = this.anchor.side * 0.1 * this.unit
+        const moves: Record<string, [number, number]> = {
+          ArrowLeft: [-step, 0],
+          ArrowRight: [step, 0],
+          ArrowUp: [0, step],
+          ArrowDown: [0, -step]
+        }
+        const move = moves[event.key]
+        if (move) {
+          this.takeOver()
+          this.view = { ...this.view, x: this.view.x + move[0], y: this.view.y + move[1] }
+        } else if (event.key === '+' || event.key === '=') {
+          this.zoomAbout(this.anchor.x, this.anchor.y, 1.5)
+        } else if (event.key === '-' || event.key === '_') {
+          this.zoomAbout(this.anchor.x, this.anchor.y, 1 / 1.5)
+        } else {
+          return false
+        }
+        this.emitSoon()
+        return true
+      }
+    }
+  }
+
+  // Clicking the inset: the Julia set it shows becomes the exhibit
+  private adoptJulia(): void {
+    if (!this.juliaAt) return
+    const [juliaReal, juliaImaginary] = this.juliaAt
+    this.parameters = { ...this.parameters, family: 'julia', juliaReal, juliaImaginary }
+    this.goHome()
+    this.emit()
+  }
+
+  private goHome(): void {
+    this.takeOver()
+    this.view = { ...HOME[this.family] }
+    this.juliaAt = null
+  }
+
+  private takeMeSomewhere(): void {
+    const place = PLACES[this.placeIndex % PLACES.length]
+    this.placeIndex += 1
+    if (place.family !== this.family || place.julia) {
+      this.parameters = {
+        ...this.parameters,
+        family: place.family,
+        juliaReal: place.julia?.[0] ?? this.parameters.juliaReal,
+        juliaImaginary: place.julia?.[1] ?? this.parameters.juliaImaginary
+      }
+      const home = HOME[place.family]
+      this.view = { ...home, zoom: home.zoom * 0.6 }
+    }
+    this.takeOver()
+    this.juliaAt = null
+    this.place = place.name
+    const to = { x: place.x, y: place.y, zoom: place.zoom }
+    // Reduced motion cuts instead of flying
+    if (this.host?.reducedMotion) this.view = to
+    else {
+      this.flight = { from: { ...this.view }, to, t: 0 }
+      this.host?.setPaused(false)
+    }
+    this.emit()
+  }
+
+  protected onParameterChange(key: keyof FractalParameters): void {
+    if (key === 'family') this.goHome()
+  }
+
+  getControls(): VisualizationControl[] {
+    const { family } = this
+    return [
+      this.choice('family', 'Family', FAMILIES),
+      this.toggle('autoIterations', 'Auto iterations'),
+      this.slider('iterations', 'Iterations', 50, 2000, 10, {
+        value: this.iterations,
+        disabled: this.parameters.autoIterations
+      }),
+      this.choice(
+        'palette',
+        'Palette',
+        Object.keys(PALETTES).map(name => ({ label: name, value: name }))
+      ),
+      this.toggle('smooth', 'Smooth colouring'),
+      ...(family === 'julia'
+        ? [
+            this.slider('juliaReal', 'Julia constant, real', -2, 2, 0.001),
+            this.slider('juliaImaginary', 'Julia constant, imaginary', -2, 2, 0.001)
+          ]
+        : []),
+      ...(family === 'newton' ? [this.slider('relaxation', 'Newton relaxation', 0.5, 2, 0.05)] : []),
+      this.button('somewhere', 'Take me somewhere', () => this.takeMeSomewhere(), { primary: true }),
+      this.button('home', 'Reset view', () => {
+        this.goHome()
+        this.emit()
+      })
+    ]
+  }
+
+  getPlacard(): Placard {
+    const formula = FAMILIES.find(entry => entry.value === this.family)?.formula ?? ''
+    const text =
+      this.family === 'newton'
+        ? 'Each point is handed to Newton’s method and shaded by the root of z³ = 1 it lands on. Darker points took more steps to get there.'
+        : this.family === 'mandelbrot' && this.renderer === 'webgl2'
+          ? 'Black points never escape, and the rest are shaded by how fast they do. Point at the set, or press and hold, and the inset shows the Julia set for that point.'
+          : 'Black points never escape, and the rest are shaded by how fast they do. Drag to pan, and scroll or pinch to zoom.'
+    return { title: 'Fractal', formula, text, note: this.place ?? undefined }
+  }
+
+  private get centreText(): string {
+    const digits = clamp(2 + Math.ceil(Math.log10(Math.max(1, this.view.zoom))), 4, 8)
+    const { x, y } = this.view
+    return `${x.toFixed(digits)} ${y < 0 ? '-' : '+'} ${Math.abs(y).toFixed(digits)}i`
+  }
+
+  private get zoomText(): string {
+    const zoom = this.view.zoom
+    return `${zoom < 1000 ? zoom.toPrecision(3) : zoom.toExponential(1).replace('e+', 'e')}x`
+  }
+
+  getLedger(): Readout[] {
+    const gpu = this.renderer === 'webgl2'
+    return [
+      { key: 'Centre', value: this.centreText },
+      { key: 'Zoom', value: this.zoomText },
+      { key: 'Iterations', value: `${this.iterations}${this.parameters.autoIterations ? ' (auto)' : ''}` },
+      gpu
+        ? { key: 'Precision', value: 'float32 (GPU)', signal: 'compiled' }
+        : { key: 'Precision', value: 'float64 (CPU), half resolution', signal: 'interpreted' }
+    ]
+  }
+
+  describe(): string {
+    const label = FAMILIES.find(entry => entry.value === this.family)?.label ?? ''
+    const where = this.place ? `, at ${this.place}` : ''
+    return `${label} set${where}, centred on ${this.centreText} at ${this.zoomText} zoom, ${this.iterations} iterations, ${this.parameters.palette} palette.`
+  }
+
+  getData(): Record<string, string> {
+    const julia = this.juliaAt ?? [this.parameters.juliaReal, this.parameters.juliaImaginary]
+    return {
+      family: this.family,
+      centre: `${this.view.x},${this.view.y}`,
+      zoom: String(this.view.zoom),
+      // The inset's constant while it is up, the family's own otherwise
+      julia: `${julia[0]},${julia[1]}`,
+      inset: this.getInset() ? 'shown' : 'hidden',
+      // Where `centre` sits on the stage, and complex units per pixel
+      anchor: `${this.anchor.x},${this.anchor.y}`,
+      unit: String(this.unit),
+      renderer: this.renderer
     }
   }
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import RubiLoader from '@/app/components/Loaders/RubiLoader'
+import { isDemoRoute } from '@/lib/demos'
 
 export function PageTransitionLoader() {
   const pathname = usePathname()
@@ -20,8 +21,14 @@ export function PageTransitionLoader() {
 
     // If path changed, show loader
     if (pathname !== previousPathRef.current) {
-      setIsLoading(true)
+      // Both ends of a demo navigation are black: change nothing but the content
+      const involvesDemo = isDemoRoute(pathname) || isDemoRoute(previousPathRef.current)
       previousPathRef.current = pathname
+      if (involvesDemo) {
+        setIsLoading(false)
+        return
+      }
+      setIsLoading(true)
 
       // Hide loader after a short delay to show the transition
       const timer = setTimeout(() => {

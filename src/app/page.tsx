@@ -1,9 +1,10 @@
 'use client'
-import { IOptions, MoveDirection, RecursivePartial } from '@tsparticles/engine'
 import Particles, { ParticlesProvider } from '@tsparticles/react'
 import { loadSlim } from '@tsparticles/slim' // if you are going to use `loadSlim`, install the "@tsparticles/slim" package too.
-import { useEffect, useMemo, useState } from 'react'
+import { ViewTransition, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { home } from '@/lib/constellation'
+import { demos, leavingDemo, markLeavingDemo, titleTransitionName } from '@/lib/demos'
 import RubiLoader from './components/Loaders/RubiLoader'
 import ProfilePhoto from './components/Svg/ProfilePhoto'
 import { CiLinkedin } from 'react-icons/ci'
@@ -11,9 +12,19 @@ import { FaGithubSquare } from 'react-icons/fa'
 import XkcdIcon from './components/Svg/XkcdIcon'
 
 export default function Home() {
-  const [initialized, setInitialized] = useState(false)
+  // Arriving back from a demo: its title travels to its place in the list, so
+  // the list has to be there at once instead of behind the loader.
+  const [returning] = useState(leavingDemo)
+  const [initialized, setInitialized] = useState(returning !== null)
+  // The label that travels: the demo just left, or the one just clicked.
+  // Only that one is named, so no other navigation starts a view transition.
+  const [travelling, setTravelling] = useState(returning)
 
   useEffect(() => {
+    if (returning !== null) {
+      markLeavingDemo(null)
+      return
+    }
     let mounted = true
 
     // Reset initialization state on mount (handles bfcache restoration)
@@ -29,7 +40,7 @@ export default function Home() {
       mounted = false
       clearTimeout(timeoutId)
     }
-  }, [])
+  }, [returning])
 
   // Handle browser back/forward navigation (bfcache restoration)
   useEffect(() => {
@@ -47,81 +58,6 @@ export default function Home() {
     window.addEventListener('pageshow', handlePageShow)
     return () => window.removeEventListener('pageshow', handlePageShow)
   }, [])
-  const options: RecursivePartial<IOptions> = useMemo(
-    () => ({
-      background: {
-        color: {
-          value: '#000'
-        }
-      },
-      fpsLimit: 120,
-      interactivity: {
-        detectsOn: 'window',
-        events: {
-          onClick: {
-            enable: true,
-            mode: 'push'
-          },
-          onHover: {
-            enable: true,
-            mode: 'repulse'
-          }
-        },
-        modes: {
-          push: {
-            quantity: 12
-          },
-          repulse: {
-            distance: 120,
-            duration: 1,
-            speed: 0.5,
-            maxSpeed: 1,
-            easing: 'ease-out-cubic'
-          }
-        }
-      },
-      particles: {
-        color: {
-          value: '#ffffff'
-        },
-        links: {
-          color: '#ffffff',
-          distance: 80,
-          enable: true,
-          opacity: 0.25,
-          width: 1.5
-        },
-        move: {
-          direction: 'top' as MoveDirection,
-          enable: true,
-          outModes: {
-            default: 'bounce'
-          },
-          random: true,
-          speed: 4,
-          straight: false
-        },
-        number: {
-          density: {
-            enable: true
-          },
-          value: 500
-        },
-        opacity: {
-          value: 0.5
-        },
-        shape: {
-          type: 'diamond'
-        },
-        size: {
-          value: { min: 0.1, max: 4 }
-        }
-      },
-      detectRetina: true,
-      smooth: true
-    }),
-    []
-  )
   return initialized ? (
     <>
       <h1 className="center mt-5">
@@ -160,69 +96,24 @@ export default function Home() {
       <div className="center mt-16 flex flex-col">
         <p className="text-lg mb-6">Interactive Demos</p>
         <div className="center flex flex-col space-y-2 max-w-md">
-          <Link
-            href="/image-processing-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">WASM Image Processing</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              High-performance image filters
-            </span>
-          </Link>
-          <Link
-            href="/shader-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">Shader Art Playground</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              GPU-powered visual effects
-            </span>
-          </Link>
-          <Link
-            href="/math-gallery-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">Mathematical Art Gallery</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              Interactive math visualizations
-            </span>
-          </Link>
-          <Link
-            href="/timeline-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">3D Timeline Visualization</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              Helical timeline experience
-            </span>
-          </Link>
-          <Link
-            href="/gpu-particles-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">GPU Particle System</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              Interactive particle effects
-            </span>
-          </Link>
-          <Link
-            href="/crypto-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">WASM Cryptographic Demo</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              Hash algorithms & encryption
-            </span>
-          </Link>
-          <Link
-            href="/wasm-demo"
-            className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
-            <span className="underline">WASM Core Demo</span>
-            &nbsp;
-            <span className="text-sm text-gray-400">
-              WebAssembly performance tests
-            </span>
-          </Link>
+          {demos.map(demo => (
+            <Link
+              key={demo.slug}
+              href={demo.route}
+              prefetch={false}
+              onClick={() => setTravelling(demo.slug)}
+              className="opacity-40 hover:opacity-100 fade duration-1000 text-center hover:underline">
+              {travelling === demo.slug ? (
+                <ViewTransition name={titleTransitionName(demo.slug)} share="demo-title-travel">
+                  <span className="underline">{demo.title}</span>
+                </ViewTransition>
+              ) : (
+                <span className="underline">{demo.title}</span>
+              )}
+              &nbsp;
+              <span className="text-sm text-gray-400">{demo.line}</span>
+            </Link>
+          ))}
         </div>
       </div>
       <div className="center mt-10 flex flex-col">
@@ -256,7 +147,7 @@ export default function Home() {
         <Particles
           id="particles"
           className="z-0"
-          options={options}
+          options={home}
         />
       </ParticlesProvider>
     </>

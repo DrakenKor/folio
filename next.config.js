@@ -42,6 +42,10 @@ const nextConfig = {
       '*.wasm': {
         loaders: ['file-loader'],
       },
+      '*.glsl': {
+        loaders: ['raw-loader'],
+        as: '*.js',
+      },
     },
   },
   // Enable experimental features for better performance

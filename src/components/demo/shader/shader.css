@@ -1,0 +1,272 @@
+/* The source floats over its own output: a panel on the left, on the veil */
+
+.shader-panel {
+  position: absolute;
+  top: calc(var(--demo-bar) + 16px);
+  bottom: 120px;
+  left: var(--demo-gutter);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: calc(40% - var(--demo-gutter));
+  background: var(--demo-veil);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--demo-line);
+  border-radius: var(--radius-rail);
+}
+
+/* The entrance: it comes in with the rail, from the other side */
+.shader-panel[data-ready='false'] {
+  opacity: 0;
+  transform: translateX(-24px);
+}
+
+.shader-panel[data-open='false'] {
+  bottom: auto;
+  width: auto;
+}
+
+.shader-panel-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.shader-panel-body[hidden] {
+  display: none;
+}
+
+/* ── Editor: a transparent textarea over a coloured copy of its text ── */
+
+.shader-editor {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--demo-line);
+  border-bottom: 1px solid var(--demo-line);
+}
+
+.shader-editor:focus-within {
+  border-color: var(--demo-dim);
+}
+
+.shader-editor-sheet {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.shader-editor-code,
+.shader-editor-input {
+  margin: 0;
+  padding: 10px 18px 14px 54px;
+  font: 400 13px/20px var(--font-demo-mono), 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-variant-ligatures: none;
+  letter-spacing: 0;
+  tab-size: 2;
+  white-space: pre;
+  border: 0;
+  border-radius: 0;
+}
+
+.shader-editor-code {
+  color: var(--demo-text);
+  counter-reset: shader-line;
+  pointer-events: none;
+}
+
+.shader-editor-line {
+  position: relative;
+  display: block;
+  height: 20px;
+}
+
+.shader-editor-line::before {
+  position: absolute;
+  left: -54px;
+  width: 38px;
+  color: var(--demo-dim);
+  text-align: right;
+  content: counter(shader-line);
+  counter-increment: shader-line;
+}
+
+/* A line the compiler rejected */
+.shader-editor-line[data-error='true'] > span {
+  text-decoration: underline;
+  text-decoration-color: var(--signal-change);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.shader-editor-line[data-error='true']::before {
+  color: var(--signal-change);
+}
+
+.shader-tone-comment {
+  color: var(--demo-dim);
+}
+
+.shader-tone-word {
+  color: var(--demo-white);
+  font-weight: 500;
+}
+
+.shader-tone-number {
+  color: var(--demo-bone);
+}
+
+.shader-editor .shader-editor-input {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  color: transparent;
+  background: transparent;
+  caret-color: var(--demo-white);
+  outline: none;
+  resize: none;
+}
+
+.shader-editor-input::selection {
+  color: transparent;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.shader-editor[data-readonly='true'] .shader-editor-input {
+  caret-color: transparent;
+}
+
+/* Under the editor: the compiler's message, or a hint */
+.shader-status {
+  flex: none;
+  max-height: 132px;
+  padding: 10px 18px 12px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.shader-status p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.shader-status p + p,
+.shader-status div:not(:empty) + p {
+  margin-top: 4px;
+}
+
+.shader-status a {
+  color: var(--demo-white);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* ── Rail extras ── */
+
+.shader-readout {
+  padding-top: 10px;
+}
+
+.shader-color {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.shader-color input {
+  width: 44px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--demo-line);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.shader-color input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.shader-color input::-webkit-color-swatch {
+  border: 0;
+}
+
+.shader-color input::-moz-color-swatch {
+  border: 0;
+}
+
+.shader-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--demo-text);
+}
+
+.shader-note:empty {
+  display: none;
+}
+
+/* ── Notes ── */
+
+.shader-narrow {
+  display: none;
+}
+
+.shader-list {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.shader-list li + li {
+  margin-top: 6px;
+}
+
+/* ── No WebGL2: the first shader's source, to read ── */
+
+.shader-poster-source {
+  display: flex;
+  width: min(100%, 640px);
+  max-height: 50dvh;
+  text-align: left;
+  background: var(--demo-veil);
+  border: 1px solid var(--demo-line);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.shader-poster-source .shader-editor {
+  border: 0;
+}
+
+/* ── Phones: the editor is the sheet's second tab ── */
+
+@media (max-width: 767px) {
+  .shader-wide,
+  .shader-hint {
+    display: none;
+  }
+
+  .shader-narrow {
+    display: inline;
+  }
+
+  .shader-sheet-source {
+    margin: 0 -18px;
+  }
+
+  /* The sheet scrolls down the page of code; the editor only scrolls sideways */
+  .shader-sheet-source .shader-editor {
+    flex: none;
+  }
+}

@@ -1,0 +1,1000 @@
+/* The third room of the house: the home page's darkness, diamonds and slow
+   fade, with the blog's mono voice, hairlines and three accents. */
+
+html:has(.demo-shell),
+html:has(.demo-shell) body {
+  background: #000000;
+}
+
+/* globals.css hides horizontal overflow on body, which makes body a scroll
+   container and stops position: sticky from tracking the viewport. */
+html:has(.demo-shell) body {
+  overflow: visible;
+  overflow-x: clip;
+}
+
+.demo-shell {
+  --demo-black: #000000;
+  --demo-white: #ffffff;
+  --demo-text: #f5f5f5;
+  --demo-dim: #8b8b8b;
+  --demo-bone: #d1d1d1;
+  --demo-line: rgba(255, 255, 255, 0.12);
+  /* Dark enough that --demo-dim stays above 4.5:1 even over a white canvas */
+  --demo-veil: rgba(0, 0, 0, 0.86);
+
+  /* Signals: one meaning each, always paired with a text label */
+  --signal-compiled: #5eead4;
+  --signal-interpreted: #facc15;
+  --signal-change: #ff5b8d;
+
+  --radius-rail: 1.25rem;
+  --radius-control: 0.85rem;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-quick: 150ms;
+  --dur-move: 420ms;
+  --dur-fade: 1000ms;
+
+  --demo-bar: 56px;
+  --demo-gutter: 24px;
+  --demo-sheet: 0px;
+
+  position: relative;
+  min-height: 100dvh;
+  background: var(--demo-black);
+  color: var(--demo-text);
+  font-family: var(--font-demo-mono), 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 13px;
+  font-variant: normal;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+.demo-shell svg {
+  opacity: 1;
+}
+
+/* Scrolling panels inside the shell get a thin dark scrollbar, not the
+   browser's light default */
+.demo-shell * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
+}
+
+.demo-shell :focus-visible {
+  outline: 2px solid var(--demo-white);
+  outline-offset: 3px;
+}
+
+.demo-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── The diamond: slider thumbs, toggles, pips, the back mark. Nowhere else. ── */
+
+.demo-diamond {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+  flex: none;
+}
+
+/* ── Threshold backdrop: the constellation means nothing is running yet ── */
+
+.demo-threshold {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity var(--dur-move) var(--ease);
+}
+
+.demo-threshold > div,
+.demo-threshold canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.demo-shell[data-ready='true'] .demo-threshold {
+  opacity: 0;
+}
+
+.demo-shell[data-ready='true'][data-variant='scroll'] .demo-threshold {
+  opacity: 0.2;
+}
+
+/* ── Chrome rests dim and comes up on pointer or keyboard focus ── */
+
+.demo-chrome {
+  color: var(--demo-dim);
+  transition:
+    color var(--dur-fade) ease,
+    opacity var(--dur-move) var(--ease),
+    transform var(--dur-move) var(--ease);
+}
+
+.demo-chrome:hover,
+.demo-chrome:focus-within {
+  color: var(--demo-text);
+}
+
+.demo-shell[data-chrome='hidden'] .demo-chrome,
+.demo-shell[data-chrome='hidden'] .demo-bar {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── Bar ── */
+
+.demo-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  height: var(--demo-bar);
+  padding: 0 var(--demo-gutter);
+  color: var(--demo-dim);
+  transition: opacity var(--dur-move) var(--ease);
+}
+
+/* Text scrolls beneath this bar, so it is solid, not a veil */
+.demo-shell[data-variant='scroll'] .demo-bar {
+  position: fixed;
+  background: var(--demo-black);
+  border-bottom: 1px solid var(--demo-line);
+}
+
+.demo-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  justify-self: start;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--dur-fade) ease;
+}
+
+.demo-back:hover,
+.demo-back:focus-visible {
+  color: var(--demo-white);
+}
+
+.demo-back .demo-diamond {
+  background: currentColor;
+}
+
+.demo-back-short {
+  display: none;
+}
+
+.demo-title {
+  margin: 0;
+  color: var(--demo-white);
+  font-family: var(--font-demo-title), 'Inter', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-caps: small-caps;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.demo-pips {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+}
+
+.demo-pip {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 44px;
+  color: inherit;
+  transition: color var(--dur-quick) ease;
+}
+
+.demo-pip:hover,
+.demo-pip:focus-visible,
+.demo-pip[aria-current='page'] {
+  color: var(--demo-white);
+}
+
+.demo-pip[aria-current='page'] .demo-diamond {
+  background: currentColor;
+}
+
+/* ── Stage variant ── */
+
+.demo-main {
+  position: relative;
+  z-index: 1;
+}
+
+.demo-stage {
+  position: relative;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* The canvas, or whatever fills the stage */
+.demo-canvas {
+  position: absolute;
+  inset: 0 0 var(--demo-sheet) 0;
+  display: block;
+  width: 100%;
+  height: calc(100% - var(--demo-sheet));
+  opacity: 0;
+  transition: opacity var(--dur-move) var(--ease);
+}
+
+.demo-shell[data-ready='true'] .demo-canvas {
+  opacity: 1;
+}
+
+.demo-notes-link {
+  position: absolute;
+  right: var(--demo-gutter);
+  bottom: 20px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* ── Rail ── */
+
+.demo-rail {
+  position: absolute;
+  top: calc(var(--demo-bar) + 16px);
+  right: var(--demo-gutter);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  max-height: calc(100% - var(--demo-bar) - 96px);
+  background: var(--demo-veil);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--demo-line);
+  border-radius: var(--radius-rail);
+}
+
+/* The entrance: once the first frame is up, the rail slides in from the right */
+.demo-shell[data-ready='false'] .demo-stage .demo-rail {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
+.demo-rail[data-collapsed='true'] {
+  width: auto;
+}
+
+.demo-rail-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 44px;
+  padding: 0 18px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.demo-rail-toggle-state {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.demo-rail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 18px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.demo-rail-body[hidden] {
+  display: none;
+}
+
+.demo-rail-tabs {
+  display: flex;
+  gap: 18px;
+  padding: 0 18px;
+}
+
+.demo-rail-tab {
+  min-height: 44px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.demo-rail-tab[aria-selected='true'] {
+  color: var(--demo-white);
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+
+/* ── Controls ── */
+
+.demo-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.demo-field-head,
+.demo-select {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.demo-field label,
+.demo-field legend {
+  color: inherit;
+}
+
+.demo-field output {
+  color: var(--demo-white);
+}
+
+.demo-field[data-disabled='true'],
+.demo-toggle[data-disabled='true'],
+.demo-field:disabled {
+  opacity: 0.45;
+}
+
+/* Slider: 2 px track, filled part white, a 12 px diamond for a thumb */
+.demo-slider {
+  padding-top: 10px;
+}
+
+.demo-slider input[type='range'] {
+  display: block;
+  width: 100%;
+  height: 34px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.demo-slider input[type='range']::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(to right, var(--demo-white) var(--fill), var(--demo-line) var(--fill));
+}
+
+.demo-slider input[type='range']::-moz-range-track {
+  height: 2px;
+  background: linear-gradient(to right, var(--demo-white) var(--fill), var(--demo-line) var(--fill));
+}
+
+.demo-slider input[type='range']::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  background: var(--demo-bone);
+  border: 0;
+  border-radius: 0;
+  transform: rotate(45deg);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.demo-slider input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: var(--demo-bone);
+  border: 0;
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+
+.demo-slider input[type='range']:hover::-webkit-slider-thumb,
+.demo-slider input[type='range']:focus-visible::-webkit-slider-thumb {
+  background: var(--demo-white);
+}
+
+.demo-slider input[type='range']:focus-visible {
+  outline-offset: 0;
+}
+
+/* Toggle: a diamond outline that fills when on */
+.demo-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.demo-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.demo-toggle-mark {
+  width: 11px;
+  height: 11px;
+  margin-left: 2px;
+  border: 1px solid var(--demo-bone);
+  transform: rotate(45deg);
+  transition: background var(--dur-quick) ease;
+  flex: none;
+}
+
+.demo-toggle input:checked + .demo-toggle-mark {
+  background: var(--demo-bone);
+}
+
+.demo-toggle input:checked ~ span:last-child {
+  color: var(--demo-white);
+}
+
+.demo-toggle input:focus-visible + .demo-toggle-mark {
+  outline: 2px solid var(--demo-white);
+  outline-offset: 4px;
+}
+
+/* Segmented: plain text options, the chosen one white and underlined */
+.demo-segmented {
+  padding-top: 10px;
+}
+
+.demo-segmented legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+}
+
+.demo-segmented-options {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 18px;
+  clear: both;
+}
+
+.demo-segmented-options label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  transition: color var(--dur-quick) ease;
+}
+
+.demo-segmented-options input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.demo-segmented-options label:hover {
+  color: var(--demo-white);
+}
+
+.demo-segmented-options label[data-checked='true'] {
+  color: var(--demo-white);
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+
+.demo-segmented-options label:has(input:focus-visible) {
+  outline: 2px solid var(--demo-white);
+  outline-offset: 3px;
+}
+
+.demo-segmented-options label:has(input:disabled) {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Select: the native control, restyled */
+.demo-select {
+  align-items: center;
+  min-height: 44px;
+}
+
+.demo-select select {
+  min-width: 0;
+  max-width: 60%;
+  min-height: 32px;
+  padding: 0 28px 0 12px;
+  color: var(--demo-white);
+  font: inherit;
+  background-color: transparent;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--demo-bone) 50%),
+    linear-gradient(135deg, var(--demo-bone) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 50%,
+    calc(100% - 10px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  border: 1px solid var(--demo-line);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.demo-select select:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.demo-select option {
+  color: var(--demo-text);
+  background: var(--demo-black);
+}
+
+/* Buttons: text by default, one hairline pill per demo */
+.demo-text-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  transition: color var(--dur-quick) ease;
+}
+
+.demo-text-button:hover {
+  color: var(--demo-white);
+}
+
+.demo-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 22px;
+  color: var(--demo-white);
+  font: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background var(--dur-quick) ease,
+    color var(--dur-quick) ease;
+}
+
+.demo-button:hover {
+  color: var(--demo-black);
+  background: var(--demo-white);
+}
+
+.demo-button:disabled,
+.demo-text-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.demo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 18px;
+}
+
+/* ── Ledger: an underlined key and a plain value ── */
+
+.demo-ledger {
+  font-size: 12px;
+}
+
+.demo-ledger-stage {
+  position: absolute;
+  left: var(--demo-gutter);
+  bottom: calc(var(--demo-sheet) + 24px);
+  z-index: 4;
+  padding: 10px 14px;
+  background: var(--demo-veil);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: var(--radius-control);
+}
+
+.demo-ledger dl {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.demo-ledger dl > div {
+  display: flex;
+  gap: 1.5ch;
+}
+
+.demo-ledger dt,
+.demo-key {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.demo-ledger dt {
+  min-width: 11ch;
+}
+
+.demo-ledger dd {
+  margin: 0;
+  color: var(--demo-white);
+}
+
+.demo-shell [data-signal='compiled'] {
+  color: var(--signal-compiled);
+}
+
+.demo-shell [data-signal='interpreted'] {
+  color: var(--signal-interpreted);
+}
+
+.demo-shell [data-signal='change'] {
+  color: var(--signal-change);
+}
+
+/* ── Boot, pause, poster, shortcuts ── */
+
+.demo-boot,
+.demo-poster {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: var(--demo-gutter);
+  text-align: center;
+  pointer-events: none;
+}
+
+.demo-boot p {
+  margin: 0;
+  color: var(--demo-dim);
+}
+
+.demo-poster {
+  position: absolute;
+}
+
+.demo-poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.25;
+}
+
+.demo-poster p {
+  position: relative;
+  max-width: 44ch;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.demo-poster > :not(img) {
+  pointer-events: auto;
+}
+
+.demo-play {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--demo-sheet) + 28px);
+  z-index: 6;
+  min-height: 44px;
+  padding: 0 22px;
+  color: var(--demo-white);
+  background: var(--demo-veil);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+
+.demo-play:hover {
+  color: var(--demo-black);
+  background: var(--demo-white);
+}
+
+.demo-help {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 30;
+  width: min(360px, calc(100% - 32px));
+  padding: 18px 22px 8px;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--demo-line);
+  border-radius: var(--radius-rail);
+  transform: translate(-50%, -50%);
+}
+
+.demo-help dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.demo-help dl > div {
+  display: grid;
+  grid-template-columns: 7ch 1fr;
+  gap: 12px;
+}
+
+.demo-help dd {
+  margin: 0;
+  color: var(--demo-dim);
+}
+
+.demo-help kbd {
+  color: var(--demo-white);
+  font: inherit;
+}
+
+/* ── Notes: one 68-character column, plain text on black ── */
+
+.demo-notes {
+  position: relative;
+  max-width: calc(68ch + 2 * var(--demo-gutter));
+  padding: 96px var(--demo-gutter) 120px;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.demo-notes-section + .demo-notes-section {
+  margin-top: 56px;
+}
+
+.demo-notes h2 {
+  margin: 0 0 16px;
+  color: var(--demo-white);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.demo-notes h3 {
+  margin: 32px 0 8px;
+  color: var(--demo-white);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.demo-notes p {
+  margin: 0 0 16px;
+}
+
+.demo-notes a {
+  color: var(--demo-white);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.demo-notes code {
+  color: var(--demo-bone);
+  font: inherit;
+}
+
+.demo-notes-source {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.demo-notes-next {
+  margin-top: 72px !important;
+  color: var(--demo-dim);
+}
+
+/* ── Scroll variant ── */
+
+.demo-scroll {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 68ch);
+  padding-top: var(--demo-bar);
+}
+
+.demo-scroll-visual {
+  position: sticky;
+  top: var(--demo-bar);
+  height: calc(100dvh - var(--demo-bar));
+  overflow: hidden;
+}
+
+.demo-scroll-column {
+  min-width: 0;
+  padding: 48px 32px 120px;
+  font-size: 15px;
+  line-height: 1.7;
+  border-left: 1px solid var(--demo-line);
+}
+
+.demo-scroll-column p {
+  margin: 0 0 16px;
+}
+
+.demo-scroll-column h2 {
+  margin: 0 0 16px;
+  color: var(--demo-white);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.demo-shell[data-variant='scroll'] .demo-notes {
+  border-top: 1px solid var(--demo-line);
+}
+
+/* ── Phones: the rail becomes a bottom sheet ── */
+
+@media (max-width: 767px) {
+  .demo-shell {
+    --demo-gutter: 16px;
+  }
+
+  .demo-back-long,
+  .demo-pips {
+    display: none;
+  }
+
+  .demo-back-short {
+    display: inline;
+  }
+
+  .demo-bar {
+    grid-template-columns: auto 1fr;
+  }
+
+  .demo-title {
+    justify-self: end;
+  }
+
+  .demo-stage:has(.demo-sheet) {
+    --demo-sheet: 96px;
+  }
+
+  .demo-notes-link {
+    display: none;
+  }
+
+  /* The pause pill is fixed to the viewport, so it clears the sheet itself */
+  .demo-shell:has(.demo-sheet) .demo-play {
+    bottom: 124px;
+  }
+
+  .demo-sheet {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    height: 96px;
+    max-height: none;
+    border-width: 1px 0 0;
+    border-radius: var(--radius-rail) var(--radius-rail) 0 0;
+    transition: height var(--dur-move) var(--ease);
+  }
+
+  .demo-sheet[data-stop='half'] {
+    height: 50dvh;
+  }
+
+  .demo-sheet[data-stop='full'] {
+    height: calc(100dvh - var(--demo-bar));
+  }
+
+  .demo-sheet[data-dragging='true'] {
+    transition: none;
+  }
+
+  .demo-shell[data-ready='false'] .demo-stage .demo-sheet {
+    transform: translateY(24px);
+  }
+
+  .demo-sheet-handle {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 100%;
+    height: 28px;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .demo-sheet-handle span {
+    width: 36px;
+    height: 3px;
+    background: var(--demo-dim);
+    border-radius: 2px;
+  }
+
+  .demo-sheet .demo-rail-body {
+    padding-top: 0;
+  }
+
+  .demo-scroll {
+    display: block;
+  }
+
+  .demo-scroll-visual {
+    z-index: 2;
+    height: 40dvh;
+    background: var(--demo-black);
+    border-bottom: 1px solid var(--demo-line);
+  }
+
+  .demo-scroll-column {
+    padding: 32px var(--demo-gutter) 96px;
+    border-left: 0;
+  }
+}
+
+/* ── Transitions: both ends of every navigation are black, so only the
+   content changes. The title travels between the home list and the bar. ── */
+
+::view-transition-group(.demo-title-travel) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html:has(.demo-shell)::view-transition-old(root),
+html:has(.demo-shell)::view-transition-new(root) {
+  animation-duration: 240ms;
+}
+
+/* ── Reduced motion: a straight cut ── */
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+
+  .demo-shell *,
+  .demo-shell *::before,
+  .demo-shell *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
