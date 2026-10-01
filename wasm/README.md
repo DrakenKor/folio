@@ -10,8 +10,10 @@ The demo will work without WASM (using JavaScript fallback), but for optimal per
 
 Install wasm-pack:
 ```bash
-curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+cargo install wasm-pack --version 0.15.0 --locked
 ```
+
+The repository's `rust-toolchain.toml` installs Rust 1.98.1 and the WASM target through rustup.
 
 ### Build
 

@@ -342,7 +342,7 @@ export default function WASMDemoPage() {
             <div className="mt-4 p-3 bg-gray-800 rounded">
               <p className="font-medium">Install wasm-pack:</p>
               <code className="block mt-1 text-green-400">
-                curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+                cargo install wasm-pack --version 0.15.0 --locked
               </code>
             </div>
           </div>

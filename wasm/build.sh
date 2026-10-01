@@ -10,7 +10,7 @@ echo "🦀 Building WASM modules with size optimization..."
 # Check if wasm-pack is installed
 if ! command -v wasm-pack &> /dev/null; then
     echo "❌ wasm-pack is not installed. Please install it with:"
-    echo "curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh"
+    echo "cargo install wasm-pack --version 0.15.0 --locked"
     exit 1
 fi
 
@@ -41,7 +41,8 @@ build_module() {
             --out-dir ../public/wasm \
             --release \
             --no-typescript \
-            --no-pack
+            --no-pack \
+            -- --locked
     fi
 
     # Rename output files if needed

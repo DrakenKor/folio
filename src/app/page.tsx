@@ -1,6 +1,6 @@
 'use client'
 import { IOptions, MoveDirection, RecursivePartial } from '@tsparticles/engine'
-import Particles, { initParticlesEngine } from '@tsparticles/react'
+import Particles, { ParticlesProvider } from '@tsparticles/react'
 import { loadSlim } from '@tsparticles/slim' // if you are going to use `loadSlim`, install the "@tsparticles/slim" package too.
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -24,21 +24,6 @@ export default function Home() {
         setInitialized(true)
       }
     }, 2000)
-
-    initParticlesEngine(async (engine) => {
-      await loadSlim(engine)
-    }).then(() => {
-      if (mounted) {
-        clearTimeout(timeoutId)
-        setInitialized(true)
-      }
-    }).catch((err) => {
-      console.error('Particles initialization failed:', err)
-      if (mounted) {
-        clearTimeout(timeoutId)
-        setInitialized(true)
-      }
-    })
 
     return () => {
       mounted = false
@@ -267,12 +252,13 @@ export default function Home() {
       </div>
 
 
-      <Particles
-        id="particles"
-        className="z-0"
-        particlesLoaded={async (container: any) => {}}
-        options={options}
-      />
+      <ParticlesProvider init={loadSlim}>
+        <Particles
+          id="particles"
+          className="z-0"
+          options={options}
+        />
+      </ParticlesProvider>
     </>
   ) : (
     <div className="center h-screen bg-black">
