@@ -36,9 +36,9 @@ export function createRocks(env: Environment, field: Heightfield, trees: TreeSit
     builder.add(shape, m, {
       color: linearColor(STONE[Math.floor(random() * STONE.length)]!, 0.9 + random() * 0.2),
       // The ink hull stays continuous across the broad planes and bevels.
-      vertex: p => {
+      vertex: (p, _normal, index) => {
         const d = p.clone().sub(centre).divide(scale).normalize()
-        return { hull: [d.x, d.y, d.z] }
+        return { hull: [d.x, d.y, d.z], moss: [shape.attributes.position!.getZ(index) * 0.5 + 0.5] }
       }
     })
     shape.dispose()
@@ -64,9 +64,9 @@ export function createRocks(env: Environment, field: Heightfield, trees: TreeSit
   }
 
   const vertexColor = attribute('color', 'vec3')
-  const moss = smoothstep(0.78, 0.98, normalWorld.y).mul(0.48)
+  const moss = smoothstep(0.78, 0.98, normalWorld.y).mul(smoothstep(0.15, 0.72, attribute('moss', 'float'))).mul(0.86)
   const material = new CelMaterial(env, {
-    colorNode: mix(vertexColor, color('#7f8e58'), moss),
+    colorNode: mix(vertexColor, color('#65863f'), moss),
     outlineNormal: attribute('hull', 'vec3'),
     bandOffset: null
   })
