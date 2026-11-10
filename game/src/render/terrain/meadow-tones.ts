@@ -19,9 +19,9 @@ export function meadowPatch(env: Environment, xz: Node<'vec2'>, vertexStage = fa
  * ground grass, which is the blades' average colour so fading blades leave no hole.
  */
 export function meadowTones(patch: Node<'float'>) {
-  const base = mix(color('#425a49'), color('#5a6950'), patch)
-  const body = mix(color('#69845c'), color('#839466'), patch)
-  const tip = mix(color('#a5b489'), color('#afb086'), patch)
+  const base = mix(color('#3e5c4b'), color('#53694f'), patch)
+  const body = mix(color('#618659'), color('#799763'), patch)
+  const tip = mix(color('#9eb987'), color('#abb684'), patch)
   return { base, body, tip, ground: mix(mix(base, body, 0.8), tip, 0.12) }
 }
 
@@ -32,7 +32,7 @@ export function bladeTone(tones: ReturnType<typeof meadowTones>, t: Node<'float'
 
 /** Lighter, cooler grass where a gust presses it over and turns its paler side up. */
 export function gustSheen(c: Node<'vec3'>, gust: Node<'float'>): Node<'vec3'> {
-  const pressed = c.mul(vec3(1.04, 1.2, 1.34))
+  const pressed = c.mul(vec3(1.18, 1.42, 1.65))
   return mix(c, pressed, gust.clamp(0, 1))
 }
 
@@ -53,16 +53,16 @@ export function groundGrass(env: Environment, xz: Node<'vec2'>, patch: Node<'flo
   const tones = meadowTones(patch)
   const footprint = dFdx(xz).length().max(dFdy(xz).length()).toVar()
   // 1 while a feature of `size` metres spans several pixels.
-  const resolved = (size: number) => smoothstep(size * 0.1, size * 0.5, footprint).oneMinus()
+  const resolved = (size: number) => smoothstep(size * 0.08, size * 0.3, footprint).oneMinus()
   const calm = clearing.mul(0.7).oneMinus()
-  // Clump patches about 9 m, 1.7 m and 0.5 m across: lighter and warmer, or
+  // Clump patches about 9 m, 3 m and 0.5 m across: lighter and warmer, or
   // darker and cooler. The middle scale is the tufts' own growth, lush and dark.
   const large = smoothstep(0.38, 0.62, texture(env.noise, xz.div(36)).r)
   const sparse = clumpGrowth(env, xz).oneMinus()
   const small = smoothstep(0.36, 0.64, texture(env.noise, xz.div(22)).b).toVar()
-  const lift = large.sub(0.5).mul(0.16)
-    .add(sparse.sub(0.5).mul(0.1).mul(resolved(1.7)))
-    .add(small.sub(0.5).mul(0.05).mul(resolved(0.5)))
+  const lift = large.sub(0.5).mul(0.18)
+    .add(sparse.sub(0.5).mul(0.18).mul(resolved(2.5)))
+    .add(small.sub(0.5).mul(0.06).mul(resolved(0.5)))
   let c = tones.ground.add(tones.tip.sub(tones.base).mul(lift.mul(calm)))
   // Blades shade the ground at their roots, so each near tuft stands on its own dark patch.
   c = mix(c, tones.base.mul(0.9), tuftCover(env, xz).mul(near).mul(resolved(0.4)).mul(0.5))
@@ -82,6 +82,8 @@ export function groundGrass(env: Environment, xz: Node<'vec2'>, patch: Node<'flo
     .mul(resolved(0.3)).toVar()
   const paint = mix(tones.body, tones.tip, smoothstep(-0.3, 0.3, local.y).mul(0.4))
   c = mix(c, paint, mark.mul(0.22).mul(calm))
-  // The gust rides the detail, so it reads as pressed strokes rather than a wash.
-  return gustSheen(c, gust.mul(small.mul(0.5).add(mark.mul(0.3)).add(0.45)).mul(clearing.mul(0.85).oneMinus()))
+  // The gust rides long strokes and the near detail, so it reads as pressed grass rather than a wash.
+  const stroke = smoothstep(0.35, 0.65, texture(env.noise, vec2(uv.x.div(120), uv.y.div(200))).g)
+  const carrier = stroke.mul(0.85).add(small.mul(0.25)).add(mark.mul(0.2)).add(0.3)
+  return gustSheen(c, gust.mul(carrier).mul(clearing.mul(0.85).oneMinus()))
 }

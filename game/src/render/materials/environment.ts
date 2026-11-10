@@ -65,26 +65,26 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     /** Cel band shape shared by every cel material. */
     bands: {
       terminator: uniform(0.02),
-      highlight: uniform(0.36),
-      mid: uniform(0.58),
-      softness: uniform(0.06)
+      highlight: uniform(0.5),
+      mid: uniform(0.6),
+      softness: uniform(0.035)
     },
     /** Shade, rim and ink rules shared by every cel material. */
     shading: {
       /** Shade hue; surfaces keep their luminance and take this hue by `shadeHue`. */
-      shadeTint: uniform(new Vector3(0.52, 0.54, 1)),
+      shadeTint: uniform(new Vector3(0.7, 0.62, 1)),
       /** How far shade moves from the surface colour to the shade hue, 0..1. */
-      shadeHue: uniform(0.8),
+      shadeHue: uniform(0.7),
       /** Shade brightness relative to the surface under the sky fill. */
-      shadeValue: uniform(1.1),
+      shadeValue: uniform(1.22),
       /** How much of the fill lit faces lose, 0..1. */
       fillInLight: uniform(0.75),
       litSaturation: uniform(0.85),
       /** Faint warm rim on the lit side of silhouettes, 0..1. */
-      rim: uniform(0.28),
+      rim: uniform(0.45),
       /** Outline colour: surface colour times this value, shifted by `inkTint`. */
-      inkValue: uniform(0.2),
-      inkTint: colorUniform('#c4ccff')
+      inkValue: uniform(0.42),
+      inkTint: colorUniform('#d8dcf4')
     },
     /** Tileable seeded noise: r low, g mid, b high frequency, a cellular-ish. */
     noise: createNoiseTexture(subSeed(seed, 'noise'))

@@ -24,6 +24,8 @@ export const inkWidth = uniform(2)
 const LUMA = vec3(0.2126, 0.7152, 0.0722)
 /** Darkest an outline gets, so ink never reads as black. */
 const INK_FLOOR = vec3(0.035, 0.03, 0.055)
+/** The rim's colour: the key light's warmth. */
+const WARM_RIM = vec3(1, 0.82, 0.55)
 
 /** Ink width in pixels at a view depth: full up close, thinner far away, never under ~0.7 px. */
 export function inkPixels(depth: Node<'float'>): Node<'float'> {
@@ -33,7 +35,7 @@ export function inkPixels(depth: Node<'float'>): Node<'float'> {
 /** The ink rule: the surface colour, darker and slightly cooler, never black. */
 export function inkColor(env: Environment, surface: Node<'vec3'>): Node<'vec3'> {
   const { inkValue, inkTint } = env.shading
-  return mix(vec3(dot(surface, LUMA)), surface, 1.2).max(0).mul(inkValue).mul(inkTint).max(INK_FLOOR)
+  return mix(vec3(dot(surface, LUMA)), surface, 1.35).max(0).mul(inkValue).mul(inkTint).max(INK_FLOOR)
 }
 
 /** 1 within the ink width of an edge, given the distance to it in any unit; for shader-inked thin surfaces. */
@@ -98,13 +100,13 @@ class CelLightingModel extends LightingModel {
 
     // Warm rim on lit silhouettes; upward faces (ground, grass) never rim.
     const edge = float(1).sub(normalView.dot(positionViewDirection).clamp(0, 1))
-    const rim = smoothstep(0.55, 0.95, edge)
+    const rim = smoothstep(0.45, 0.9, edge)
       .mul(smoothstep(0.0, 0.3, ndl))
-      .mul(smoothstep(0.5, 0.85, normalWorld.y).oneMinus())
+      .mul(smoothstep(0.55, 0.9, normalWorld.y).oneMinus())
       .mul(lit)
       .mul(this.env.shading.rim)
       .mul(this.readability ? 1.5 : 1)
-    reflectedLight.directDiffuse.addAssign(light.mul(rim).mul(lambert(mix(diffuseColor.rgb, vec3(1), 0.5))))
+    reflectedLight.directDiffuse.addAssign(light.mul(rim).mul(lambert(mix(diffuseColor.rgb, WARM_RIM, 0.6))))
   }
 
   override indirect(...[builder]: IndirectArgs): void {
