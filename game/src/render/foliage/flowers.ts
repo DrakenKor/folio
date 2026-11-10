@@ -17,7 +17,7 @@ const SIDE = 13
 /** Flowers per cluster. */
 const PER_CLUSTER = 22
 /** Share of cells that hold a drift where the meadow allows one. */
-const CLUSTER_CHANCE = 0.3
+const CLUSTER_CHANCE = 0.45
 
 export function createFlowers(env: Environment, field: Heightfield) {
   const geometry = starGeometry()
@@ -31,7 +31,8 @@ export function createFlowers(env: Environment, field: Heightfield) {
     const flower = index.sub(cluster.mul(PER_CLUSTER))
     const gz = floor(cluster.div(side))
     const gx = cluster.sub(gz.mul(side))
-    const base = floor(fieldFocus(SIDE * CELL * 0.5 - 6).div(CELL)).sub(side.mul(0.5))
+    const focus = fieldFocus(SIDE * CELL * 0.5 - 6).toVar()
+    const base = floor(focus.div(CELL)).sub(side.mul(0.5))
     const cell = base.add(mod(vec2(gx, gz).sub(base), side)).toVar()
     const clusterSeed = cell.x.toInt().add(9000).mul(8192).add(cell.y.toInt().add(9000)).toVar()
     const seed = clusterSeed.mul(PER_CLUSTER).add(flower.toInt()).toVar()
@@ -49,12 +50,13 @@ export function createFlowers(env: Environment, field: Heightfield) {
     const site = texture(field.texture, xz.add(TERRAIN_HALF + 0.5).div(GRID)).level(float(0))
     const centreSite = texture(field.texture, centre.add(TERRAIN_HALF + 0.5).div(GRID)).level(float(0))
 
-    const fade = nearFade(vec3(xz.x, site.r, xz.y))
+    const edge = xz.sub(focus).abs()
+    const fade = nearFade(vec3(xz.x, site.r, xz.y)).mul(smoothstep(22, 30, edge.x.max(edge.y)).oneMinus())
     const threshold = rand(0x789a).mul(0.85)
     const exists = step(clusterRand(0x89ab), float(CLUSTER_CHANCE)).mul(step(0.9, centreSite.b)).mul(step(0.9, site.b))
     const keep = exists.mul(smoothstep(threshold, threshold.add(0.15), fade)).mul(trampleAt(env, xz).oneMinus())
     const size = mix(float(0.032), float(0.05), rand(0x9abc)).mul(keep)
-    const height = mix(float(0.16), float(0.3), rand(0xabcd))
+    const height = mix(float(0.43), float(0.67), rand(0xabcd))
     const lean = windAt(env, xz).lean.add(sin(env.time.mul(2.3).add(turn)).mul(0.05)).mul(height).mul(0.6)
     const yaw = rand(0xbcde).mul(6.283)
     const petal = positionGeometry.xz.mul(size)

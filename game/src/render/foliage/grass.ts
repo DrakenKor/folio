@@ -38,9 +38,9 @@ import { GRID, type Heightfield, TERRAIN_HALF } from '../terrain/heightfield'
 import { bladeTone, dryGrass, meadowPatch, meadowTones } from '../terrain/meadow-tones'
 import { fieldFocus, nearFade } from './bands'
 import { CLUMP_CELL, tuftAt } from './tufts'
-/** Clump cells per side of the field: 112 × 0.5 m covers 56 m. */
-const CLUMP_SIDE = 112
-/** Blades per tuft; 112² × 9 is about 113k blades. */
+/** Clump cells per side of the field: 176 × 0.5 m covers 88 m. */
+const CLUMP_SIDE = 176
+/** Blades per tuft; 176² × 9 is about 279k blades. */
 const BLADES = 9
 
 export function createGrass(env: Environment, field: Heightfield) {
@@ -99,16 +99,16 @@ export function createGrass(env: Environment, field: Heightfield) {
     const mask = site.b
     const edge = xz.sub(focus).abs()
     const fade = nearFade(vec3(xz.x, groundY, xz.y))
-      .mul(smoothstep(18, 26, edge.x.max(edge.y)).oneMinus()).toVar()
+      .mul(smoothstep(34, 42, edge.x.max(edge.y)).oneMinus()).toVar()
     const keep = step(clumpRand(0x4567), mask.mul(1.15)).mul(step(clumpRand(0x6d2b), uniforms.density))
     const trample = trampleAt(env, xz).toVar()
-    const height = mix(float(0.19), float(0.34), bladeRand(0x5678))
+    const height = mix(float(0.42), float(0.9), bladeRand(0x5678).pow(1.5))
       .mul(tuftHeight)
       .mul(r.mul(0.35).oneMinus())
       .mul(uniforms.height)
       .mul(keep)
       .mul(mask.mul(0.5).add(0.5))
-      .mul(mix(float(1), float(0.3), trample))
+      .mul(mix(float(1), float(0.36), trample))
       .mul(fade).toVar()
     const width = mix(float(0.055), float(0.085), bladeRand(0x6789)).mul(fade.mul(0.7).add(0.3)).mul(trample.mul(0.4).oneMinus())
 

@@ -11,8 +11,8 @@ export function createPost(renderer: WebGPURenderer, scene: Scene, camera: Camer
     outlineWidth: inkWidth,
     bloomStrength: uniform(0.65),
     bloomRadius: uniform(0.55),
-    saturation: uniform(0.94),
-    vignette: uniform(0.12)
+    saturation: uniform(1.08),
+    vignette: uniform(0.08)
   }
 
   const scenePass = celOutlinePass(scene, camera, uniforms.outlineWidth)

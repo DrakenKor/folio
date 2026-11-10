@@ -25,6 +25,6 @@ export function gustAt(env: Environment, xz: Node<'vec2'>): Node<'float'> {
 export function windAt(env: Environment, xz: Node<'vec2'>) {
   const gust = gustAt(env, xz).toVar()
   const sway = sin(env.time.mul(1.7).sub(xz.dot(env.windDirection).mul(0.22))).mul(0.5).add(0.5)
-  const lean = env.windStrength.mul(sway.mul(0.4).add(0.12).add(gust.mul(0.9)))
+  const lean = env.windStrength.mul(sway.mul(0.35).add(0.32).add(gust.mul(0.95)))
   return { gust, lean }
 }

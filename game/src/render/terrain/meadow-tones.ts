@@ -1,26 +1,21 @@
-// One clump field and palette for standing and painted grass.
-import type { Node } from 'three/webgpu'
-import { cameraPosition, color, dFdx, dFdy, dot, float, mix, smoothstep, texture, vec3 } from 'three/tsl'
+// One sunlit palette for standing blades and continuous painted grass.
+import type { Node, Texture } from 'three/webgpu'
+import { color, dFdx, dFdy, dot, float, mix, smoothstep, texture, vec2, vec3 } from 'three/tsl'
 import type { Environment } from '../materials/environment'
-import { clumpGrowth, tuftPaint } from '../foliage/tufts'
 
-/** Lushness shared by the ground colour and tuft growth. */
+/** Broad palette variation shared by standing blades and painted ground. */
 export function meadowPatch(env: Environment, xz: Node<'vec2'>, vertexStage = false): Node<'float'> {
-  const detail = smoothstep(24, 85, xz.distance(cameraPosition.xz)).oneMinus()
   const broad = texture(env.noise, xz.div(160))
-  const middle = texture(env.noise, xz.div(80))
   const b = vertexStage ? broad.level(float(0)).r : broad.r
-  const m = vertexStage ? middle.level(float(0)).r : middle.r
-  const distant = smoothstep(0.35, 0.65, b.mul(0.6).add(m.mul(0.4))).sub(0.5).mul(0.6).add(0.5)
-  return mix(distant, clumpGrowth(env, xz, vertexStage), detail)
+  return b.sub(0.5).mul(0.8).add(0.5)
 }
 
-/** Dry gaps and lush clumps share root, body and tip tones at every distance. */
+/** Root, body and warm tip tones shared at every distance. */
 export function meadowTones(patch: Node<'float'>) {
-  const base = mix(color('#697653'), color('#405f4c'), patch)
-  const body = mix(color('#919e6a'), color('#698b5b'), patch)
-  const tip = mix(color('#b0b581'), color('#93ac78'), patch)
-  return { base, body, tip, ground: mix(mix(base, body, 0.8), tip, 0.12) }
+  const base = mix(color('#3b6e31'), color('#5f8032'), patch)
+  const body = mix(color('#68a03b'), color('#8aa83b'), patch)
+  const tip = mix(color('#b3d463'), color('#d9d87a'), patch)
+  return { base, body, tip, ground: mix(mix(base, body, 0.8), tip, 0.16) }
 }
 
 /** Blade colour from its shaded root to its sunlit tip. */
@@ -34,22 +29,18 @@ export function dryGrass(c: Node<'vec3'>, amount: Node<'float'>): Node<'vec3'> {
   return mix(c, vec3(luma).mul(vec3(1.18, 1.01, 0.62)), amount.mul(0.22))
 }
 
-/** Painted clumps keep their palette and pattern as individual strokes recede. */
-export function groundGrass(env: Environment, xz: Node<'vec2'>, patch: Node<'float'>, clearing: Node<'float'>): Node<'vec3'> {
+/** Mipmapped directional strokes blend in scale as their pixel footprint grows. */
+export function groundGrass(env: Environment, paint: Texture, xz: Node<'vec2'>, patch: Node<'float'>, clearing: Node<'float'>): Node<'vec3'> {
   const tones = meadowTones(patch)
+  const direction = env.windDirection
+  const uv = vec2(xz.dot(vec2(direction.y.negate(), direction.x)), xz.dot(direction))
   const footprint = dFdx(xz).length().max(dFdy(xz).length()).toVar()
-  const resolved = (size: number) => smoothstep(size * 0.08, size * 0.3, footprint).oneMinus()
-  const calm = clearing.mul(0.55).oneMinus()
-  const large = smoothstep(0.38, 0.62, texture(env.noise, xz.div(160)).r)
-  let c = tones.ground.mul(large.sub(0.5).mul(0.06).add(1))
-  const paint = tuftPaint(env, xz)
-  const tuft = paint.cover.mul(resolved(0.4)).toVar()
-  c = mix(c, tones.base, tuft.mul(0.3).mul(calm))
-  const mark = paint.strokes.mul(resolved(0.4)).toVar()
-  c = mix(c, mix(tones.body, tones.tip, 0.25), mark.mul(0.5).mul(calm))
-  // Larger brush marks survive behind the standing blades without changing the grass palette.
-  const middle = tuftPaint(env, xz.div(3))
-  const brush = middle.strokes.mul(resolved(1.2)).toVar()
-  c = mix(c, tones.body, brush.mul(0.32).mul(calm))
-  return c
+  const fine = texture(paint, uv.div(8)).rg
+  const middle = texture(paint, uv.div(28).add(0.37)).rg
+  const broad = texture(paint, uv.div(76).add(0.71)).rg
+  const detail = mix(middle, fine, smoothstep(0.025, 0.12, footprint).oneMinus())
+  const marks = mix(detail, broad, smoothstep(0.18, 0.7, footprint)).toVar()
+  const calm = clearing.mul(0.35).oneMinus()
+  const c = mix(tones.ground, tones.base, marks.r.mul(0.5).mul(calm))
+  return mix(c, mix(tones.body, tones.tip, 0.82), marks.g.mul(0.9).mul(calm))
 }
