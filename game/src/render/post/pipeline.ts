@@ -11,8 +11,8 @@ export function createPost(renderer: WebGPURenderer, scene: Scene, camera: Camer
     outlineWidth: inkWidth,
     bloomStrength: uniform(0.65),
     bloomRadius: uniform(0.55),
-    saturation: uniform(0.94),
-    vignette: uniform(0.12)
+    saturation: uniform(1.04),
+    vignette: uniform(0.08)
   }
 
   const scenePass = celOutlinePass(scene, camera, uniforms.outlineWidth)
@@ -25,7 +25,7 @@ export function createPost(renderer: WebGPURenderer, scene: Scene, camera: Camer
   bloomPass.strength = uniforms.bloomStrength
   bloomPass.radius = uniforms.bloomRadius
 
-  let rgb = sceneColor.rgb.add(bloomPass.rgb)
+  let rgb = sceneColor.rgb.add(bloomPass.rgb).mul(1.08)
   // One gentle grade; NeutralToneMapping supplies the highlight shoulder.
   const luma = dot(rgb, vec3(0.2126, 0.7152, 0.0722))
   rgb = mix(vec3(luma), rgb, uniforms.saturation)

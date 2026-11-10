@@ -4,9 +4,9 @@ import type { Node } from 'three/webgpu'
 import { cameraPosition, cameraWorldMatrix, smoothstep, vec4 } from 'three/tsl'
 
 /** Blades are at full density up to this distance from the camera, in metres. */
-export const NEAR_END = 26
+export const NEAR_END = 38
 /** Blades are gone by this distance; beyond it the ground grass draws alone. */
-export const FAR_END = 44
+export const FAR_END = 76
 
 /** Ground point a foliage field centres on: `ahead` metres in front of the camera, so the field covers what it sees. */
 export function fieldFocus(ahead: number): Node<'vec2'> {

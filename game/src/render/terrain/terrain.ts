@@ -5,6 +5,7 @@ import { Mesh, PlaneGeometry } from 'three/webgpu'
 import { cameraViewMatrix, color, dot, Fn, mix, normalWorldGeometry, positionWorld, smoothstep, texture, vec3, vec4 } from 'three/tsl'
 import { trampleAt, triplanarNoise, type Environment } from '../materials/environment'
 import { gustAt } from '../materials/wind'
+import { createGrassPaint } from '../foliage/paint'
 import { MeadowMaterial } from './meadow-material'
 import { GRID, type Heightfield, TERRAIN_HALF, TERRAIN_SIZE } from './heightfield'
 import { dryGrass, groundGrass, meadowPatch, meadowTones } from './meadow-tones'
@@ -28,6 +29,7 @@ export function createTerrain(env: Environment, field: Heightfield) {
   }
   geometry.computeBoundingSphere()
 
+  const paint = createGrassPaint(env.seed)
   const xz = positionWorld.xz
   const fieldUv = xz.add(TERRAIN_HALF + 0.5).div(GRID)
   const sample = texture(field.texture, fieldUv)
@@ -42,9 +44,9 @@ export function createTerrain(env: Environment, field: Heightfield) {
     // Ground-plane detail would stretch down steep slopes, so it calms there as in the trampled ring.
     const calm = trample.max(smoothstep(0.78, 0.95, normalWorldGeometry.y).oneMinus())
     const patch = meadowPatch(env, xz).toVar()
-    const meadow = dryGrass(groundGrass(env, xz, patch, calm), trample.mul(fine.mul(0.4).add(0.6)))
+    const meadow = dryGrass(groundGrass(env, paint, xz, patch, calm), trample.mul(fine.mul(0.4).add(0.6)))
     // The path: soft edges broken in half-metre bites where the ground grass thins into worn earth.
-    const earth = mix(color('#967d59'), color('#a88e66'), fine.mul(0.25).add(0.4))
+    const earth = mix(color('#867653'), color('#a18d68'), fine)
     const luma = vec3(0.2126, 0.7152, 0.0722)
     const dirt = earth.mul(dot(meadowTones(patch).ground, luma).div(dot(earth, luma)))
     let ground = mix(meadow, dirt, pathAmount)

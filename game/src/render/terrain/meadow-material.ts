@@ -6,7 +6,7 @@ import type { Environment } from '../materials/environment'
 
 /** A modest cool sheen from grass turning its paler side towards the light. */
 export function gustSheen(c: Node<'vec3'>, gust: Node<'float'>): Node<'vec3'> {
-  return mix(c, c.mul(vec3(1.16, 1.27, 1.37)), gust.clamp(0, 1))
+  return mix(c, c.mul(vec3(1.27, 1.4, 1.48)), gust.clamp(0, 1))
 }
 
 /** Grass sheen affects direct sunlight; cast shadows retain their own grass tone. */
@@ -27,4 +27,3 @@ export class MeadowMaterial extends CelMaterial {
     return model
   }
 }
-
