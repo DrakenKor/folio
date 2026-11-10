@@ -1,62 +1,61 @@
 import { Group, Mesh, Vector3, type Node } from 'three/webgpu'
-import { abs, attribute, color, float, fract, max, min, mod, mrt, smoothstep, vec4 } from 'three/tsl'
+import { abs, attribute, color, float, max, mod, mrt, smoothstep, vec2, vec4 } from 'three/tsl'
 import { CelMaterial, inkColor } from '../materials/cel'
 import type { Environment } from '../materials/environment'
-import { carve, inset, split, StoneGeometry, type Cut, type Point } from './monolith-cells'
+import { carve, split, StoneGeometry, type Cut, type Point } from './monolith-cells'
 
 export const SHAFT_BASE = 1.25
 export const SHAFT_HEIGHT = 6.6
 export const STONE_TURN = -0.24
-/** The warm-grey stone of the shaft, cap, plinth and ring: the rocks' family, a step lighter. */
 export const MONOLITH_STONE = '#a59e90'
 export const CYAN = '#65e9df'
-/** Height of the crystal's centre above the shaft's foot, where the pulse ends. */
 export const CRYSTAL_RISE = SHAFT_HEIGHT + 2.05
-const BAND = SHAFT_HEIGHT / 3
-const GROOVE_DEPTH = 0.08
-/** How far each groove wall leans out, so the walls show between face and floor. */
-const WALL_SPREAD = 0.02
+const GROOVE_DEPTH = 0.075
+const DIAMONDS: Point[] = [[0.76, 2.22], [0.40, 1.17]]
+const DIAMOND_CENTRE = 2.55
+const LATTICE_ROWS = [4.65, 5.30, 5.95, SHAFT_HEIGHT]
 
-/** One calm pulse, followed by a soft release, travelling from the foot to the crystal. */
+/** A broad, calm crest climbs to the crystal and leaves a short luminous wake. */
 export function climbingPulse(env: Environment, height: number | Node<'float'>): Node<'float'> {
-  const behind = mod(env.time.mul(1.8).add(11.7), 13).sub(1).sub(height)
-  return smoothstep(-0.3, 0.08, behind).mul(smoothstep(0.4, 1.5, behind).oneMinus())
+  const behind = mod(env.time.mul(1.45).add(12.9), 13).sub(0.6).sub(height)
+  return smoothstep(-0.40, 0.06, behind).mul(smoothstep(0.55, 2.1, behind).oneMinus())
 }
 
-/** Convex stone cells have bevelled walls down to a continuous, recessed luminous floor. */
+/** The stone face stays continuous except at the designed, recessed grooves. */
 export function createCarvedShaft(env: Environment): Group {
   const group = new Group()
   group.rotation.y = STONE_TURN
   const cuts = carvingCuts()
-  const seams: Cut[] = [-0.93, 0.93].map(u => ({ a: [u, 0], b: [u, SHAFT_HEIGHT], width: 0 }))
   let cells = carve([[-1, 0], [1, 0], [1, SHAFT_HEIGHT], [-1, SHAFT_HEIGHT]], cuts)
-  for (const cut of seams) cells = cells.flatMap(cell => split(cell, cut))
+  for (const u of [-0.93, 0.93]) cells = cells.flatMap(cell => split(cell, { a: [u, 0], b: [u, SHAFT_HEIGHT], width: 0 }))
   const surface = new StoneGeometry()
   const floor = new StoneGeometry()
   const cap = new StoneGeometry()
   for (let face = 0; face < 4; face++) {
     for (const cell of cells) {
-      const bottom = inset(cell, cell.map(() => -WALL_SPREAD)) ?? cell
-      const top3 = cell.map(p => facePoint(p, face, 0))
-      const bottom3 = bottom.map(p => facePoint(p, face, GROOVE_DEPTH))
-      // Corner chamfers catch the light; groove walls sit a step darker.
-      const chamfer = cell.every(p => Math.abs(p[0]) >= 0.93 - 1e-6)
-      surface.polygon(top3, chamfer ? 1.14 : 1)
+      const top = cell.map(p => facePoint(p, face, 0))
+      surface.polygon(top, 1, cell.map(faceUv))
       for (let i = 0; i < cell.length; i++) {
         const j = (i + 1) % cell.length
-        surface.polygon([top3[i]!, bottom3[i]!, bottom3[j]!, top3[j]!], 0.66)
+        const bevel = grooveBevel(cell[i]!, cell[j]!, cuts)
+        if (bevel === 0) continue
+        const a = cell[i]!
+        const b = cell[j]!
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1])
+        const wall = (p: Point): Point => [p[0] + (b[1] - a[1]) / length * bevel, p[1] - (b[0] - a[0]) / length * bevel]
+        surface.polygon([top[i]!, facePoint(wall(a), face, GROOVE_DEPTH), facePoint(wall(b), face, GROOVE_DEPTH), top[j]!], 0.86)
       }
     }
     for (const [left, right] of [[-1, -0.93], [-0.93, 0.93], [0.93, 1]] as Point[]) {
       const quad: Point[] = [[left, 0], [right, 0], [right, SHAFT_HEIGHT], [left, SHAFT_HEIGHT]]
-      floor.polygon(quad.map(p => facePoint(p, face, GROOVE_DEPTH + 0.002)), 1, quad)
-      cap.polygon([facePoint([left, SHAFT_HEIGHT], face, 0), facePoint([right, SHAFT_HEIGHT], face, 0), new Vector3(0, SHAFT_BASE + SHAFT_HEIGHT + 0.95, 0)], 1.06)
+      floor.polygon(quad.map(p => facePoint(p, face, GROOVE_DEPTH + 0.002)), 1, quad.map(faceUv))
+      cap.polygon([facePoint([left, SHAFT_HEIGHT], face, 0), facePoint([right, SHAFT_HEIGHT], face, 0), new Vector3(0, SHAFT_BASE + SHAFT_HEIGHT + 0.95, 0)], 1)
     }
   }
   const material = new CelMaterial(env, {
     colorNode: color(MONOLITH_STONE).mul(attribute('stoneValue', 'float')),
-    outlineColor: null,
-    landmarkSpill: 0.15
+    emissiveNode: color(CYAN).mul(latticeWake(env)).mul(0.18),
+    outlineColor: null, landmarkSpill: 0.15
   })
   material.name = 'monolith-stone'
   const mesh = new Mesh(surface.build(), material)
@@ -68,71 +67,93 @@ export function createCarvedShaft(env: Environment): Group {
   crown.castShadow = true
   group.add(crown)
 
+  const glow = grooveGlow(env)
   const inlay = new CelMaterial(env, {
-    color: '#2f3532', emissiveNode: grooveGlow(env), landmarkSpill: 0.3,
+    color: '#56605b', emissiveNode: glow, landmarkSpill: 0.15,
     outlineColor: inkColor(env, color(MONOLITH_STONE).rgb), outlineNormal: attribute('hull', 'vec3')
   })
   inlay.name = 'monolith-groove-floor'
-  inlay.mrtNode = mrt({ glow: vec4(grooveGlow(env).mul(1.7), 1) })
+  inlay.mrtNode = mrt({ glow: vec4(glow.mul(1.7), 1) })
   group.add(new Mesh(floor.build(), inlay))
   return group
 }
 
-/**
- * Light on the groove floors: brightest along each groove's centre line, darker
- * beside the walls. The primary lines carry the pulse; lattice cells light in
- * sequence behind it, and the glow strengthens slightly towards the top.
- */
-function grooveGlow(env: Environment): Node<'vec3'> {
-  const uv = attribute('carveUv', 'vec2')
-  const diamond = (width: number, height: number) => abs(abs(uv.x).div(width).add(abs(uv.y.sub(SHAFT_HEIGHT / 2)).div(height)).sub(1)).mul(width)
-  const primaryDistance = uv.x.abs().min(diamond(0.88, 3.12)).min(diamond(0.60, 2.12)).min(diamond(0.32, 1.12))
-  const primary = smoothstep(0.07, 0.02, primaryDistance)
-  const band = uv.y.div(BAND).floor().clamp(0, 2)
-  const spacing = float(BAND).div(float(2).pow(band))
-  const local = uv.y.sub(band.mul(BAND))
-  const lineDistance = (v: Node<'float'>) => fract(v.div(spacing).add(0.5)).sub(0.5).abs().mul(spacing)
-  const rise = uv.x.add(1).mul(1.1)
-  const diagonals = min(lineDistance(local.sub(rise)), lineDistance(local.add(rise))).div(Math.hypot(1, 1.1))
-  const bandEdge = fract(uv.y.div(BAND).add(0.5)).sub(0.5).abs().mul(BAND)
-  const lattice = max(smoothstep(0.03, 0.006, min(lineDistance(local), diagonals)), smoothstep(0.045, 0.012, bandEdge))
-  const row = local.div(spacing).floor().add(0.5).mul(spacing).add(band.mul(BAND))
-  const primaryEnergy = climbingPulse(env, uv.y).mul(0.9).add(0.8)
-  const latticeEnergy = climbingPulse(env, row).mul(0.55).add(0.6).add(band.mul(0.06))
-  const lift = uv.y.div(SHAFT_HEIGHT).mul(0.35).add(1)
-  return color(CYAN).mul(max(primary.mul(primaryEnergy), lattice.mul(latticeEnergy)).mul(lift))
+/** Only exposed cut boundaries have walls; polygon partition edges stay flush. */
+function grooveBevel(a: Point, b: Point, cuts: Cut[]): number {
+  const x = (a[0] + b[0]) * 0.5
+  const y = (a[1] + b[1]) * 0.5
+  const cut = cuts.find(cut => {
+    const dx = cut.b[0] - cut.a[0]
+    const dy = cut.b[1] - cut.a[1]
+    const length = Math.hypot(dx, dy)
+    const along = ((x - cut.a[0]) * dx + (y - cut.a[1]) * dy) / length
+    const across = Math.abs((x - cut.a[0]) * dy - (y - cut.a[1]) * dx) / length
+    return along > -1e-6 && along < length + 1e-6 && Math.abs(across - cut.width) < 1e-6
+  })
+  return cut ? Math.min(0.012, cut.width * 0.35) : 0
 }
 
-/** A spine and three nested diamonds over a triangular grid of 1, 2, then 4 subdivisions. */
+/** The spine carries the crest; diamonds and triangular cells illuminate in its wake. */
+function grooveGlow(env: Environment): Node<'vec3'> {
+  const uv = carvingUv()
+  const spine = smoothstep(0.025, 0.078, abs(uv.x)).oneMinus()
+  let diamond: Node<'float'> = float(0)
+  for (const [width, height] of DIAMONDS) {
+    const distance = abs(abs(uv.x).div(width).add(abs(uv.y.sub(DIAMOND_CENTRE)).div(height)).sub(1)).mul(width)
+    diamond = max(diamond, smoothstep(0.008, 0.030, distance).oneMinus())
+  }
+  const pulse = climbingPulse(env, uv.y)
+  const lit = spine.mul(pulse.mul(3.6).add(0.42)).max(diamond.mul(pulse.mul(1.15).add(0.30)))
+  const lattice = smoothstep(4.63, 4.67, uv.y).mul(latticeWake(env).mul(1.5).add(0.13))
+  return color(CYAN).mul(lit.max(lattice))
+}
+
+/** Triangular cells respond after the crest, with the outside cells following the centre. */
+function latticeWake(env: Environment): Node<'float'> {
+  const uv = carvingUv()
+  let energy: Node<'float'> = float(0)
+  for (let band = 0; band < 3; band++) {
+    const low = LATTICE_ROWS[band]!
+    const high = LATTICE_ROWS[band + 1]!
+    const count = 2 ** band
+    const cell = uv.x.add(1).mul(count / 2).floor().add(0.5).mul(2 / count).sub(1)
+    const wake = climbingPulse(env, cell.abs().mul(0.25).add((low + high) * 0.5 + 0.45))
+    const region = smoothstep(low - 0.02, low + 0.02, uv.y).mul(smoothstep(high - 0.02, high + 0.02, uv.y).oneMinus())
+    energy = max(energy, region.mul(wake))
+  }
+  return energy
+}
+
+/** Interpolate physical face coordinates before undoing the shaft's taper. */
+function faceUv([u, y]: Point): Point {
+  return [u * (1.24 - y / SHAFT_HEIGHT * 0.40), y]
+}
+
+function carvingUv(): Node<'vec2'> {
+  const p = attribute('carveUv', 'vec2')
+  return vec2(p.x.div(p.y.mul(-0.40 / SHAFT_HEIGHT).add(1.24)), p.y)
+}
+
+/** Two nested diamonds lead into triangular rows doubling towards the crown. */
 function carvingCuts(): Cut[] {
-  const cuts: Cut[] = [{ a: [0, 0], b: [0, SHAFT_HEIGHT], width: 0.075 }]
-  for (const [width, height] of [[0.88, 3.12], [0.60, 2.12], [0.32, 1.12]] as Point[]) {
-    const diamond: Point[] = [[0, 3.3 - height], [width, 3.3], [0, 3.3 + height], [-width, 3.3]]
-    diamond.forEach((a, i) => cuts.push({ a, b: diamond[(i + 1) % 4]!, width: 0.06 }))
+  const cuts: Cut[] = [{ a: [0, 0], b: [0, SHAFT_HEIGHT], width: 0.095 }]
+  for (const [width, height] of DIAMONDS) {
+    const diamond: Point[] = [[0, DIAMOND_CENTRE - height], [width, DIAMOND_CENTRE], [0, DIAMOND_CENTRE + height], [-width, DIAMOND_CENTRE]]
+    diamond.forEach((a, i) => cuts.push({ a, b: diamond[(i + 1) % 4]!, width: 0.032 }))
   }
   for (let band = 0; band < 3; band++) {
     const count = 2 ** band
-    const y = band * 2.2
-    for (let k = 0; k <= count; k++) cuts.push({ a: [-1, y + k * 2.2 / count], b: [1, y + k * 2.2 / count], width: k % count === 0 ? 0.04 : 0.032 })
-    for (const slope of [-1, 1]) {
-      for (let k = -count; k <= count * 2; k++) {
-        const a: Point = [-1, y + k * 2.2 / count]
-        const b: Point = [1, a[1] + slope * 2.2]
-        const ends = clipBand(a, b, y, y + 2.2)
-        if (ends) cuts.push({ a: ends[0], b: ends[1], width: 0.032 })
-      }
+    const low = LATTICE_ROWS[band]!
+    const high = LATTICE_ROWS[band + 1]!
+    cuts.push({ a: [-1, low], b: [1, low], width: 0.012 })
+    for (let i = 0; i < count; i++) {
+      const left = -1 + i * 2 / count
+      const right = -1 + (i + 1) * 2 / count
+      const tip: Point = [(left + right) * 0.5, high]
+      cuts.push({ a: [left, low], b: tip, width: 0.012 }, { a: tip, b: [right, low], width: 0.012 })
     }
   }
   return cuts
-}
-
-function clipBand(a: Point, b: Point, low: number, high: number): [Point, Point] | null {
-  const dy = b[1] - a[1]
-  const t0 = Math.max(0, Math.min((low - a[1]) / dy, (high - a[1]) / dy))
-  const t1 = Math.min(1, Math.max((low - a[1]) / dy, (high - a[1]) / dy))
-  if (t1 - t0 < 1e-6) return null
-  const at = (t: number): Point => [a[0] + (b[0] - a[0]) * t, a[1] + dy * t]
-  return [at(t0), at(t1)]
 }
 
 function facePoint([u, y]: Point, face: number, depth: number): Vector3 {

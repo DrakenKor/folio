@@ -88,9 +88,10 @@ class CelLightingModel extends LightingModel {
     let t: Node<'float'> = ndl
     // Painterly terminator breakup up close, calm broad bands in the distance.
     if (this.bandOffset) t = t.add(this.bandOffset.mul(smoothstep(25, 90, positionView.z.negate()).oneMinus()))
-    const form = smoothstep(terminator.sub(softness), terminator.add(softness), t)
+    const feather = softness.max(fwidth(t).mul(0.75)).max(0.045)
+    const form = smoothstep(terminator.sub(feather), terminator.add(feather), t)
       .mul(mid)
-      .add(smoothstep(highlight.sub(softness), highlight.add(softness), t).mul(float(1).sub(mid)))
+      .add(smoothstep(highlight.sub(feather), highlight.add(feather), t).mul(float(1).sub(mid)))
     // Faces turning from the light are already in shade; ignoring the map there removes acne.
     const facing = smoothstep(terminator, terminator.add(0.15), ndl)
     const cast = mix(float(1), shadowMap, facing).mul(cloudLight(this.env))
@@ -101,7 +102,7 @@ class CelLightingModel extends LightingModel {
 
     // Warm rim on lit silhouettes; upward faces (ground, grass) never rim.
     const edge = float(1).sub(normalView.dot(positionViewDirection).clamp(0, 1))
-    const rim = smoothstep(0.45, 0.9, edge)
+    const rim = smoothstep(0.68, 0.98, edge)
       .mul(smoothstep(0.0, 0.3, ndl))
       .mul(smoothstep(0.55, 0.9, normalWorld.y).oneMinus())
       .mul(lit)

@@ -14,8 +14,18 @@ export function createMonolithSite(env: Environment, field: Heightfield): Group 
   let y = 0
   for (const [size, height] of [[3.25, 0.43], [2.55, 0.40], [1.85, 0.42]] as Point[]) {
     const shape = tierShape(size)
-    const geometry = new ExtrudeGeometry(shape, { depth: height - 0.16, bevelEnabled: true, bevelSize: 0.10, bevelThickness: 0.08, bevelSegments: 1, steps: 1 })
-    const matrix = new Matrix4().makeRotationX(-Math.PI / 2).setPosition(0, y + 0.08, 0)
+    const geometry = new ExtrudeGeometry(shape, { depth: height - 0.24, bevelEnabled: true, bevelSize: 0.16, bevelThickness: 0.12, bevelSegments: 2, steps: 1 })
+    const positions = geometry.attributes.position!
+    for (let i = 0; i < positions.count; i++) {
+      const x = positions.getX(i)
+      const z = positions.getY(i)
+      const edge = Math.max(Math.abs(x), Math.abs(z)) / size
+      const wear = Math.max(0, Math.sin(x * 2.1 + z * 1.7) - 0.15) * Math.max(0, edge - 0.65) * 0.28
+      const top = Math.max(0, Math.min(1, (positions.getZ(i) + 0.12) / height))
+      positions.setZ(i, positions.getZ(i) - wear * top)
+    }
+    geometry.computeVertexNormals()
+    const matrix = new Matrix4().makeRotationX(-Math.PI / 2).setPosition(0, y + 0.12, 0)
     builder.add(geometry, matrix, {
       color: linearColor(MONOLITH_STONE),
       vertex: p => ({ tierHalf: [size], hull: [p.x / size, 0.3, p.z / size] })
@@ -25,11 +35,11 @@ export function createMonolithSite(env: Environment, field: Heightfield): Group 
   }
   const edge = max(abs(positionLocal.x), abs(positionLocal.z)).div(attribute('tierHalf', 'float'))
   const patch = sin(positionLocal.x.mul(1.15).add(positionLocal.z.mul(0.55))).add(sin(positionLocal.z.mul(1.5))).mul(0.25).add(0.5)
-  const moss = smoothstep(0.5, 0.85, edge).mul(smoothstep(0.2, 0.55, patch)).mul(smoothstep(0.7, 0.95, normalWorld.y))
+  const moss = smoothstep(0.55, 0.88, edge).mul(smoothstep(0.10, 0.45, patch)).mul(smoothstep(0.05, 0.65, normalWorld.y))
   const material = new CelMaterial(env, {
-    colorNode: mix(attribute('color', 'vec3'), color('#5f7a3c'), moss.mul(0.88)),
+    colorNode: mix(attribute('color', 'vec3'), color('#526d34'), moss.mul(0.95)),
     outlineNormal: attribute('hull', 'vec3'),
-    landmarkSpill: 0.75
+    landmarkSpill: 0.32
   })
   material.name = 'monolith-plinth'
   const plinth = new Mesh(builder.build(), material)
@@ -41,11 +51,11 @@ export function createMonolithSite(env: Environment, field: Heightfield): Group 
 
 function tierShape(size: number): Shape {
   const shape = new Shape()
-  const corner = 0.35
   for (let side = 0; side < 4; side++) {
-    const chip = Math.sin(size * 3 + side * 1.7) * size * 0.48
-    const wear = 0.06 + (side % 3) * 0.035
-    const edge: Point[] = [[-size + corner, -size], [chip - 0.20, -size], [chip - 0.10, -size + wear], [chip + 0.14, -size + wear * 0.9], [chip + 0.24, -size], [size - corner, -size]]
+    const corner = 0.28 + (Math.sin(size * 2 + side) * 0.5 + 0.5) * 0.24
+    const chip = Math.sin(size * 3 + side * 1.7) * Math.min(size * 0.48, size - corner - 0.70)
+    const wear = 0.12 + (side % 3) * 0.045
+    const edge: Point[] = [[-size + corner, -size], [chip - 0.60, -size], [chip - 0.20, -size + wear], [chip + 0.20, -size + wear * 0.75], [chip + 0.65, -size], [size - corner, -size]]
     const angle = side * Math.PI / 2
     edge.forEach(([x, z], i) => {
       const u = x * Math.cos(angle) - z * Math.sin(angle)
