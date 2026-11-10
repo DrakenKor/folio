@@ -39,7 +39,7 @@ export class MeadowView implements RenderView {
     })
     this.camera.camera.far = 4000
     this.meadow = createMeadow(world.seed)
-    this.knight = new CharacterView(asset)
+    this.knight = new CharacterView(asset, { env: this.meadow.env })
     this.meadow.scene.add(this.knight.object)
     this.post = createPost(renderer, this.meadow.scene, this.camera.camera)
     this.registerBookmarks()
@@ -82,6 +82,7 @@ export class MeadowView implements RenderView {
     if (frame.world.seed !== this.meadow.field.seed) {
       this.disposeScene()
       this.meadow = createMeadow(frame.world.seed)
+      this.knight.setEnvironment(this.meadow.env)
       this.meadow.scene.add(this.knight.object)
       this.post = createPost(this.renderer, this.meadow.scene, this.camera.camera)
       this.registerBookmarks()

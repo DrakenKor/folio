@@ -1,7 +1,7 @@
 // Uniforms shared by every material in one scene: time, light, wind and haze.
 // Each scene owns one Environment, so two views never fight over globals.
 import { Color, type Node, type UniformNode, DataTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, RGBAFormat, UnsignedByteType, Vector2, Vector3 } from 'three/webgpu'
-import { abs, positionWorld, smoothstep, step, texture, uniform } from 'three/tsl'
+import { abs, float, positionWorld, smoothstep, step, texture, uniform } from 'three/tsl'
 import { Noise2D, subSeed } from '../rng'
 
 export interface Palette {
@@ -15,11 +15,11 @@ export interface Palette {
 }
 
 export const MEADOW_PALETTE: Palette = {
-  sun: '#ffdcaa',
-  skyFill: '#a3aeea',
-  groundFill: '#9488bc',
+  sun: '#ffe7c2',
+  skyFill: '#b8b3e3',
+  groundFill: '#aca3d0',
   zenith: '#3a72c2',
-  horizon: '#c4d8ec',
+  horizon: '#b5cfee',
   haze: '#b0c8e8',
   sunHaze: '#ffdcb0'
 }
@@ -40,7 +40,7 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     haze: colorUniform(palette.haze),
     sunHaze: colorUniform(palette.sunHaze),
     /** Haze extinction per metre, past `hazeStart`. */
-    hazeDensity: uniform(0.0017),
+    hazeDensity: uniform(0.0022),
     hazeStart: uniform(24),
     /** How much haze drains saturation before tinting, 0..1. */
     hazeDesaturate: uniform(0.55),
@@ -54,20 +54,23 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     /** Cloud density threshold: higher means clearer sky. */
     cloudCover: uniform(0.56),
     /** How much a passing cloud darkens the ground, 0..1. */
-    cloudShadow: uniform(0.45),
+    cloudShadow: uniform(0.32),
     /** Cel band shape shared by every cel material. */
     bands: {
       terminator: uniform(0.02),
       highlight: uniform(0.36),
-      mid: uniform(0.62),
+      mid: uniform(0.58),
       softness: uniform(0.06)
     },
     /** Shade, rim and ink rules shared by every cel material. */
     shading: {
       /** Saturation of the shade band relative to the surface, so shadows stay rich. */
-      shadeSaturation: uniform(1.35),
+      shadeSaturation: uniform(0.85),
+      shadeTint: uniform(new Vector3(0.48, 0.38, 1)),
+      shadeValue: uniform(1.05),
+      litSaturation: uniform(0.85),
       /** Faint warm rim on the lit side of silhouettes, 0..1. */
-      rim: uniform(0.35),
+      rim: uniform(0.28),
       /** Outline colour: surface colour times this value, shifted by `inkTint`. */
       inkValue: uniform(0.2),
       inkTint: colorUniform('#c4ccff')
@@ -82,17 +85,16 @@ export type Environment = ReturnType<typeof createEnvironment>
 
 /** Cloud density on the cloud layer at `uv`; the sky and the ground share it. */
 export function cloudDensity(env: Environment, uv: Node<'vec2'>) {
-  return texture(env.noise, uv)
-    .r.mul(0.8)
-    .add(texture(env.noise, uv.mul(2.3).add(0.37)).g.mul(0.16))
-    .add(texture(env.noise, uv.mul(6.1).add(0.71)).b.mul(0.04))
+  return texture(env.noise, uv).level(float(2))
+    .r.mul(0.85)
+    .add(texture(env.noise, uv.mul(1.9).add(0.37)).level(float(2)).r.mul(0.15))
 }
 
 /** 1 in open sun, lower under the large, soft shadow of a drifting cloud. */
 export function cloudLight(env: Environment) {
   const toLayer = env.sunDirection.xz.div(env.sunDirection.y.max(0.15)).mul(positionWorld.y.negate().add(300))
-  const uv = positionWorld.xz.add(toLayer).mul(0.0011).add(env.windDirection.mul(env.time.mul(0.0011)))
-  const density = texture(env.noise, uv).r
+  const uv = positionWorld.xz.add(toLayer).mul(0.0011).sub(env.windDirection.mul(env.time.mul(0.0022)))
+  const density = cloudDensity(env, uv)
   // Only the densest cloud cores cast, so shadows stay sparse.
   return smoothstep(env.cloudCover.add(0.04), env.cloudCover.add(0.2), density).mul(env.cloudShadow).oneMinus()
 }

@@ -100,8 +100,8 @@ function createHero(env: Environment): Group {
 
 export function createEnemy(env: Environment): Group {
   const enemy = new Group()
-  const body = new CelMaterial(env, { color: 0x5b3f86, outlineColor: vec3(0.07, 0.02, 0.1), outlineWidth: 1.1 })
-  const shell = new CelMaterial(env, { color: 0xb05ad8, outlineColor: vec3(0.12, 0.02, 0.15), outlineWidth: 1, flatShading: true })
+  const body = new CelMaterial(env, { color: 0x5b3f86, readability: true })
+  const shell = new CelMaterial(env, { color: 0xb05ad8, flatShading: true, readability: true })
   const dome = part(new SphereGeometry(0.55, 20, 14), body, 0.38)
   dome.scale.set(1.15, 0.72, 1.3)
   enemy.add(dome)
@@ -112,11 +112,11 @@ export function createEnemy(env: Environment): Group {
     spike.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5)
     enemy.add(spike)
   }
-  const eyeGlow = color('#ff5fd2').mul(float(3))
-  const eyeMaterial = new CelMaterial(env, { color: 0xffd6f4, emissiveNode: eyeGlow, outlineColor: null })
+  const eyeGlow = color('#d650a8').mul(float(1.1))
+  const eyeMaterial = new CelMaterial(env, { color: 0xb84e92, emissiveNode: eyeGlow, outlineColor: null })
   eyeMaterial.mrtNode = mrt({ glow: vec4(eyeGlow, 1) })
   for (const side of [-1, 1]) {
-    const eye = part(new SphereGeometry(0.07, 10, 8), eyeMaterial, 0.5)
+    const eye = part(new SphereGeometry(0.045, 10, 8), eyeMaterial, 0.5)
     eye.position.set(side * 0.2, 0.5, 0.62)
     enemy.add(eye)
   }

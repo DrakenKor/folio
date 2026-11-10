@@ -1,7 +1,7 @@
 // Scattered faceted rocks with moss on their tops: a few big boulders, ruin
 // stones around the monolith and pebbles along the path. One merged mesh.
 import { IcosahedronGeometry, Matrix4, Mesh, Quaternion, Vector3, Euler, type BufferGeometry } from 'three/webgpu'
-import { attribute, color, mix, normalWorld, positionWorld, smoothstep, texture, vec3 } from 'three/tsl'
+import { attribute, color, mix, normalWorld, positionWorld, smoothstep, texture } from 'three/tsl'
 import { GeometryBuilder, linearColor } from '../geometry'
 import { CelMaterial } from '../materials/cel'
 import type { Environment } from '../materials/environment'
@@ -81,10 +81,8 @@ export function createRocks(env: Environment, field: Heightfield, trees: TreeSit
   const material = new CelMaterial(env, {
     colorNode: mix(vertexColor.mul(fine.mul(0.2).add(0.9)), color('#6d8f3a'), moss),
     flatShading: true,
-    outlineColor: vertexColor.mul(0.28).add(vec3(0.02, 0.01, 0.05)),
     outlineNormal: attribute('hull', 'vec3'),
-    outlineWidth: 1,
-    bandOffset: fine.sub(0.5).mul(0.15)
+    bandOffset: null
   })
   material.name = 'rock'
   const mesh = new Mesh(builder.build(), material)

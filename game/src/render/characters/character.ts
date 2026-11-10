@@ -1,8 +1,9 @@
-import { AnimationMixer, Box3, Group, LoopOnce, Vector3, type AnimationAction, type AnimationClip, type Object3D } from 'three/webgpu'
+import { AnimationMixer, Box3, Group, LoopOnce, Mesh, Vector3, type AnimationAction, type AnimationClip, type Object3D } from 'three/webgpu'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { applyToon } from './toon'
+import { createEnvironment, type Environment } from '../materials/environment'
 
 /** Clips that repeat; every other clip holds its last frame. */
 const LOOPS = new Set(['idle', 'walk', 'run', 'block'])
@@ -61,10 +62,12 @@ export class CharacterView {
   private readonly model: Object3D
   private readonly mixer: AnimationMixer
   private readonly actions = new Map<string, AnimationAction>()
+  private readonly ownEnvironment: Environment | null
 
-  constructor(asset: CharacterAsset, { height = 1.8 } = {}) {
+  constructor(asset: CharacterAsset, { height = 1.8, env }: { height?: number; env?: Environment } = {}) {
+    this.ownEnvironment = env ? null : createEnvironment(0)
     this.model = cloneSkinned(asset.scene)
-    applyToon(this.model)
+    applyToon(this.model, env ?? this.ownEnvironment!)
     this.object.add(this.model)
     this.mixer = new AnimationMixer(this.model)
     for (const clip of asset.clips) {
@@ -118,9 +121,18 @@ export class CharacterView {
     return action.getClip().duration
   }
 
+  /** Rebinds scene uniforms and noise when the meadow seed changes. */
+  setEnvironment(env: Environment): void { applyToon(this.model, env) }
+
   dispose(): void {
     this.mixer.stopAllAction()
     this.mixer.uncacheRoot(this.model)
+    this.model.traverse(node => {
+      if (!(node instanceof Mesh)) return
+      node.geometry.dispose()
+      for (const material of Array.isArray(node.material) ? node.material : [node.material]) material.dispose()
+    })
+    this.ownEnvironment?.noise.dispose()
     this.object.removeFromParent()
   }
 

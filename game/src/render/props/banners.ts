@@ -2,9 +2,9 @@
 // with the shared gusts. Thin cloth has no volume for a hull outline, so its
 // border is inked in the shader instead.
 import { CylinderGeometry, Group, Matrix4, Mesh, PlaneGeometry, DoubleSide } from 'three/webgpu'
-import { attribute, color, cos, faceDirection, float, Fn, min, mix, positionLocal, sin, smoothstep, step, transformNormalToView, uv, vec2, vec3 } from 'three/tsl'
+import { attribute, color, cos, faceDirection, float, Fn, min, mix, positionLocal, sin, step, transformNormalToView, uv, vec2, vec3 } from 'three/tsl'
 import { GeometryBuilder, linearColor } from '../geometry'
-import { CelMaterial } from '../materials/cel'
+import { CelMaterial, inkColor, inkEdge } from '../materials/cel'
 import type { Environment } from '../materials/environment'
 import { gustAt } from '../materials/wind'
 import type { Heightfield, Point } from '../terrain/heightfield'
@@ -27,9 +27,7 @@ export function createBanners(env: Environment, field: Heightfield) {
     poles.add(finial, new Matrix4().makeTranslation(s.x, y + POLE_HEIGHT - 0.2 + 0.11, s.z), { color: linearColor('#d9b25a') })
   }
   const poleMaterial = new CelMaterial(env, {
-    colorNode: attribute('color', 'vec3'),
-    outlineColor: vec3(0.09, 0.05, 0.04),
-    outlineWidth: 0.9
+    colorNode: attribute('color', 'vec3')
   })
   poleMaterial.name = 'pole'
   const poleMesh = new Mesh(poles.build(), poleMaterial)
@@ -72,7 +70,7 @@ export function createBanners(env: Environment, field: Heightfield) {
       const base = i % 2 === 0 ? color('#c6402e') : color('#2f5fa8')
       const band = step(0.1, t.x).mul(step(t.x, 0.18))
       const cloth = mix(base, color('#f1e6cc'), band)
-      return mix(cloth, cloth.mul(0.22), smoothstep(0.018, 0.035, edge).oneMinus())
+      return mix(cloth, inkColor(env, cloth), inkEdge(edge))
     })()
 
     const flagMaterial = new CelMaterial(env, {

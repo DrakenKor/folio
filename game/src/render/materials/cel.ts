@@ -23,7 +23,7 @@ export const inkWidth = uniform(2)
 
 const LUMA = vec3(0.2126, 0.7152, 0.0722)
 /** Darkest an outline gets, so ink never reads as black. */
-const INK_FLOOR = vec3(0.011, 0.012, 0.024)
+const INK_FLOOR = vec3(0.035, 0.03, 0.055)
 
 /** Ink width in pixels at a view depth: full up close, thinner far away, never under ~0.7 px. */
 export function inkPixels(depth: Node<'float'>): Node<'float'> {
@@ -64,7 +64,8 @@ const lambert = (albedo: Node) => BRDF_Lambert({ diffuseColor: albedo }) as unkn
 class CelLightingModel extends LightingModel {
   constructor(
     private readonly env: Environment,
-    private readonly bandOffset: Node<'float'> | null
+    private readonly bandOffset: Node<'float'> | null,
+    private readonly readability: boolean
   ) {
     super()
   }
@@ -88,7 +89,8 @@ class CelLightingModel extends LightingModel {
     const facing = smoothstep(terminator, terminator.add(0.15), ndl)
     const cast = mix(float(1), shadowMap, facing).mul(cloudLight(this.env))
     const lit = smoothstep(0.15, 0.85, cast)
-    reflectedLight.directDiffuse.addAssign(light.mul(form.mul(lit)).mul(lambert(diffuseColor.rgb)))
+    const albedo = mix(vec3(dot(diffuseColor.rgb, LUMA)), diffuseColor.rgb, this.env.shading.litSaturation)
+    reflectedLight.directDiffuse.addAssign(light.mul(form.mul(lit)).mul(lambert(albedo)).mul(this.readability ? 1.5 : 1))
 
     // Warm rim on lit silhouettes; upward faces (ground, grass) never rim.
     const edge = float(1).sub(normalView.dot(positionViewDirection).clamp(0, 1))
@@ -97,20 +99,26 @@ class CelLightingModel extends LightingModel {
       .mul(smoothstep(0.5, 0.85, normalWorld.y).oneMinus())
       .mul(lit)
       .mul(this.env.shading.rim)
+      .mul(this.readability ? 1.5 : 1)
     reflectedLight.directDiffuse.addAssign(light.mul(rim).mul(lambert(mix(diffuseColor.rgb, vec3(1), 0.5))))
   }
 
   override indirect(...[builder]: IndirectArgs): void {
     const { irradiance, ambientOcclusion, reflectedLight } = builder.context as unknown as IndirectContext
-    // The cool fill tints the shade band; extra saturation keeps it from going grey.
+    // Fill carries surface value and chroma into one blue-violet shade hue.
     const albedo = diffuseColor.rgb
-    const shade = mix(vec3(dot(albedo, LUMA)), albedo, this.env.shading.shadeSaturation).max(0)
-    reflectedLight.indirectDiffuse.addAssign(irradiance.mul(lambert(shade)))
+    const value = albedo.r.max(albedo.g).max(albedo.b)
+    const chroma = value.sub(albedo.r.min(albedo.g).min(albedo.b)).div(value.max(1e-4))
+    const saturation = chroma.mul(this.env.shading.shadeSaturation).clamp(0.55, 0.95)
+    const shade = mix(vec3(1), this.env.shading.shadeTint, saturation).mul(value).mul(this.env.shading.shadeValue)
+    reflectedLight.indirectDiffuse.addAssign(dot(irradiance, LUMA).mul(lambert(shade)))
     reflectedLight.indirectDiffuse.mulAssign(ambientOcclusion)
   }
 }
 
 export interface CelMaterialOptions extends MeshToonNodeMaterialParameters {
+  /** Lifts band values and the shared warm rim for focal subjects. */
+  readability?: boolean
   /** Outline colour override; omit for the ink rule, null for no outline. */
   outlineColor?: Node<'vec3'> | null
   /** Outline width relative to the ink width; 0 draws none. */
@@ -140,12 +148,13 @@ export class CelMaterial extends MeshToonNodeMaterial {
   /** Facet normals from screen derivatives; toon materials lack the typed field. */
   flatShading: boolean
   private readonly bandOffset: Node<'float'> | null
+  private readonly readability: boolean
 
   constructor(
     readonly env: Environment,
     options: CelMaterialOptions = {}
   ) {
-    const { outlineColor, outlineWidth = 1, outlineNormal = null, bandOffset = null, emissiveNode = null, flatShading = false, ...params } = options
+    const { outlineColor, outlineWidth = 1, outlineNormal = null, bandOffset = null, emissiveNode = null, flatShading = false, readability = false, ...params } = options
     super(params)
     this.emissiveNode = emissiveNode
     this.flatShading = flatShading
@@ -154,6 +163,7 @@ export class CelMaterial extends MeshToonNodeMaterial {
     this.outlineWidth = outlineWidth
     this.outlineNormal = outlineNormal
     this.bandOffset = bandOffset
+    this.readability = readability
   }
 
   /** The unlit surface colour, as the ink rule sees it. */
@@ -169,7 +179,7 @@ export class CelMaterial extends MeshToonNodeMaterial {
   }
 
   override setupLightingModel(): LightingModel {
-    return new CelLightingModel(this.env, this.bandOffset)
+    return new CelLightingModel(this.env, this.bandOffset, this.readability)
   }
 }
 
