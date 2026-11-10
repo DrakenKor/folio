@@ -6,7 +6,7 @@
 // comes from a hash of its world cell, and the field never swims. Heights and
 // masks come from the heightfield texture; wind from scrolling noise; blades
 // bend away from the player and shorten around them.
-import { BufferAttribute, InstancedBufferGeometry, Mesh, Vector2, Vector3, DoubleSide } from 'three/webgpu'
+import { BufferAttribute, InstancedBufferGeometry, Mesh, Vector2, DoubleSide } from 'three/webgpu'
 import {
   cameraViewMatrix,
   color,
@@ -34,6 +34,7 @@ import type { Environment } from '../materials/environment'
 import { GRID, type Heightfield, TERRAIN_HALF } from '../terrain/heightfield'
 import { meadowPatch, meadowTones } from '../terrain/terrain'
 import { gustAt } from '../materials/wind'
+import { trampleAt } from '../materials/environment'
 
 /** Instances per side of the grid: 384² is about 147k blades. */
 export const GRASS_SIDE = 384
@@ -46,7 +47,7 @@ export function createGrass(env: Environment, field: Heightfield) {
 
   const uniforms = {
     focus: uniform(new Vector2(field.player.x, field.player.z)),
-    player: uniform(new Vector3(field.player.x, field.heightAt(field.player.x, field.player.z), field.player.z)),
+    player: env.player,
     /** Metres per grid cell. Larger cells spread the same blades wider, each one broader. */
     cell: uniform(GRASS_CELL),
     height: uniform(1),
@@ -54,13 +55,14 @@ export function createGrass(env: Environment, field: Heightfield) {
     /** Blades within this radius bend away from the player. */
     bendRadius: uniform(1.4),
     /** Grass within this radius is cut shorter, as where fights happen. */
-    shortenRadius: uniform(3.2)
+    shortenRadius: env.trampleRadius
   }
 
   const vT = varyingProperty('float', 'vGrassT')
   const vGust = varyingProperty('float', 'vGrassGust')
   const vPatch = varyingProperty('float', 'vGrassPatch')
   const vVariety = varyingProperty('float', 'vGrassVariety')
+  const vTrample = varyingProperty('float', 'vGrassTrample')
   const vNormal = varyingProperty('vec3', 'vGrassNormal')
 
   const side = float(GRASS_SIDE)
@@ -91,7 +93,8 @@ export function createGrass(env: Environment, field: Heightfield) {
     const keep = step(r5, mask.mul(1.15)).mul(step(r4, uniforms.density))
     const toPlayer = xz.sub(uniforms.player.xz)
     const playerDist = toPlayer.length().max(1e-3)
-    const shorten = mix(float(0.4), float(1), smoothstep(uniforms.shortenRadius.mul(0.45), uniforms.shortenRadius, playerDist))
+    const trample = trampleAt(env, xz)
+    const shorten = mix(float(1), float(0.42), trample)
     const tall = r3.mul(r3)
     const height = mix(float(0.32), float(0.82), tall).mul(uniforms.height).mul(edge).mul(keep).mul(shorten).mul(mask.mul(0.6).add(0.4))
     const width = mix(float(0.055), float(0.095), r4).mul(uniforms.cell.div(GRASS_CELL))
@@ -103,7 +106,7 @@ export function createGrass(env: Environment, field: Heightfield) {
 
     const yaw = r2.mul(6.283)
     const leanDir = vec2(cos(yaw.add(1.3)), sin(yaw.add(1.3)))
-    const push = smoothstep(uniforms.bendRadius, uniforms.bendRadius.mul(0.15), playerDist).mul(1.5)
+    const push = smoothstep(uniforms.bendRadius, uniforms.bendRadius.mul(0.15), playerDist).mul(1.2).add(trample.mul(1.3))
     const bend = leanDir.mul(r4.mul(0.25).add(0.12)).add(env.windDirection.mul(windAmount)).add(toPlayer.div(playerDist).mul(push))
     const amount = bend.length().max(1e-4)
     const bendDir = bend.div(amount)
@@ -119,6 +122,7 @@ export function createGrass(env: Environment, field: Heightfield) {
     vGust.assign(gust)
     vPatch.assign(meadowPatch(texture(env.noise, xz.div(110)).level(float(0)).r, texture(env.noise, xz.div(31)).level(float(0)).g))
     vVariety.assign(r5)
+    vTrample.assign(trample)
     const facing = vec3(across.y.negate(), 0, across.x)
     vNormal.assign(vec3(bendDir.x.mul(0.25), 1, bendDir.y.mul(0.25)).add(facing.mul(0.3)).normalize())
 
@@ -136,7 +140,9 @@ export function createGrass(env: Environment, field: Heightfield) {
     c = mix(c, tones.tip, smoothstep(0.5, 1, t))
     c = c.mul(vVariety.mul(0.12).add(0.94))
     // Gusts catch the light on the tips: visible waves rolling across the field.
-    c = mix(c, color('#e6e9a6'), vGust.mul(t).mul(t).mul(0.38))
+    c = mix(c, color('#eef0b4'), vGust.mul(t).mul(t).mul(0.5))
+    // Trampled grass lies flat and shows its paler, drier side.
+    c = mix(c, color('#d9d08e'), vTrample.mul(smoothstep(0.0, 0.5, t)).mul(0.75))
     return vec4(c, 1)
   })()
 

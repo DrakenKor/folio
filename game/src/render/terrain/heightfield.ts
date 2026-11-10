@@ -78,7 +78,9 @@ export function createHeightfield(seed: number): Heightfield {
       const z = j - TERRAIN_HALF
       const k = j * GRID + i
       let h = base(x, z)
-      const d = distanceToLine(pathLine, x, z)
+      // The path fades out before the hills at the edge of the world.
+      const inside = smoothstep(122, 100, Math.max(Math.abs(x), Math.abs(z)))
+      const d = distanceToLine(pathLine, x, z) + (1 - inside) * 8
       const wobble = noise.sample(x / 6 + 100, z / 6) * 0.35
       const p = smoothstep(PATH_HALF_WIDTH + 1.1 + wobble, PATH_HALF_WIDTH * 0.35, d)
       // The path wears a shallow trough and smooths out small bumps.

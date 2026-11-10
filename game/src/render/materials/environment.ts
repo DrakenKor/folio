@@ -1,7 +1,7 @@
 // Uniforms shared by every material in one scene: time, light, wind and haze.
 // Each scene owns one Environment, so two views never fight over globals.
 import { Color, type Node, type UniformNode, DataTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, RGBAFormat, UnsignedByteType, Vector2, Vector3 } from 'three/webgpu'
-import { positionWorld, smoothstep, texture, uniform } from 'three/tsl'
+import { abs, positionWorld, smoothstep, texture, uniform } from 'three/tsl'
 import { Noise2D, subSeed } from '../rng'
 
 export interface Palette {
@@ -45,6 +45,10 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     /** Wind heading on the ground plane (unit) and strength 0..2. */
     windDirection: uniform(new Vector2(0.8, 0.6).normalize()),
     windStrength: uniform(1),
+    /** Where the player stands: grass bends away and the ground is trampled around it. */
+    player: uniform(new Vector3()),
+    /** Radius of trampled, shortened grass, as where fights happen. */
+    trampleRadius: uniform(3.6),
     /** Cloud density threshold: higher means clearer sky. */
     cloudCover: uniform(0.56),
     /** How much a passing cloud darkens the ground, 0..1. */
@@ -78,6 +82,24 @@ export function cloudLight(env: Environment) {
   const uv = positionWorld.xz.add(toLayer).mul(0.0026).add(env.windDirection.mul(env.time.mul(0.0022)))
   const density = texture(env.noise, uv).r
   return smoothstep(env.cloudCover.sub(0.03), env.cloudCover.add(0.06), density).mul(env.cloudShadow).oneMinus()
+}
+
+/**
+ * Blotchy world-space noise from the mid-frequency channel, projected from
+ * three axes and blended by the normal so no surface sees it stretched.
+ */
+export function triplanarNoise(env: Environment, p: Node<'vec3'>, n: Node<'vec3'>, scale: number) {
+  const w = abs(n).pow(4)
+  const sum = w.x.add(w.y).add(w.z)
+  const x = texture(env.noise, p.yz.mul(scale)).g
+  const y = texture(env.noise, p.zx.mul(scale)).g
+  const z = texture(env.noise, p.xy.mul(scale)).g
+  return x.mul(w.x).add(y.mul(w.y)).add(z.mul(w.z)).div(sum)
+}
+
+/** 1 at the player's feet, fading to 0 at the trample radius. */
+export function trampleAt(env: Environment, xz: Node<'vec2'>) {
+  return smoothstep(env.trampleRadius, env.trampleRadius.mul(0.35), xz.sub(env.player.xz).length())
 }
 
 /** A colour uniform typed as vec3, so it composes with vector maths. */

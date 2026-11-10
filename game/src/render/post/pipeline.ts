@@ -30,7 +30,7 @@ export function createPost(renderer: WebGPURenderer, scene: Scene, camera: Camer
   rgb = mix(vec3(luma), rgb, uniforms.saturation)
   const shadowTint = color('#5d6fb0')
   const lightTint = color('#ffe7c4')
-  rgb = rgb.mul(mix(mix(vec3(1), shadowTint.mul(1.25), float(0.16)), vec3(1), smoothstep(0.02, 0.35, luma)))
+  rgb = rgb.mul(mix(mix(vec3(1), shadowTint.mul(1.6), float(0.3)), vec3(1), smoothstep(0.03, 0.45, luma)))
   rgb = rgb.mul(mix(vec3(1), lightTint, smoothstep(0.45, 1.2, luma).mul(0.12)))
   const edge = screenUV.sub(0.5).length()
   rgb = rgb.mul(float(1).sub(smoothstep(0.35, 0.85, edge).mul(uniforms.vignette)))

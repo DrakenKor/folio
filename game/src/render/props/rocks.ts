@@ -9,7 +9,7 @@ import { Noise2D, rng, subSeed } from '../rng'
 import { distanceToLine, type Heightfield } from '../terrain/heightfield'
 import type { TreeSite } from '../foliage/trees'
 
-const STONE = ['#8f8a9a', '#9b958f', '#837f92', '#a29a8c']
+const STONE = ['#aaa5b4', '#b4ada6', '#9d99ab', '#bab1a2']
 
 export function createRocks(env: Environment, field: Heightfield, trees: TreeSite[]) {
   const random = rng(subSeed(field.seed, 'rocks'))

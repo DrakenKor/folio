@@ -25,6 +25,8 @@ interface LookApi {
   ready: boolean
   backend: string
   perf(seconds: number): Promise<PerfResult>
+  /** Dev handles for probing uniforms from the console. */
+  debug?: Record<string, unknown>
 }
 
 declare global {
@@ -64,6 +66,7 @@ const standIns = createStandIns(meadow.env, meadow.field, { x: meadow.field.play
 meadow.scene.add(standIns.group)
 
 const post = createPost(renderer, meadow.scene, camera)
+look.debug = { meadow, post, camera, renderer }
 
 function resize() {
   const ratio = Math.min(window.devicePixelRatio, 1.5)

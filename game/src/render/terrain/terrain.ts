@@ -3,7 +3,7 @@
 import { Mesh, PlaneGeometry, type Node } from 'three/webgpu'
 import { color, Fn, mix, normalWorld, positionWorld, smoothstep, texture } from 'three/tsl'
 import { CelMaterial } from '../materials/cel'
-import type { Environment } from '../materials/environment'
+import { trampleAt, type Environment } from '../materials/environment'
 import { GRID, type Heightfield, TERRAIN_HALF, TERRAIN_SIZE } from './heightfield'
 
 /**
@@ -50,6 +50,8 @@ export function createTerrain(env: Environment, field: Heightfield) {
     const dirt = mix(color('#9a7f58'), color('#c4a97a'), smoothstep(0.55, 0.95, sample.g).mul(fine.mul(0.4).add(0.6)))
     const worn = mix(meadow, color('#7a7446'), smoothstep(0.05, 0.3, sample.g.add(edgeNoise)))
     let ground = mix(worn, dirt, pathAmount)
+    // Trampled ground around the player: drier and paler, so the cut grass reads.
+    ground = mix(ground, mix(ground, color('#b5ad6a'), 0.55), trampleAt(env, xz).mul(fine.mul(0.4).add(0.6)))
     // Bare rock where the hills get steep.
     const rock = mix(color('#7d7a86'), color('#a29fa6'), mid)
     ground = mix(ground, rock, smoothstep(0.82, 0.66, normalWorld.y.add(fine.sub(0.5).mul(0.08))))

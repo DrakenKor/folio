@@ -6,7 +6,7 @@ import { ConeGeometry, CylinderGeometry, IcosahedronGeometry, Matrix4, Mesh, Qua
 import { attribute, cameraViewMatrix, cos, float, Fn, mix, positionLocal, sin, texture, vec2, vec3, vec4 } from 'three/tsl'
 import { GeometryBuilder, linearColor } from '../geometry'
 import { CelMaterial } from '../materials/cel'
-import type { Environment } from '../materials/environment'
+import { triplanarNoise, type Environment } from '../materials/environment'
 import { gustAt } from '../materials/wind'
 import { Noise2D, rng, subSeed } from '../rng'
 import { distanceToLine, type Heightfield } from '../terrain/heightfield'
@@ -130,16 +130,17 @@ export function createTrees(env: Environment, field: Heightfield) {
   })
   trunkMaterial.name = 'trunk'
 
-  const leafNoise = texture(env.noise, positionLocal.xz.mul(0.09).add(positionLocal.y.mul(0.05))).b
+  const soft = attribute('soft', 'vec3')
+  const leafNoise = triplanarNoise(env, positionLocal, soft, 0.11)
   const canopyMaterial = new CelMaterial(env, {
     colorNode: vertexColor.mul(mix(float(0.9), float(1.1), texture(env.noise, positionLocal.xz.mul(0.05)).g)),
     positionNode: swayNode(0.035),
     // The merged mesh sits at the origin, so its attributes are in world space.
-    normalNode: cameraViewMatrix.mul(vec4(attribute('soft', 'vec3'), 0)).xyz.normalize(),
+    normalNode: cameraViewMatrix.mul(vec4(soft, 0)).xyz.normalize(),
     outlineColor: vertexColor.mul(0.32).add(vec3(0.0, 0.012, 0.03)),
     outlineNormal: attribute('hull', 'vec3'),
     outlineWidth: 1.1,
-    bandOffset: leafNoise.sub(0.5).mul(0.3)
+    bandOffset: leafNoise.sub(0.5).mul(0.45)
   })
   canopyMaterial.name = 'canopy'
 
@@ -147,10 +148,10 @@ export function createTrees(env: Environment, field: Heightfield) {
   trunkMesh.name = 'tree-trunks'
   const canopyMesh = new Mesh(canopies.build(), canopyMaterial)
   canopyMesh.name = 'tree-canopies'
-  for (const mesh of [trunkMesh, canopyMesh]) {
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-  }
+  trunkMesh.castShadow = trunkMesh.receiveShadow = true
+  // Crowns cast but do not receive: their bent normals already shade the big
+  // shape, and lumpy self-shadowing only adds acne.
+  canopyMesh.castShadow = true
   return { trunks: trunkMesh, canopies: canopyMesh, sites }
 }
 
@@ -213,7 +214,8 @@ function placeTrees(field: Heightfield, random: () => number): TreeSite[] {
   // Anchors frame the bookmarks: a tree beside the player, a grove behind the monolith.
   const anchors: Array<[number, number, number]> = [
     [player.x + 8.6, player.z - 5.5, 2.3],
-    [player.x - 9.5, player.z - 7.5, 2.6],
+    [player.x - 8.5, player.z - 3.4, 2.4],
+    [player.x - 28.5, player.z + 27, 2.8],
     [player.x + 12, player.z - 13, 1.6],
     [monolith.x + 11, monolith.z - 9, 2.6],
     [monolith.x + 4, monolith.z - 16, 1.5],

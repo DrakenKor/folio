@@ -97,18 +97,6 @@ export function createBanners(env: Environment, field: Heightfield) {
 function bannerSites(field: Heightfield): Point[] {
   const { pathLine, monolith, player } = field
   const sides: Point[] = []
-  const nearest = (target: Point, distance: number) => {
-    let best = 0
-    let bestErr = Infinity
-    pathLine.forEach((p, i) => {
-      const err = Math.abs(Math.hypot(p.x - target.x, p.z - target.z) - distance)
-      if (err < bestErr) {
-        bestErr = err
-        best = i
-      }
-    })
-    return best
-  }
   const offset = (i: number, side: number, by: number): Point => {
     const p = pathLine[i]!
     const q = pathLine[Math.min(i + 1, pathLine.length - 1)]!
@@ -132,6 +120,7 @@ function bannerSites(field: Heightfield): Point[] {
   }
   sides.push(offset(nearMonolith(13), 1, 2.1))
   sides.push(offset(nearMonolith(24), -1, 2.1))
-  sides.push(offset(nearest(player, 7), 1, 2.0))
+  // The third stands in the player's view, across the path from them.
+  sides.push({ x: player.x + 5.4, z: player.z + 1.2 })
   return sides
 }
