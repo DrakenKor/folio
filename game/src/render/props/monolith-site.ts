@@ -100,7 +100,9 @@ function carvedRing(env: Environment, field: Heightfield): Group {
   }
   const material = new CelMaterial(env, { colorNode: color(MONOLITH_STONE).mul(attribute('stoneValue', 'float')), outlineColor: null })
   material.name = 'monolith-ring-stone'
-  const mesh = new Mesh(stone.build(), material)
+  const paving = stone.build()
+  smoothStoneNormals(paving)
+  const mesh = new Mesh(paving, material)
   mesh.receiveShadow = true
   const glow = color(CYAN).mul(climbingPulse(env, 0).mul(0.10).add(0.12))
   const inlay = new CelMaterial(env, { color: '#2f3532', emissiveNode: glow, outlineColor: null })
