@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Character viewer</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #c9d3d6;
+        overflow: hidden;
+        font: 13px/1.4 system-ui, sans-serif;
+      }
+      #stage {
+        position: fixed;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #panel {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        background: rgb(255 255 255 / 0.85);
+        color: #1a1c33;
+      }
+      #panel[hidden] {
+        display: none;
+      }
+      #panel input {
+        width: 220px;
+        vertical-align: middle;
+      }
+      #sheet {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #c9d3d6;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage" aria-label="Character view"></canvas>
+    <div id="panel" hidden>
+      <label>Speed <input id="speed" type="range" min="0" max="7" step="0.05" value="0" /></label>
+      <span id="readout"></span>
+    </div>
+    <script type="module" src="./src/anim/main.ts"></script>
+  </body>
+</html>
