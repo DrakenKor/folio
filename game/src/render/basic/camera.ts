@@ -10,6 +10,7 @@ export interface CameraPose {
 export class CameraRig {
   readonly camera = new PerspectiveCamera(45, 1, 0.1, 500)
   private following = true
+  private player: Vec2 = { x: 0, z: 0 }
   private target = new Vector3()
   private ray = new Raycaster()
   private ground = new Plane(new Vector3(0, 1, 0), 0)
@@ -25,7 +26,9 @@ export class CameraRig {
   bookmark(name: string): void {
     const pose = this.bookmarks.get(name)
     if (!pose) throw new RangeError(`Unknown camera bookmark: ${name}`)
-    this.set(pose)
+    const offset = name === 'player' ? this.player : { x: 0, z: 0 }
+    this.set({ position: { x: pose.position.x + offset.x, y: pose.position.y, z: pose.position.z + offset.z },
+      target: { x: pose.target.x + offset.x, y: pose.target.y, z: pose.target.z + offset.z } })
   }
 
   set(pose: CameraPose): void {
@@ -40,6 +43,7 @@ export class CameraRig {
   follow(): void { this.following = true }
 
   update(player: Vec2): void {
+    this.player = { ...player }
     if (!this.following) return
     this.target.set(player.x, 0, player.z)
     this.camera.position.set(player.x, 20, player.z + 14)

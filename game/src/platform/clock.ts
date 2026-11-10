@@ -13,7 +13,8 @@ export class Clock {
   private explicitlyPaused = false
   private suspensions = new Set<string>()
   private frameTimes: number[] = []
-  private tickTimes: number[] = []
+  private tickTimes: number[][] = []
+  private pendingTickTimes: number[] = []
   private events: SimEvent[] = []
 
   constructor(public world: World, private readCommand: (world: World) => Command = () => IDLE_COMMAND,
@@ -50,7 +51,7 @@ export class Clock {
       const start = performance.now()
       this.events.push(...step(this.world, input))
       this.recorder.record(input)
-      this.sample(this.tickTimes, performance.now() - start)
+      this.pendingTickTimes.push(performance.now() - start)
       this.afterStep(this.world)
     }
     if (this.paused) this.capturePoses()
@@ -68,6 +69,9 @@ export class Clock {
     }
     const frame: Frame = { world: this.world, prev: this.previous,
       alpha: Math.min(this.accumulator / STEP_MS, 1 - Number.EPSILON), events: this.events }
+    this.tickTimes.push(this.pendingTickTimes)
+    this.pendingTickTimes = []
+    if (this.tickTimes.length > 120) this.tickTimes.shift()
     this.events = []
     return frame
   }
@@ -78,7 +82,7 @@ export class Clock {
       const at = (p: number) => sorted[Math.max(0, Math.ceil(sorted.length * p) - 1)] ?? 0
       return { median: at(0.5), p95: at(0.95), samples: sorted.length }
     }
-    return { frameMs: summary(this.frameTimes), tickMs: summary(this.tickTimes) }
+    return { frameMs: summary(this.frameTimes), tickMs: summary(this.tickTimes.flat()) }
   }
 
   private sample(values: number[], value: number): void {

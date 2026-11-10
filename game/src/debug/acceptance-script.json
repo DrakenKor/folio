@@ -1,0 +1,6 @@
+[
+  {"tick": 0, "command": {"move": {"x": 1, "z": 0}, "aim": {"x": 20, "z": -5}, "buttons": 1}},
+  {"tick": 600, "command": {"move": {"x": 0, "z": -1}, "aim": null, "buttons": 0}},
+  {"tick": 1200, "command": {"move": {"x": -0.6, "z": 0.8}, "aim": {"x": -4, "z": 3}, "buttons": 4}},
+  {"tick": 2400, "command": {"move": {"x": 0, "z": 0}, "aim": null, "buttons": 0}}
+]

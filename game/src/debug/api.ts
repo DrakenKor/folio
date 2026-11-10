@@ -69,11 +69,11 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
       }
       return hashWorld(clock.world)
     },
-    exportReplay: () => encode(canonical(clock.recorder.exportReplay())),
+    exportReplay: () => encode(canonical({ ...clock.recorder.exportReplay(), build: __BUILD_ID__ })),
     async loadReplay(text: string) {
       const replay: Replay = JSON.parse(await decode(text))
       const result = verifyReplay(replay)
-      // Validate the whole replay before replacing live state.
+      // Check replay hashes before replacing live state.
       replace(JSON.stringify(replay.start))
       clock.pause()
       for (const command of replay.commands) clock.advance(1, command)
