@@ -19,7 +19,7 @@ export function createBanners(env: Environment, field: Heightfield) {
   const sites = bannerSites(field)
 
   const poles = new GeometryBuilder()
-  const pole = new CylinderGeometry(0.055, 0.08, POLE_HEIGHT, 6)
+  const pole = new CylinderGeometry(0.065, 0.095, POLE_HEIGHT, 12)
   const finial = new CylinderGeometry(0.0, 0.11, 0.22, 6)
   for (const s of sites) {
     const y = field.heightAt(s.x, s.z)
@@ -31,16 +31,16 @@ export function createBanners(env: Environment, field: Heightfield) {
   })
   poleMaterial.name = 'pole'
   const poleMesh = new Mesh(poles.build(), poleMaterial)
-  poleMesh.castShadow = true
+  poleMesh.castShadow = poleMesh.receiveShadow = true
   group.add(poleMesh)
 
   // Pennant in local space: x along the cloth from the pole, tapering to a point.
-  const flagGeo = new PlaneGeometry(FLAG_LENGTH, FLAG_HEIGHT, 20, 4)
+  const flagGeo = new PlaneGeometry(FLAG_LENGTH, FLAG_HEIGHT, 32, 6)
   flagGeo.translate(FLAG_LENGTH / 2, -FLAG_HEIGHT / 2, 0)
   const pos = flagGeo.attributes.position!
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i)
-    const taper = 1 - 0.78 * (x / FLAG_LENGTH)
+    const taper = 1 - 0.94 * (x / FLAG_LENGTH)
     pos.setY(i, (pos.getY(i) + FLAG_HEIGHT / 2) * taper - (FLAG_HEIGHT / 2) * taper)
   }
 
@@ -50,24 +50,31 @@ export function createBanners(env: Environment, field: Heightfield) {
     const anchor = vec2(s.x, s.z)
     const gust = gustAt(env, anchor)
     const u = positionLocal.x.div(FLAG_LENGTH)
-    const amp = u.mul(0.32).add(0.05).mul(env.windStrength.mul(0.5).add(0.5)).mul(gust.mul(0.7).add(0.65))
-    const wave = positionLocal.x.mul(3.1).sub(env.time.mul(7.5)).add(phase)
-    const droop = float(1).sub(env.windStrength.mul(0.55)).max(0).mul(0.45).mul(u.mul(u))
+    const drive = gust.mul(env.windStrength).clamp(0, 1).toVar()
+    const stretch = drive.mul(0.62).add(0.38)
+    const droop = drive.mul(-0.84).add(0.98)
+    const slow = positionLocal.x.mul(3.1).sub(env.time.mul(2.2)).add(phase)
+    const fast = positionLocal.x.mul(5.5).sub(env.time.mul(10)).add(phase)
+    const calmAmp = drive.oneMinus().mul(0.018).mul(env.windStrength)
+    const gustAmp = drive.mul(0.24)
+    const ripple = sin(slow).mul(calmAmp).add(sin(fast).mul(gustAmp))
     const positionNode = vec3(
-      positionLocal.x.sub(sin(wave).abs().mul(0.06).mul(u)),
-      positionLocal.y.sub(droop).add(sin(wave.mul(0.5).add(1)).mul(0.04).mul(u)),
-      positionLocal.z.add(sin(wave).mul(amp))
+      positionLocal.x.mul(stretch),
+      positionLocal.y.sub(droop.mul(u.pow(1.7))).add(sin(fast.mul(0.65)).mul(drive).mul(u).mul(0.055)),
+      positionLocal.z.add(ripple.mul(u))
     )
-    const slope = cos(wave).mul(3.1).mul(amp)
-    const normal = transformNormalToView(vec3(slope.negate(), 0, 1).normalize()).mul(faceDirection)
+    const slope = ripple.div(FLAG_LENGTH).add(u.mul(
+      cos(slow).mul(calmAmp).mul(3.1).add(cos(fast).mul(gustAmp).mul(5.5))
+    ))
+    const normal = transformNormalToView(vec3(slope.negate(), 0, stretch).normalize()).mul(faceDirection)
 
     const colorNode = Fn(() => {
       const t = uv()
       // Distance to the cloth border in metres, for the inked edge.
-      const across = min(t.y, t.y.oneMinus()).mul(FLAG_HEIGHT).mul(float(1).sub(t.x.mul(0.78)))
-      const along = t.x.oneMinus().mul(FLAG_LENGTH)
+      const across = min(t.y, t.y.oneMinus()).mul(FLAG_HEIGHT).mul(float(1).sub(t.x.mul(0.94)))
+      const along = min(t.x, t.x.oneMinus()).mul(FLAG_LENGTH).mul(stretch)
       const edge = min(across, along)
-      const base = i % 2 === 0 ? color('#c6402e') : color('#2f5fa8')
+      const base = i % 2 === 0 ? color('#c64b35') : color('#b55336')
       const band = step(0.1, t.x).mul(step(t.x, 0.18))
       const cloth = mix(base, color('#f1e6cc'), band)
       return mix(cloth, inkColor(env, cloth), inkEdge(edge))
@@ -84,7 +91,7 @@ export function createBanners(env: Environment, field: Heightfield) {
     const flag = new Mesh(flagGeo, flagMaterial)
     flag.position.set(s.x, field.heightAt(s.x, s.z) + POLE_HEIGHT - 0.42, s.z)
     flag.rotation.y = windAngle
-    flag.castShadow = true
+    flag.castShadow = flag.receiveShadow = true
     group.add(flag)
   })
 
