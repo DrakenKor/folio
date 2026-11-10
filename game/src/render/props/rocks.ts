@@ -1,6 +1,6 @@
 // Warm chamfered boulders and ruin stones, with moss confined to upward planes.
 import { Matrix4, Mesh, Quaternion, Vector3, Euler } from 'three/webgpu'
-import { attribute, color, mix, normalWorld, smoothstep } from 'three/tsl'
+import { attribute, color, float, mix } from 'three/tsl'
 import { GeometryBuilder, linearColor } from '../geometry'
 import { CelMaterial } from '../materials/cel'
 import type { Environment } from '../materials/environment'
@@ -8,6 +8,7 @@ import { rng, subSeed } from '../rng'
 import { distanceToLine, type Heightfield } from '../terrain/heightfield'
 import type { TreeSite } from '../foliage/trees'
 import { stoneGeometry } from './stone-geometry'
+import { stoneMoss } from './stone-moss'
 
 /** Warm greys at mid value, clearly below the knight's armour. */
 const STONE = ['#817c74', '#7b766f', '#878178', '#77736c']
@@ -37,9 +38,9 @@ export function createRocks(env: Environment, field: Heightfield, trees: TreeSit
     builder.add(shape, m, {
       color: linearColor(STONE[Math.floor(random() * STONE.length)]!, 0.9 + random() * 0.2),
       // The ink hull stays continuous across the broad planes and bevels.
-      vertex: (p, _normal, index) => {
+      vertex: p => {
         const d = p.clone().sub(centre).divide(scale).normalize()
-        return { hull: [d.x, d.y, d.z], moss: [shape.attributes.position!.getZ(index) * 0.5 + 0.5] }
+        return { hull: [d.x, d.y, d.z] }
       }
     })
     shape.dispose()
@@ -65,10 +66,11 @@ export function createRocks(env: Environment, field: Heightfield, trees: TreeSit
   }
 
   const vertexColor = attribute('color', 'vec3')
-  const moss = smoothstep(0.65, 0.92, normalWorld.y).mul(smoothstep(0.15, 0.72, attribute('moss', 'float'))).mul(0.72)
+  const moss = stoneMoss(float(0)).mul(0.72)
   const material = new CelMaterial(env, {
     colorNode: mix(vertexColor, color('#5f7a3c'), moss),
     outlineNormal: attribute('hull', 'vec3'),
+    outlineWidth: 0.7,
     bandOffset: null
   })
   material.name = 'rock'

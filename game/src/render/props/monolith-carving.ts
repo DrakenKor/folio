@@ -1,6 +1,6 @@
 import { Group, Mesh, Vector3, type Node } from 'three/webgpu'
 import { abs, attribute, color, float, max, mod, mrt, smoothstep, vec2, vec4 } from 'three/tsl'
-import { CelMaterial, inkColor } from '../materials/cel'
+import { CelMaterial } from '../materials/cel'
 import type { Environment } from '../materials/environment'
 import { carve, split, StoneGeometry, type Cut, type Point } from './monolith-cells'
 
@@ -43,7 +43,7 @@ export function createCarvedShaft(env: Environment): Group {
         const b = cell[j]!
         const length = Math.hypot(b[0] - a[0], b[1] - a[1])
         const wall = (p: Point): Point => [p[0] + (b[1] - a[1]) / length * bevel, p[1] - (b[0] - a[0]) / length * bevel]
-        surface.polygon([top[i]!, facePoint(wall(a), face, GROOVE_DEPTH), facePoint(wall(b), face, GROOVE_DEPTH), top[j]!], 0.86)
+        surface.polygon([top[i]!, facePoint(wall(a), face, GROOVE_DEPTH), facePoint(wall(b), face, GROOVE_DEPTH), top[j]!], 0.78)
       }
     }
     for (const [left, right] of [[-1, -0.93], [-0.93, 0.93], [0.93, 1]] as Point[]) {
@@ -54,7 +54,6 @@ export function createCarvedShaft(env: Environment): Group {
   }
   const material = new CelMaterial(env, {
     colorNode: color(MONOLITH_STONE).mul(attribute('stoneValue', 'float')),
-    emissiveNode: color(CYAN).mul(latticeWake(env)).mul(0.18),
     outlineColor: null, landmarkSpill: 0.15
   })
   material.name = 'monolith-stone'
@@ -70,11 +69,13 @@ export function createCarvedShaft(env: Environment): Group {
   const glow = grooveGlow(env)
   const inlay = new CelMaterial(env, {
     color: '#56605b', emissiveNode: glow, landmarkSpill: 0.15,
-    outlineColor: inkColor(env, color(MONOLITH_STONE).rgb), outlineNormal: attribute('hull', 'vec3')
+    outlineColor: null
   })
   inlay.name = 'monolith-groove-floor'
   inlay.mrtNode = mrt({ glow: vec4(glow.mul(1.7), 1) })
-  group.add(new Mesh(floor.build(), inlay))
+  const grooveFloor = new Mesh(floor.build(), inlay)
+  grooveFloor.receiveShadow = true
+  group.add(grooveFloor)
   return group
 }
 
@@ -90,7 +91,7 @@ function grooveBevel(a: Point, b: Point, cuts: Cut[]): number {
     const across = Math.abs((x - cut.a[0]) * dy - (y - cut.a[1]) * dx) / length
     return along > -1e-6 && along < length + 1e-6 && Math.abs(across - cut.width) < 1e-6
   })
-  return cut ? Math.min(0.012, cut.width * 0.35) : 0
+  return cut ? cut.width * 0.38 : 0
 }
 
 /** The spine carries the crest; diamonds and triangular cells illuminate in its wake. */
@@ -100,7 +101,7 @@ function grooveGlow(env: Environment): Node<'vec3'> {
   let diamond: Node<'float'> = float(0)
   for (const [width, height] of DIAMONDS) {
     const distance = abs(abs(uv.x).div(width).add(abs(uv.y.sub(DIAMOND_CENTRE)).div(height)).sub(1)).mul(width)
-    diamond = max(diamond, smoothstep(0.008, 0.030, distance).oneMinus())
+    diamond = max(diamond, smoothstep(0.012, 0.040, distance).oneMinus())
   }
   const pulse = climbingPulse(env, uv.y)
   const lit = spine.mul(pulse.mul(3.6).add(0.42)).max(diamond.mul(pulse.mul(1.15).add(0.30)))
@@ -136,21 +137,21 @@ function carvingUv(): Node<'vec2'> {
 
 /** Two nested diamonds lead into triangular rows doubling towards the crown. */
 function carvingCuts(): Cut[] {
-  const cuts: Cut[] = [{ a: [0, 0], b: [0, SHAFT_HEIGHT], width: 0.095 }]
+  const cuts: Cut[] = [{ a: [0, 0], b: [0, SHAFT_HEIGHT], width: 0.11 }]
   for (const [width, height] of DIAMONDS) {
     const diamond: Point[] = [[0, DIAMOND_CENTRE - height], [width, DIAMOND_CENTRE], [0, DIAMOND_CENTRE + height], [-width, DIAMOND_CENTRE]]
-    diamond.forEach((a, i) => cuts.push({ a, b: diamond[(i + 1) % 4]!, width: 0.032 }))
+    diamond.forEach((a, i) => cuts.push({ a, b: diamond[(i + 1) % 4]!, width: 0.048 }))
   }
   for (let band = 0; band < 3; band++) {
     const count = 2 ** band
     const low = LATTICE_ROWS[band]!
     const high = LATTICE_ROWS[band + 1]!
-    cuts.push({ a: [-1, low], b: [1, low], width: 0.012 })
+    cuts.push({ a: [-1, low], b: [1, low], width: 0.023 })
     for (let i = 0; i < count; i++) {
       const left = -1 + i * 2 / count
       const right = -1 + (i + 1) * 2 / count
       const tip: Point = [(left + right) * 0.5, high]
-      cuts.push({ a: [left, low], b: tip, width: 0.012 }, { a: tip, b: [right, low], width: 0.012 })
+      cuts.push({ a: [left, low], b: tip, width: 0.023 }, { a: tip, b: [right, low], width: 0.023 })
     }
   }
   return cuts

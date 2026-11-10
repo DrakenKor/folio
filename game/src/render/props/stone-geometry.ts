@@ -17,15 +17,10 @@ export function stoneGeometry(random: () => number): BufferGeometry {
       return new Vector3(p.x * s + (ring > 1 ? 0.08 : 0), y! + p.dot(tilt) + wear, p.z * s)
     }))
   const positions: number[] = []
-  const normals: number[] = []
   const polygon = (points: Vector3[]) => {
-    const face = points[1]!.clone().sub(points[0]!).cross(points[2]!.clone().sub(points[0]!)).normalize()
     for (let i = 1; i < points.length - 1; i++) {
       for (const p of [points[0]!, points[i]!, points[i + 1]!]) {
-        const rounded = new Vector3(p.x, p.y * 0.6, p.z).normalize()
-        const n = face.clone().lerp(rounded, 0.24).normalize()
         positions.push(p.x, p.y, p.z)
-        normals.push(n.x, n.y, n.z)
       }
     }
   }
@@ -39,6 +34,31 @@ export function stoneGeometry(random: () => number): BufferGeometry {
   polygon(rings[0]!)
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
-  geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3))
+  smoothStoneNormals(geometry)
   return geometry
+}
+
+/** Shares angle-weighted normals across bevels while retaining the stone's broad geometric planes. */
+export function smoothStoneNormals(geometry: BufferGeometry): void {
+  const positions = geometry.getAttribute('position')
+  const sums = new Map<string, Vector3>()
+  const keys = Array.from({ length: positions.count }, (_, i) =>
+    `${positions.getX(i).toFixed(5)},${positions.getY(i).toFixed(5)},${positions.getZ(i).toFixed(5)}`)
+  const index = geometry.index
+  const count = index?.count ?? positions.count
+  for (let i = 0; i < count; i += 3) {
+    const ids = [0, 1, 2].map(j => index ? index.getX(i + j) : i + j)
+    const points = ids.map(j => new Vector3().fromBufferAttribute(positions, j))
+    const normal = points[1]!.clone().sub(points[0]!).cross(points[2]!.clone().sub(points[0]!)).normalize()
+    ids.forEach((id, corner) => {
+      const a = points[(corner + 1) % 3]!.clone().sub(points[corner]!).normalize()
+      const b = points[(corner + 2) % 3]!.clone().sub(points[corner]!).normalize()
+      const angle = Math.acos(Math.max(-1, Math.min(1, a.dot(b))))
+      const key = keys[id]!
+      const sum = sums.get(key) ?? new Vector3()
+      sums.set(key, sum.addScaledVector(normal, angle))
+    })
+  }
+  const normals = keys.flatMap(key => sums.get(key)!.clone().normalize().toArray())
+  geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3))
 }
