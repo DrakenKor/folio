@@ -25,7 +25,7 @@ export function createMonolithSite(env: Environment, field: Heightfield): Group 
   }
   const edge = max(abs(positionLocal.x), abs(positionLocal.z)).div(attribute('tierHalf', 'float'))
   const patch = sin(positionLocal.x.mul(1.15).add(positionLocal.z.mul(0.55))).add(sin(positionLocal.z.mul(1.5))).mul(0.25).add(0.5)
-  const moss = smoothstep(0.68, 0.95, edge).mul(smoothstep(0.35, 0.7, patch)).mul(smoothstep(0.65, 0.92, normalWorld.y))
+  const moss = smoothstep(0.65, 0.92, edge).mul(smoothstep(0.25, 0.65, patch)).mul(smoothstep(0.65, 0.92, normalWorld.y))
   const material = new CelMaterial(env, {
     colorNode: mix(attribute('color', 'vec3'), color('#697b45'), moss.mul(0.8)),
     outlineNormal: attribute('hull', 'vec3')
@@ -41,8 +41,10 @@ export function createMonolithSite(env: Environment, field: Heightfield): Group 
 function tierShape(size: number): Shape {
   const shape = new Shape()
   const corner = 0.35
-  const edge: Point[] = [[-size + corner, -size], [-size * 0.4, -size], [-size * 0.34, -size + 0.065], [-size * 0.24, -size + 0.07], [-size * 0.18, -size], [size * 0.57, -size], [size * 0.61, -size + 0.10], [size * 0.69, -size], [size - corner, -size]]
   for (let side = 0; side < 4; side++) {
+    const chip = Math.sin(size * 3 + side * 1.7) * size * 0.48
+    const wear = 0.06 + (side % 3) * 0.035
+    const edge: Point[] = [[-size + corner, -size], [chip - 0.20, -size], [chip - 0.10, -size + wear], [chip + 0.14, -size + wear * 0.9], [chip + 0.24, -size], [size - corner, -size]]
     const angle = side * Math.PI / 2
     edge.forEach(([x, z], i) => {
       const u = x * Math.cos(angle) - z * Math.sin(angle)
@@ -67,21 +69,22 @@ function carvedRing(env: Environment, field: Heightfield): Group {
     const angle = (section + (u + 1) / 2) / 16 * Math.PI * 2
     const x = Math.cos(angle) * (4.95 + r)
     const z = Math.sin(angle) * (4.95 + r)
-    return new Vector3(x, field.heightAt(field.monolith.x + x, field.monolith.z + z) - field.monolith.y + 0.25 + height, z)
+    const shoulder = (0.34 - r) * 0.35
+    return new Vector3(x, field.heightAt(field.monolith.x + x, field.monolith.z + z) - field.monolith.y + 0.25 + shoulder + height, z)
   }
   for (let section = 0; section < 16; section++) {
     for (const cell of cells) {
       const outer = inset(cell, cell.map(() => -0.01)) ?? cell
-      top.polygon(cell.map(p => point(p, section, 0.20)), 1)
+      top.polygon(cell.map(p => point(p, section, 0.09)), 1)
       for (let i = 0; i < cell.length; i++) {
         const j = (i + 1) % cell.length
-        top.polygon([point(cell[i]!, section, 0.20), point(outer[i]!, section, 0.08), point(outer[j]!, section, 0.08), point(cell[j]!, section, 0.20)], 0.65)
+        top.polygon([point(cell[i]!, section, 0.09), point(outer[i]!, section, 0.035), point(outer[j]!, section, 0.035), point(cell[j]!, section, 0.09)], 0.65)
       }
     }
     for (let part = 0; part < 8; part++) {
       const u = part / 4 - 1
       const v = (part + 1) / 4 - 1
-      floor.polygon([[u, -0.34], [v, -0.34], [v, 0.34], [u, 0.34]].map(p => point(p as Point, section, 0.079)), 1)
+      floor.polygon([[u, -0.34], [v, -0.34], [v, 0.34], [u, 0.34]].map(p => point(p as Point, section, 0.034)), 1)
     }
   }
   const stone = new CelMaterial(env, { colorNode: color('#aca38e').mul(attribute('stoneValue', 'float')), outlineColor: null })
