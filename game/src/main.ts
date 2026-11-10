@@ -1,44 +1,102 @@
-import { Color, Mesh, MeshStandardNodeMaterial, PerspectiveCamera, PlaneGeometry, Scene, WebGPURenderer, DirectionalLight, HemisphereLight } from 'three/webgpu'
+import { WebGPURenderer } from 'three/webgpu'
+import { Clock } from './platform/clock'
+import { Input } from './platform/input'
+import { initialWorld, storeSession } from './platform/session'
+import { BasicView } from './render/basic/view'
+import { createAPI } from './debug/api'
+import { graphicsStopped, toast } from './debug/overlay'
 
-// Placeholder entry: an empty lit scene. T0.3 replaces this with the platform
-// clock, simulation and debug API.
 const canvas = document.getElementById('stage') as HTMLCanvasElement
-const params = new URLSearchParams(location.search)
-
-const renderer = new WebGPURenderer({
-  canvas,
-  antialias: true,
-  forceWebGL: params.get('backend') === 'webgl'
-})
+const url = new URL(location.href)
+const initial = await initialWorld(url)
+const renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: url.searchParams.get('backend') === 'webgl' })
 await renderer.init()
+document.body.dataset.backend = 'isWebGPUBackend' in renderer.backend ? 'webgpu' : 'webgl2'
+const view = new BasicView(renderer)
+const input = new Input(canvas, () => view.camera.basis(), (x, y) => view.camera.groundPoint(x, y))
+const clock = new Clock(initial.world, world => input.command(world), world => input.afterStep(world))
+if (initial.paused) clock.pause()
+if (url.searchParams.has('bookmark')) view.camera.bookmark(url.searchParams.get('bookmark')!)
 
-const scene = new Scene()
-scene.background = new Color(0x9cc7e8)
-scene.add(new HemisphereLight(0xdfefff, 0x4a6b3a, 1.2))
-const sun = new DirectionalLight(0xfff1d6, 2)
-sun.position.set(30, 50, 20)
-scene.add(sun)
+let lost = false
+let animation = 0
+let firstFrame!: () => void
+const ready = new Promise<void>(resolve => { firstFrame = resolve })
+const listeners = new AbortController()
+const options = { signal: listeners.signal }
 
-const ground = new Mesh(new PlaneGeometry(200, 200), new MeshStandardNodeMaterial({ color: 0x6fa35a }))
-ground.rotation.x = -Math.PI / 2
-scene.add(ground)
-
-const camera = new PerspectiveCamera(45, 1, 0.1, 1000)
-camera.position.set(0, 30, 22)
-camera.lookAt(0, 0, 0)
-
-function resize() {
-  const ratio = Math.min(window.devicePixelRatio, 1.5)
-  renderer.setPixelRatio(ratio)
-  renderer.setSize(window.innerWidth, window.innerHeight, false)
-  camera.aspect = window.innerWidth / window.innerHeight
-  camera.updateProjectionMatrix()
+function suspension(): void {
+  clock.suspend('hidden', document.hidden)
+  clock.suspend('blur', !document.hasFocus())
+  if (clock.paused) input.release()
 }
-window.addEventListener('resize', resize)
+window.addEventListener('blur', suspension, options)
+window.addEventListener('focus', suspension, options)
+document.addEventListener('visibilitychange', suspension, options)
+suspension()
+
+renderer.onDeviceLost = () => {
+  if (lost) return
+  lost = true
+  clock.suspend('graphics', true)
+  input.release()
+  cancelAnimationFrame(animation)
+  storeSession(clock.world, true, true)
+  graphicsStopped()
+}
+
+function loseDevice(): void {
+  if (lost) return
+  if ('isWebGPUBackend' in renderer.backend) {
+    const backend = renderer.backend as unknown as { device: { destroy(): void } }
+    backend.device.destroy()
+    // three.js suppresses intentional device destruction; forward this injected loss.
+    renderer.onDeviceLost({ api: 'WebGPU', message: 'Debug device loss', reason: 'destroyed', originalEvent: null })
+  } else {
+    const extension = (renderer.getContext() as WebGL2RenderingContext).getExtension('WEBGL_lose_context')
+    if (!extension) throw new Error('WEBGL_lose_context is unavailable')
+    extension.loseContext()
+  }
+}
+
+const api = createAPI(clock, input, view.camera, ready, loseDevice)
+if (import.meta.env.DEV || url.searchParams.get('debug') === '1') window.__game = api
+
+window.addEventListener('keydown', async event => {
+  if (event.code !== 'F8' || event.repeat) return
+  event.preventDefault()
+  const text = await api.exportReplay()
+  try {
+    await navigator.clipboard.writeText(text)
+    toast('Replay copied')
+  } catch {
+    toast('Clipboard refused. Replay logged in console.')
+    console.warn('Replay:', text)
+  }
+}, options)
+
+function resize(): void { view.resize(innerWidth, innerHeight, Math.min(devicePixelRatio, 1.5)) }
+window.addEventListener('resize', resize, options)
 resize()
 
-renderer.setAnimationLoop(() => renderer.render(scene, camera))
+function draw(now: number): void {
+  if (lost) return
+  view.sync(clock.frame(now))
+  view.render()
+  firstFrame()
+  animation = requestAnimationFrame(draw)
+}
+animation = requestAnimationFrame(draw)
 
-Object.assign(window, {
-  __game: { ready: true, backend: 'isWebGPUBackend' in renderer.backend ? 'webgpu' : 'webgl2' }
+window.addEventListener('pagehide', () => {
+  if (import.meta.env.DEV) storeSession(clock.world, clock.userPaused)
+}, options)
+
+if (import.meta.hot) import.meta.hot.dispose(() => {
+  cancelAnimationFrame(animation)
+  storeSession(clock.world, clock.userPaused)
+  listeners.abort()
+  input.dispose()
+  view.dispose()
+  void renderer.dispose()
 })
