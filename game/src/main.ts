@@ -22,6 +22,9 @@ let lost = false
 let animation = 0
 let firstFrame!: () => void
 const ready = new Promise<void>(resolve => { firstFrame = resolve })
+void ready.then(() => {
+  if (window.parent !== window) window.parent.postMessage('ready', location.origin)
+})
 const listeners = new AbortController()
 const options = { signal: listeners.signal }
 

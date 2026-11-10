@@ -12,8 +12,15 @@ export interface DemoEntry {
   aliases?: string[]
 }
 
-// The seven reworked demos, in home-page order. No other route belongs here.
+// The demos in home-page order.
 export const demos: DemoEntry[] = [
+  {
+    slug: 'game',
+    route: '/game-demo',
+    title: 'Game',
+    line: 'An original action RPG, running in your browser.',
+    variant: 'stage'
+  },
   {
     slug: 'particles',
     route: '/gpu-particles-demo',
