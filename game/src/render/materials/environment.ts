@@ -1,0 +1,122 @@
+// Uniforms shared by every material in one scene: time, light, wind and haze.
+// Each scene owns one Environment, so two views never fight over globals.
+import { Color, type Node, type UniformNode, DataTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, RGBAFormat, UnsignedByteType, Vector2, Vector3 } from 'three/webgpu'
+import { positionWorld, smoothstep, texture, uniform } from 'three/tsl'
+import { Noise2D, subSeed } from '../rng'
+
+export interface Palette {
+  sun: string
+  skyFill: string
+  groundFill: string
+  zenith: string
+  horizon: string
+  haze: string
+  sunHaze: string
+}
+
+export const MEADOW_PALETTE: Palette = {
+  sun: '#ffe1b8',
+  skyFill: '#8fb3e8',
+  groundFill: '#8a8a5a',
+  zenith: '#3a72c2',
+  horizon: '#c4d8ec',
+  haze: '#94b4dc',
+  sunHaze: '#ffdcb0'
+}
+
+export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETTE) {
+  const sunDirection = new Vector3()
+  const env = {
+    seed,
+    palette,
+    /** Scene time in seconds; the page decides whether it runs or is frozen. */
+    time: uniform(0),
+    /** Unit vector pointing from the ground towards the sun. */
+    sunDirection: uniform(sunDirection),
+    /** Sun colour times intensity, matching the directional light. */
+    sunColor: colorUniform(palette.sun),
+    zenith: colorUniform(palette.zenith),
+    horizon: colorUniform(palette.horizon),
+    haze: colorUniform(palette.haze),
+    sunHaze: colorUniform(palette.sunHaze),
+    /** Haze extinction per metre, past `hazeStart`. */
+    hazeDensity: uniform(0.0032),
+    hazeStart: uniform(14),
+    /** Wind heading on the ground plane (unit) and strength 0..2. */
+    windDirection: uniform(new Vector2(0.8, 0.6).normalize()),
+    windStrength: uniform(1),
+    /** Cloud density threshold: higher means clearer sky. */
+    cloudCover: uniform(0.56),
+    /** How much a passing cloud darkens the ground, 0..1. */
+    cloudShadow: uniform(0.85),
+    /** Cel band shape shared by every cel material. */
+    bands: {
+      terminator: uniform(0.04),
+      highlight: uniform(0.4),
+      mid: uniform(0.5),
+      softness: uniform(0.05)
+    },
+    /** Tileable seeded noise: r low, g mid, b high frequency, a cellular-ish. */
+    noise: createNoiseTexture(subSeed(seed, 'noise'))
+  }
+  return env
+}
+
+export type Environment = ReturnType<typeof createEnvironment>
+
+/** Cloud density on the cloud layer at `uv`; the sky and the ground share it. */
+export function cloudDensity(env: Environment, uv: Node<'vec2'>) {
+  return texture(env.noise, uv)
+    .r.mul(0.8)
+    .add(texture(env.noise, uv.mul(2.3).add(0.37)).g.mul(0.16))
+    .add(texture(env.noise, uv.mul(6.1).add(0.71)).b.mul(0.04))
+}
+
+/** 1 in open sun, lower under the drifting shadow of a cloud. */
+export function cloudLight(env: Environment) {
+  const toLayer = env.sunDirection.xz.div(env.sunDirection.y.max(0.15)).mul(positionWorld.y.negate().add(300))
+  const uv = positionWorld.xz.add(toLayer).mul(0.0026).add(env.windDirection.mul(env.time.mul(0.0022)))
+  const density = texture(env.noise, uv).r
+  return smoothstep(env.cloudCover.sub(0.03), env.cloudCover.add(0.06), density).mul(env.cloudShadow).oneMinus()
+}
+
+/** A colour uniform typed as vec3, so it composes with vector maths. */
+function colorUniform(hex: string): UniformNode<'vec3', Color> {
+  return uniform(new Color(hex)) as unknown as UniformNode<'vec3', Color>
+}
+
+const NOISE_SIZE = 256
+
+/** A 256² RGBA8 texture of tileable fractal noise at four scales. */
+function createNoiseTexture(seed: number): DataTexture {
+  const n = new Noise2D(seed)
+  const n2 = new Noise2D(seed ^ 0x9e3779b9)
+  const data = new Uint8Array(NOISE_SIZE * NOISE_SIZE * 4)
+  const s = NOISE_SIZE
+  for (let y = 0; y < s; y++) {
+    for (let x = 0; x < s; x++) {
+      const u = x / s
+      const v = y / s
+      const r = n.fbm(u * 4, v * 4, 4, 4)
+      const g = n.fbm(u * 16, v * 16, 3, 16)
+      const b = n2.fbm(u * 48, v * 48, 2, 48)
+      const a = Math.abs(n2.fbm(u * 8, v * 8, 4, 8))
+      const i = (y * s + x) * 4
+      data[i] = Math.round(clamp01(r * 0.5 + 0.5) * 255)
+      data[i + 1] = Math.round(clamp01(g * 0.5 + 0.5) * 255)
+      data[i + 2] = Math.round(clamp01(b * 0.5 + 0.5) * 255)
+      data[i + 3] = Math.round(clamp01(a * 1.6) * 255)
+    }
+  }
+  const tex = new DataTexture(data, s, s, RGBAFormat, UnsignedByteType)
+  tex.wrapS = tex.wrapT = RepeatWrapping
+  tex.magFilter = LinearFilter
+  tex.minFilter = LinearMipmapLinearFilter
+  tex.generateMipmaps = true
+  tex.needsUpdate = true
+  return tex
+}
+
+function clamp01(x: number): number {
+  return x < 0 ? 0 : x > 1 ? 1 : x
+}
