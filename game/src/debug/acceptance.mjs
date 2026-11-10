@@ -80,7 +80,11 @@ async function waitFor(predicate, description) {
 async function navigate(url) {
   const previous = loads
   const navigation = await page.send('Page.navigate', { url })
-  if (!navigation.loaderId) await page.send('Page.reload')
+  if (!navigation.loaderId) {
+    // A fragment-only change navigates in place; reload only once the new URL is current.
+    await waitFor(async () => (await evaluate('location.href')) === url, 'fragment navigation')
+    await page.send('Page.reload')
+  }
   await waitFor(() => loads > previous, 'page load')
   await page.send('Page.bringToFront')
   await waitFor(() => evaluate('!!window.__game'), 'debug API')
