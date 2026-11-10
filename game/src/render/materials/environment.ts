@@ -1,7 +1,7 @@
 // Uniforms shared by every material in one scene: time, light, wind and haze.
 // Each scene owns one Environment, so two views never fight over globals.
 import { Color, type Node, type UniformNode, DataTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, RGBAFormat, UnsignedByteType, Vector2, Vector3 } from 'three/webgpu'
-import { abs, positionWorld, smoothstep, step, texture, uniform } from 'three/tsl'
+import { abs, float, positionWorld, smoothstep, step, texture, uniform } from 'three/tsl'
 import { Noise2D, subSeed } from '../rng'
 
 export interface Palette {
@@ -85,9 +85,9 @@ export type Environment = ReturnType<typeof createEnvironment>
 
 /** Cloud density on the cloud layer at `uv`; the sky and the ground share it. */
 export function cloudDensity(env: Environment, uv: Node<'vec2'>) {
-  return texture(env.noise, uv)
+  return texture(env.noise, uv).level(float(2))
     .r.mul(0.85)
-    .add(texture(env.noise, uv.mul(1.9).add(0.37)).r.mul(0.15))
+    .add(texture(env.noise, uv.mul(1.9).add(0.37)).level(float(2)).r.mul(0.15))
 }
 
 /** 1 in open sun, lower under the large, soft shadow of a drifting cloud. */

@@ -20,7 +20,7 @@ export function createSky(env: Environment) {
   const toLayer = dir.xz.mul(float(300).sub(cameraPosition.y).div(up.max(0.03)))
   const cloudUv = cameraPosition.xz.add(toLayer).mul(0.0011).sub(env.windDirection.mul(env.time.mul(0.0022)))
   const body = cloudDensity(env, cloudUv)
-  const towardSun = cloudDensity(env, cloudUv.add(env.sunDirection.xz.normalize().mul(0.022)))
+  const towardSun = cloudDensity(env, cloudUv.add(env.sunDirection.xz.normalize().mul(0.05)))
   const cover = smoothstep(env.cloudCover.sub(0.01), env.cloudCover.add(0.045), body).mul(smoothstep(0.01, 0.16, up))
   const disk = smoothstep(0.99955, 0.99975, sunDot).mul(cover.oneMinus())
 
@@ -30,10 +30,10 @@ export function createSky(env: Environment) {
     sky = sky.add(env.sunHaze.mul(sunDot.pow(12).mul(0.5)))
     const coverage = env.cloudCover
     // Soft painted edges and warm tops over lavender undersides.
-    const shaded = smoothstep(-0.018, 0.018, towardSun.sub(body)).mul(0.7)
-      .add(smoothstep(coverage, coverage.add(0.18), body).mul(0.3))
-    const lit = mix(color('#fffaf0'), env.sunHaze, sunDot.pow(3).mul(0.45))
-    const under = mix(color('#a7aed2'), color('#c3c3dc'), smoothstep(coverage.add(0.05), coverage.add(0.2), body))
+    const shaded = smoothstep(-0.006, 0.018, towardSun.sub(body)).mul(0.85)
+      .add(smoothstep(coverage, coverage.add(0.18), body).mul(0.15))
+    const lit = mix(color('#fff2da'), env.sunHaze, sunDot.pow(3).mul(0.45))
+    const under = mix(color('#9296c2'), color('#b3b1d1'), smoothstep(coverage.add(0.05), coverage.add(0.2), body))
     const cloud = mix(lit, under, shaded)
     // Clouds near the horizon sink into the haze.
     const cloudFinal = mix(env.horizon, cloud, smoothstep(0.0, 0.25, up).mul(0.7).add(0.3))
