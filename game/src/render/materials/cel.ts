@@ -3,7 +3,7 @@
 // the bands straight to shade with one soft edge, a faint warm rim catches
 // lit silhouettes, and one ink rule colours every outline.
 import { LightingModel, MeshToonNodeMaterial, type MeshToonNodeMaterialParameters, type Node } from 'three/webgpu'
-import { BRDF_Lambert, diffuseColor, dot, float, fwidth, mix, normalView, normalWorld, positionView, positionViewDirection, smoothstep, texture, uniform, vec3 } from 'three/tsl'
+import { BRDF_Lambert, diffuseColor, dot, float, fwidth, mix, normalView, normalWorld, positionView, positionViewDirection, positionWorld, smoothstep, texture, uniform, vec3 } from 'three/tsl'
 import { cloudLight, type Environment } from './environment'
 
 /** Band shape, held on the environment so one slider moves every material. */
@@ -113,6 +113,11 @@ class CelLightingModel extends LightingModel {
     const shade = mix(vec3(1), this.env.shading.shadeTint, saturation).mul(value).mul(this.env.shading.shadeValue)
     reflectedLight.indirectDiffuse.addAssign(dot(irradiance, LUMA).mul(lambert(shade)))
     reflectedLight.indirectDiffuse.mulAssign(ambientOcclusion)
+    const landmark = this.env.landmark
+    const delta = landmark.position.sub(positionWorld)
+    const falloff = smoothstep(0, landmark.radius, delta.length()).oneMinus().pow(2)
+    const facing = normalWorld.dot(delta.normalize()).max(0).mul(0.7).add(0.3)
+    reflectedLight.indirectDiffuse.addAssign(landmark.color.mul(landmark.strength).mul(falloff).mul(facing).mul(lambert(albedo)))
   }
 }
 
