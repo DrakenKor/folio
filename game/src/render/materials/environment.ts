@@ -43,7 +43,7 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     hazeDensity: uniform(0.0022),
     hazeStart: uniform(24),
     /** How much haze drains saturation before tinting, 0..1. */
-    hazeDesaturate: uniform(0.55),
+    hazeDesaturate: uniform(0.2),
     /** Wind heading on the ground plane (unit) and strength 0..2. */
     windDirection: uniform(new Vector2(0.8, 0.6).normalize()),
     windStrength: uniform(1),
@@ -57,7 +57,7 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     /** Where the player stands: grass bends away and the ground is trampled around it. */
     player: uniform(new Vector3()),
     /** Radius of trampled, shortened grass, as where fights happen. */
-    trampleRadius: uniform(3.6),
+    trampleRadius: uniform(3.2),
     /** Cloud density threshold: higher means clearer sky. */
     cloudCover: uniform(0.56),
     /** How much a passing cloud darkens the ground, 0..1. */
@@ -71,10 +71,14 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     },
     /** Shade, rim and ink rules shared by every cel material. */
     shading: {
-      /** Saturation of the shade band relative to the surface, so shadows stay rich. */
-      shadeSaturation: uniform(0.85),
-      shadeTint: uniform(new Vector3(0.48, 0.38, 1)),
-      shadeValue: uniform(1.05),
+      /** Shade hue; surfaces keep their luminance and take this hue by `shadeHue`. */
+      shadeTint: uniform(new Vector3(0.52, 0.54, 1)),
+      /** How far shade moves from the surface colour to the shade hue, 0..1. */
+      shadeHue: uniform(0.8),
+      /** Shade brightness relative to the surface under the sky fill. */
+      shadeValue: uniform(1.1),
+      /** How much of the fill lit faces lose, 0..1. */
+      fillInLight: uniform(0.75),
       litSaturation: uniform(0.85),
       /** Faint warm rim on the lit side of silhouettes, 0..1. */
       rim: uniform(0.28),

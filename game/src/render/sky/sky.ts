@@ -1,8 +1,8 @@
 // Sky dome with a painted gradient, a sun and drifting two-tone clouds, plus
-// two rings of far hills that the haze turns progressively blue.
+// two rings of far mountains: flat cool blue-green bands, one value step
+// apart, that the haze carries towards the horizon blue.
 import { BackSide, BufferAttribute, BufferGeometry, Group, Mesh, MeshBasicNodeMaterial, SphereGeometry, type Camera } from 'three/webgpu'
-import { cameraPosition, color, float, Fn, mix, mrt, normalize, positionWorld, smoothstep, vec4 } from 'three/tsl'
-import { CelMaterial } from '../materials/cel'
+import { cameraPosition, color, float, Fn, mix, mrt, normalize, normalWorld, positionWorld, smoothstep, texture, vec4 } from 'three/tsl'
 import { cloudDensity, type Environment } from '../materials/environment'
 import { Noise2D, subSeed } from '../rng'
 
@@ -53,8 +53,8 @@ export function createSky(env: Environment) {
   dome.frustumCulled = false
   group.add(dome)
 
-  group.add(createRange(env, { radius: 236, depth: 70, base: -12, low: 26, high: 72, rock: '#657e9e', snowLine: Infinity, shift: 0 }))
-  group.add(createRange(env, { radius: 900, depth: 200, base: -60, low: 70, high: 210, rock: '#7682a0', snowLine: 0.6, shift: 31 }))
+  group.add(createRange(env, { radius: 360, depth: 190, base: -16, low: 8, high: 100, rock: '#4e737c', snowLine: Infinity, shift: 0 }))
+  group.add(createRange(env, { radius: 900, depth: 200, base: -60, low: 70, high: 210, rock: '#7193a9', snowLine: 0.6, shift: 31 }))
 
   return {
     group,
@@ -81,7 +81,7 @@ interface Range {
 function createRange(env: Environment, range: Range): Mesh {
   const noise = new Noise2D(subSeed(env.seed, `range-${range.shift}`))
   const segments = 360
-  const rows = 8
+  const rows = 18
   const positions = new Float32Array((segments + 1) * (rows + 1) * 3)
   const index: number[] = []
   for (let s = 0; s <= segments; s++) {
@@ -90,11 +90,13 @@ function createRange(env: Environment, range: Range): Mesh {
     const cz = Math.sin(a)
     const ridge = 1 - Math.abs(noise.fbm(cx * 2.6 + range.shift, cz * 2.6, 3))
     const broad = noise.fbm(cx * 1.1 - range.shift, cz * 1.1, 2) * 0.5 + 0.5
-    const peak = range.low + (range.high - range.low) * Math.pow(ridge, 2.4) * (0.4 + broad * 0.8)
+    const peak = range.low + (range.high - range.low) * Math.pow(ridge, 4) * (0.25 + broad)
     for (let r = 0; r <= rows; r++) {
       const f = r / rows
-      const y = range.base + (peak - range.base) * Math.pow(f, 0.8)
-      const wobble = noise.sample(cx * 4 + range.shift, cz * 4) * range.depth * 0.12 * (1 - f)
+      const shoulder = noise.fbm(cx * 5 + f * 2 + range.shift, cz * 5 - f * 3, 2)
+      const y = range.base + (peak - range.base) * Math.pow(f, 1.65)
+        + shoulder * range.high * 0.25 * Math.sin(f * Math.PI)
+      const wobble = noise.sample(cx * 4 + f * 2 + range.shift, cz * 4 - f) * range.depth * 0.24 * (1 - f)
       const radius = range.radius - (1 - f) * range.depth + wobble
       const k = (s * (rows + 1) + r) * 3
       positions[k] = cx * radius
@@ -114,14 +116,20 @@ function createRange(env: Environment, range: Range): Mesh {
   geometry.setIndex(index)
   geometry.computeVertexNormals()
 
+  // Painted, not cel-lit: a gentle sun-side lift and a lighter crest keep the
+  // band flat at a distance, without facets turning into stripes.
   const colorNode = Fn(() => {
-    const rock = color(range.rock)
+    const sunSide = smoothstep(-0.2, 0.8, normalWorld.dot(env.sunDirection)).mul(0.14).add(0.92)
+    const crest = mix(float(0.92), float(1.04), positionWorld.y.div(range.high).clamp(0, 1))
+    const rock = color(range.rock).mul(sunSide).mul(crest)
     if (!Number.isFinite(range.snowLine)) return rock
-    const height = positionWorld.y.div(range.high)
-    const snow = smoothstep(float(range.snowLine), float(range.snowLine + 0.06), height)
-    return mix(rock, color('#f2f5fa'), snow)
+    // The snow line wanders along the ridge, so it never reads as one level cut.
+    const line = texture(env.noise, positionWorld.xz.div(700)).r.sub(0.5).mul(0.3).add(range.snowLine)
+    const snow = smoothstep(line, line.add(0.08), positionWorld.y.div(range.high))
+    return mix(rock, color('#e4ecf4').mul(sunSide), snow)
   })()
-  const material = new CelMaterial(env, { colorNode, outlineColor: null })
+  const material = new MeshBasicNodeMaterial()
+  material.colorNode = colorNode
   material.name = 'range'
   const mesh = new Mesh(geometry, material)
   mesh.name = 'range'

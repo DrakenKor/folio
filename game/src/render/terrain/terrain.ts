@@ -6,6 +6,7 @@ import { color, Fn, mix, normalWorld, positionWorld, smoothstep, texture } from 
 import { CelMaterial } from '../materials/cel'
 import { trampleAt, type Environment } from '../materials/environment'
 import { gustAt } from '../materials/wind'
+import { nearFade } from '../foliage/bands'
 import { GRID, type Heightfield, TERRAIN_HALF, TERRAIN_SIZE } from './heightfield'
 import { dryGrass, groundGrass, meadowPatch } from './meadow-tones'
 
@@ -26,15 +27,17 @@ export function createTerrain(env: Environment, field: Heightfield) {
   const fine = texture(env.noise, xz.div(5)).b
 
   const colorNode = Fn(() => {
-    const trample = trampleAt(env, xz)
-    const meadow = dryGrass(groundGrass(env, xz, meadowPatch(env, xz), gustAt(env, xz)), trample.mul(fine.mul(0.4).add(0.6)))
+    const trample = trampleAt(env, xz).toVar()
+    // Where full blades stand: the near band, off the path, outside the trampled ring.
+    const near = nearFade(positionWorld).mul(sample.b).mul(trample.mul(0.6).oneMinus())
+    const meadow = dryGrass(groundGrass(env, xz, meadowPatch(env, xz), gustAt(env, xz), near, trample), trample.mul(fine.mul(0.4).add(0.6)))
     // The path: soft, broken edges where the ground grass thins into worn earth.
     const edgeNoise = fine.sub(0.5).mul(0.5)
     const pathAmount = smoothstep(0.2, 0.6, sample.g.add(edgeNoise))
-    const dirt = mix(color('#9a7f58'), color('#c4a97a'), smoothstep(0.55, 0.95, sample.g).mul(fine.mul(0.4).add(0.6)))
+    const dirt = mix(color('#967d59'), color('#b39b74'), smoothstep(0.55, 0.95, sample.g).mul(fine.mul(0.4).add(0.6)))
     let ground = mix(meadow, dirt, pathAmount)
     // Bare rock where the hills get steep.
-    const rock = mix(color('#7d7a86'), color('#a29fa6'), mid)
+    const rock = mix(color('#7a746b'), color('#948c81'), mid)
     ground = mix(ground, rock, smoothstep(0.66, 0.82, normalWorld.y.add(fine.sub(0.5).mul(0.08))).oneMinus())
     return ground
   })()

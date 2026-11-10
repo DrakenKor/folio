@@ -9,7 +9,8 @@ import { distanceToLine, type Heightfield } from '../terrain/heightfield'
 import type { TreeSite } from '../foliage/trees'
 import { stoneGeometry } from './stone-geometry'
 
-const STONE = ['#b9b09b', '#b4aa96', '#c1b6a0', '#b7ad99']
+/** Warm greys at mid value, clearly below the knight's armour. */
+const STONE = ['#817c74', '#7b766f', '#878178', '#77736c']
 
 export function createRocks(env: Environment, field: Heightfield, trees: TreeSite[]) {
   const random = rng(subSeed(field.seed, 'rocks'))
@@ -66,7 +67,7 @@ export function createRocks(env: Environment, field: Heightfield, trees: TreeSit
   const vertexColor = attribute('color', 'vec3')
   const moss = smoothstep(0.78, 0.98, normalWorld.y).mul(smoothstep(0.15, 0.72, attribute('moss', 'float'))).mul(0.86)
   const material = new CelMaterial(env, {
-    colorNode: mix(vertexColor, color('#65863f'), moss),
+    colorNode: mix(vertexColor, color('#5f7a3c'), moss),
     outlineNormal: attribute('hull', 'vec3'),
     bandOffset: null
   })

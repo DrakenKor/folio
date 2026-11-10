@@ -37,9 +37,7 @@ import { windAt } from '../materials/wind'
 import { GRID, type Heightfield, TERRAIN_HALF } from '../terrain/heightfield'
 import { bladeTone, dryGrass, gustSheen, meadowPatch, meadowTones } from '../terrain/meadow-tones'
 import { fieldFocus, nearFade } from './bands'
-
-/** Metres between clump centres: fixed, so density never depends on the camera. */
-export const CLUMP_CELL = 0.5
+import { CLUMP_CELL, tuftAt } from './tufts'
 /** Clump cells per side of the field: 112 × 0.5 m covers 56 m. */
 const CLUMP_SIDE = 112
 /** Blades per tuft; 112² × 9 is about 113k blades. */
@@ -63,6 +61,7 @@ export function createGrass(env: Environment, field: Heightfield) {
   const vGust = varyingProperty('float', 'vGrassGust')
   const vPatch = varyingProperty('float', 'vGrassPatch')
   const vVariety = varyingProperty('float', 'vGrassVariety')
+  const vFade = varyingProperty('float', 'vGrassFade')
   const vTrample = varyingProperty('float', 'vGrassTrample')
   const vNormal = varyingProperty('vec3', 'vGrassNormal')
 
@@ -75,17 +74,17 @@ export function createGrass(env: Environment, field: Heightfield) {
     const blade = index.sub(clump.mul(BLADES))
     const gz = floor(clump.div(side))
     const gx = clump.sub(gz.mul(side))
-    const base = floor(fieldFocus(CLUMP_SIDE * CLUMP_CELL * 0.5 - 4).div(CLUMP_CELL)).sub(side.mul(0.5))
+    const focus = fieldFocus(CLUMP_SIDE * CLUMP_CELL * 0.5 - 10).toVar()
+    const base = floor(focus.div(CLUMP_CELL)).sub(side.mul(0.5))
     const cell = base.add(mod(vec2(gx, gz).sub(base), side)).toVar()
-    const clumpSeed = cell.x.toInt().add(4096).mul(8192).add(cell.y.toInt().add(4096)).toVar()
-    const bladeSeed = clumpSeed.mul(BLADES).add(blade.toInt()).toVar()
-    const clumpRand = (salt: number) => hash(clumpSeed.add(salt))
+    const tuft = tuftAt(env, cell)
+    const bladeSeed = tuft.seed.mul(BLADES).add(blade.toInt()).toVar()
+    const clumpRand = tuft.rand
     const bladeRand = (salt: number) => hash(bladeSeed.add(salt))
 
     // The tuft: a jittered centre, a radius, a height and a hue of its own.
-    const centre = cell.add(vec2(clumpRand(0x9e37), clumpRand(0x51ed)).mul(0.7).add(0.15)).mul(CLUMP_CELL)
-    const radius = mix(float(0.1), float(0.22), clumpRand(0x2c1b))
-    const tuftHeight = mix(float(0.75), float(1.2), clumpRand(0x7f4a))
+    const { centre, radius } = tuft
+    const tuftHeight = tuft.height
     const tuftHue = clumpRand(0x3b9d).sub(0.5).mul(0.32)
 
     // The blade: spread over the tuft's disc, leaning out from its centre.
@@ -98,20 +97,20 @@ export function createGrass(env: Environment, field: Heightfield) {
 
     // Path edges thin blade by blade; the middle band thins and shortens with distance.
     const mask = site.b
-    const fade = nearFade(vec3(xz.x, groundY, xz.y)).toVar()
-    const threshold = bladeRand(0x3456).mul(0.85)
+    const edge = xz.sub(focus).abs()
+    const fade = nearFade(vec3(xz.x, groundY, xz.y))
+      .mul(smoothstep(18, 26, edge.x.max(edge.y)).oneMinus()).toVar()
     const keep = step(bladeRand(0x4567), mask.mul(1.15)).mul(step(clumpRand(0x6d2b), uniforms.density))
     const trample = trampleAt(env, xz).toVar()
-    const height = mix(float(0.23), float(0.42), bladeRand(0x5678))
+    const height = mix(float(0.19), float(0.34), bladeRand(0x5678))
       .mul(tuftHeight)
       .mul(r.mul(0.35).oneMinus())
       .mul(uniforms.height)
       .mul(keep)
       .mul(mask.mul(0.5).add(0.5))
-      .mul(mix(float(1), float(0.48), trample))
-      .mul(smoothstep(threshold, threshold.add(0.15), fade))
-      .mul(fade.mul(0.35).add(0.65)).toVar()
-    const width = mix(float(0.05), float(0.075), bladeRand(0x6789)).mul(fade.mul(0.5).add(0.5))
+      .mul(mix(float(1), float(0.3), trample))
+      .mul(fade).toVar()
+    const width = mix(float(0.055), float(0.085), bladeRand(0x6789)).mul(fade.mul(0.7).add(0.3)).mul(trample.mul(0.4).oneMinus())
 
     // Bend: the tuft's splay, the shared wind with a little flutter, and the player's push.
     const wind = windAt(env, xz)
@@ -138,10 +137,11 @@ export function createGrass(env: Environment, field: Heightfield) {
 
     // Lit like the ground under it: the slope's normal, tipped a little by the blade.
     const slope = vec3(fieldAt(xz.sub(vec2(1, 0))).r.sub(fieldAt(xz.add(vec2(1, 0))).r), 2, fieldAt(xz.sub(vec2(0, 1))).r.sub(fieldAt(xz.add(vec2(0, 1))).r)).normalize()
-    vNormal.assign(slope.add(vec3(bendDir.x, 0, bendDir.y).mul(t.mul(0.2))).add(vec3(across.y.negate(), 0, across.x).mul(0.12)).normalize())
+    vNormal.assign(slope.add(vec3(bendDir.x, 0, bendDir.y).mul(t.mul(0.2).mul(fade))).add(vec3(across.y.negate(), 0, across.x).mul(fade.mul(0.12))).normalize())
     vT.assign(t)
+    vFade.assign(fade)
     vGust.assign(wind.gust)
-    vPatch.assign(meadowPatch(env, xz, true).add(tuftHue))
+    vPatch.assign(meadowPatch(env, xz, true).add(tuftHue.mul(fade)))
     vVariety.assign(clumpRand(0x1f3d))
     vTrample.assign(trample)
 
@@ -153,9 +153,10 @@ export function createGrass(env: Environment, field: Heightfield) {
   })()
 
   const colorNode = Fn(() => {
-    let c = bladeTone(meadowTones(vPatch.clamp(0, 1)), vT)
-    c = c.mul(vVariety.mul(0.1).add(0.95))
-    c = gustSheen(c, vGust.mul(vT.mul(0.6).add(0.7)))
+    const tones = meadowTones(vPatch.clamp(0, 1))
+    let c = mix(tones.ground, bladeTone(tones, vT), vFade)
+    c = c.mul(vVariety.sub(0.5).mul(0.06).mul(vFade).add(1))
+    c = gustSheen(c, vGust.mul(mix(float(0.55), vT.mul(0.3).add(0.65), vFade)))
     c = dryGrass(c, vTrample)
     return vec4(c, 1)
   })()
