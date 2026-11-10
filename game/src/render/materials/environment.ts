@@ -47,6 +47,13 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     /** Wind heading on the ground plane (unit) and strength 0..2. */
     windDirection: uniform(new Vector2(0.8, 0.6).normalize()),
     windStrength: uniform(1),
+    /** A soft local light shared by every cel surface; disabled until a landmark is placed. */
+    landmark: {
+      position: uniform(new Vector3()),
+      color: colorUniform('#65e9df'),
+      radius: uniform(1),
+      strength: uniform(0)
+    },
     /** Where the player stands: grass bends away and the ground is trampled around it. */
     player: uniform(new Vector3()),
     /** Radius of trampled, shortened grass, as where fights happen. */
