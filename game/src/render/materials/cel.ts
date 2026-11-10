@@ -70,7 +70,8 @@ class CelLightingModel extends LightingModel {
   constructor(
     private readonly env: Environment,
     private readonly bandOffset: Node<'float'> | null,
-    private readonly readability: boolean
+    private readonly readability: boolean,
+    private readonly landmarkSpill: number
   ) {
     super()
   }
@@ -125,7 +126,7 @@ class CelLightingModel extends LightingModel {
     const delta = landmark.position.sub(positionWorld)
     const falloff = smoothstep(0, landmark.radius, delta.length()).oneMinus().pow(2)
     const facing = normalWorld.dot(delta.normalize()).max(0).mul(0.7).add(0.3)
-    reflectedLight.indirectDiffuse.addAssign(landmark.color.mul(landmark.strength).mul(falloff).mul(facing).mul(lambert(albedo)))
+    reflectedLight.indirectDiffuse.addAssign(landmark.color.mul(landmark.strength.mul(this.landmarkSpill)).mul(falloff).mul(facing).mul(lambert(albedo)))
   }
 }
 
@@ -140,6 +141,8 @@ export interface CelMaterialOptions extends MeshToonNodeMaterialParameters {
   outlineNormal?: Node<'vec3'> | null
   /** Added to dot(N, L) before banding: painterly breakup of the terminator, faded with distance. */
   bandOffset?: Node<'float'> | null
+  /** Scale on the landmark's cyan spill; the landmark's own stone takes little so it stays grey. */
+  landmarkSpill?: number
   /** Light the surface gives off; add it to the glow target via mrtNode to bloom. */
   emissiveNode?: Node | null
   flatShading?: boolean
@@ -162,12 +165,13 @@ export class CelMaterial extends MeshToonNodeMaterial {
   flatShading: boolean
   private readonly bandOffset: Node<'float'> | null
   private readonly readability: boolean
+  private readonly landmarkSpill: number
 
   constructor(
     readonly env: Environment,
     options: CelMaterialOptions = {}
   ) {
-    const { outlineColor, outlineWidth = 1, outlineNormal = null, bandOffset = null, emissiveNode = null, flatShading = false, readability = false, ...params } = options
+    const { outlineColor, outlineWidth = 1, outlineNormal = null, bandOffset = null, emissiveNode = null, flatShading = false, readability = false, landmarkSpill = 1, ...params } = options
     super(params)
     this.emissiveNode = emissiveNode
     this.flatShading = flatShading
@@ -177,6 +181,7 @@ export class CelMaterial extends MeshToonNodeMaterial {
     this.outlineNormal = outlineNormal
     this.bandOffset = bandOffset
     this.readability = readability
+    this.landmarkSpill = landmarkSpill
   }
 
   /** The unlit surface colour, as the ink rule sees it. */
@@ -192,7 +197,7 @@ export class CelMaterial extends MeshToonNodeMaterial {
   }
 
   override setupLightingModel(): LightingModel {
-    return new CelLightingModel(this.env, this.bandOffset, this.readability)
+    return new CelLightingModel(this.env, this.bandOffset, this.readability, this.landmarkSpill)
   }
 }
 
