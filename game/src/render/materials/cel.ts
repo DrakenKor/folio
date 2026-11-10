@@ -1,5 +1,5 @@
 // Cel shading for every lit mesh: three soft bands of warm key light over a
-// cool, saturated shade band from the sky fill. Cast and cloud shadows fade
+// cool blue shade band from the sky fill. Cast and cloud shadows fade
 // the bands straight to shade with one soft edge, a faint warm rim catches
 // lit silhouettes, and one ink rule colours every outline.
 import { LightingModel, MeshToonNodeMaterial, type MeshToonNodeMaterialParameters, type Node } from 'three/webgpu'
@@ -62,6 +62,9 @@ type IndirectArgs = Parameters<LightingModel['indirect']>
 const lambert = (albedo: Node) => BRDF_Lambert({ diffuseColor: albedo }) as unknown as Node<'vec3'>
 
 class CelLightingModel extends LightingModel {
+  /** Direct light reaching the surface, 0..1; set by `direct`, read by `indirect`. */
+  private lightAmount: Node<'float'> = float(0)
+
   constructor(
     private readonly env: Environment,
     private readonly bandOffset: Node<'float'> | null,
@@ -89,6 +92,7 @@ class CelLightingModel extends LightingModel {
     const facing = smoothstep(terminator, terminator.add(0.15), ndl)
     const cast = mix(float(1), shadowMap, facing).mul(cloudLight(this.env))
     const lit = smoothstep(0.15, 0.85, cast)
+    this.lightAmount = form.mul(lit).toVar()
     const albedo = mix(vec3(dot(diffuseColor.rgb, LUMA)), diffuseColor.rgb, this.env.shading.litSaturation)
     reflectedLight.directDiffuse.addAssign(light.mul(form.mul(lit)).mul(lambert(albedo)).mul(this.readability ? 1.5 : 1))
 
@@ -105,13 +109,15 @@ class CelLightingModel extends LightingModel {
 
   override indirect(...[builder]: IndirectArgs): void {
     const { irradiance, ambientOcclusion, reflectedLight } = builder.context as unknown as IndirectContext
-    // Fill carries surface value and chroma into one blue-violet shade hue.
+    // Fill: the surface's luminance in one cool blue hue, keeping part of its own
+    // colour so patterns still read in shade. Lit faces take less of it, so shade
+    // stays light without washing out the sun side.
+    const { shadeTint, shadeHue, shadeValue, fillInLight } = this.env.shading
     const albedo = diffuseColor.rgb
-    const value = albedo.r.max(albedo.g).max(albedo.b)
-    const chroma = value.sub(albedo.r.min(albedo.g).min(albedo.b)).div(value.max(1e-4))
-    const saturation = chroma.mul(this.env.shading.shadeSaturation).clamp(0.55, 0.95)
-    const shade = mix(vec3(1), this.env.shading.shadeTint, saturation).mul(value).mul(this.env.shading.shadeValue)
-    reflectedLight.indirectDiffuse.addAssign(dot(irradiance, LUMA).mul(lambert(shade)))
+    const cool = shadeTint.mul(dot(albedo, LUMA).div(dot(shadeTint, LUMA)))
+    const shade = mix(albedo, cool, shadeHue).mul(shadeValue)
+    const fill = this.lightAmount.mul(fillInLight).oneMinus()
+    reflectedLight.indirectDiffuse.addAssign(dot(irradiance, LUMA).mul(lambert(shade)).mul(fill))
     reflectedLight.indirectDiffuse.mulAssign(ambientOcclusion)
     const landmark = this.env.landmark
     const delta = landmark.position.sub(positionWorld)
