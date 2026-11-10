@@ -9,6 +9,11 @@ export default defineConfig([
     },
   },
   {
+    // Game command-line tools report on stdout.
+    files: ['game/tools/**'],
+    rules: { 'no-console': 'off' },
+  },
+  {
     // The game simulation must be deterministic: no wall clock, no ambient
     // randomness, no engine-specific transcendentals, no presentation imports.
     files: ['game/src/sim/**/*.ts'],
