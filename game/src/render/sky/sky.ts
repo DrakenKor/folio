@@ -28,12 +28,10 @@ export function createSky(env: Environment) {
     const gradient = smoothstep(-0.02, 0.7, up).pow(0.7)
     let sky = mix(env.horizon, env.zenith, gradient)
     sky = sky.add(env.sunHaze.mul(sunDot.pow(12).mul(0.5)))
-    const coverage = env.cloudCover
     // Soft painted edges and warm tops over lavender undersides.
-    const shaded = smoothstep(-0.006, 0.018, towardSun.sub(body)).mul(0.85)
-      .add(smoothstep(coverage, coverage.add(0.18), body).mul(0.15))
+    const shaded = smoothstep(-0.08, 0.06, towardSun.sub(body)).mul(0.35)
     const lit = mix(color('#fff2da'), env.sunHaze, sunDot.pow(3).mul(0.45))
-    const under = mix(color('#9296c2'), color('#b3b1d1'), smoothstep(coverage.add(0.05), coverage.add(0.2), body))
+    const under = color('#a4b0cd')
     const cloud = mix(lit, under, shaded)
     // Clouds near the horizon sink into the haze.
     const cloudFinal = mix(env.horizon, cloud, smoothstep(0.0, 0.25, up).mul(0.7).add(0.3))
