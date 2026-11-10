@@ -109,11 +109,12 @@ export function createTrees(env: Environment, field: Heightfield) {
   const swayNode = (canopy: boolean) => Fn(() => {
     const gust = gustAt(env, vec2(data.x, data.y)).toVar()
     const h = data.z.mul(data.z)
-    const pulse = sin(env.time.mul(1.2).add(data.w)).mul(canopy ? 0.045 : 0.012)
-    const along = gust.mul(canopy ? 1.05 : 0.18).add(canopy ? 0.09 : 0.025)
-      .add(pulse.mul(gust.mul(0.8).add(0.2))).mul(h).mul(env.windStrength)
-    const side = sin(env.time.mul(1.6).add(data.w)).mul(canopy ? 0.09 : 0.015)
-      .mul(gust.mul(0.85).add(0.15)).mul(h).mul(env.windStrength)
+    // A steady sway every tree shares, with the gust adding lean on top, so trees between gusts still move.
+    const pulse = sin(env.time.mul(1.2).add(data.w)).mul(canopy ? 0.12 : 0.02)
+    const along = gust.mul(canopy ? 0.5 : 0.12).add(canopy ? 0.06 : 0.02)
+      .add(pulse.mul(gust.mul(0.5).add(0.7))).mul(h).mul(env.windStrength)
+    const side = sin(env.time.mul(1.6).add(data.w)).mul(canopy ? 0.11 : 0.02)
+      .mul(gust.mul(0.4).add(0.6)).mul(h).mul(env.windStrength)
     const wind = env.windDirection
     return positionLocal.add(vec3(
       wind.x.mul(along).sub(wind.y.mul(side)),

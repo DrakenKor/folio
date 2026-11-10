@@ -32,7 +32,7 @@ export function bladeTone(tones: ReturnType<typeof meadowTones>, t: Node<'float'
 
 /** Lighter, cooler grass where a gust presses it over and turns its paler side up. */
 export function gustSheen(c: Node<'vec3'>, gust: Node<'float'>): Node<'vec3'> {
-  const pressed = c.mul(vec3(1.04, 1.2, 1.34))
+  const pressed = c.mul(vec3(1.18, 1.42, 1.65))
   return mix(c, pressed, gust.clamp(0, 1))
 }
 
@@ -82,6 +82,8 @@ export function groundGrass(env: Environment, xz: Node<'vec2'>, patch: Node<'flo
     .mul(resolved(0.3)).toVar()
   const paint = mix(tones.body, tones.tip, smoothstep(-0.3, 0.3, local.y).mul(0.4))
   c = mix(c, paint, mark.mul(0.22).mul(calm))
-  // The gust rides the detail, so it reads as pressed strokes rather than a wash.
-  return gustSheen(c, gust.mul(small.mul(0.5).add(mark.mul(0.3)).add(0.45)).mul(clearing.mul(0.85).oneMinus()))
+  // The gust rides long strokes and the near detail, so it reads as pressed grass rather than a wash.
+  const stroke = smoothstep(0.35, 0.65, texture(env.noise, vec2(uv.x.div(120), uv.y.div(200))).g)
+  const carrier = stroke.mul(0.85).add(small.mul(0.25)).add(mark.mul(0.2)).add(0.3)
+  return gustSheen(c, gust.mul(carrier).mul(clearing.mul(0.85).oneMinus()))
 }

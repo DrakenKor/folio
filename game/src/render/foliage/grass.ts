@@ -114,7 +114,7 @@ export function createGrass(env: Environment, field: Heightfield) {
 
     // Bend: the tuft's splay, the shared wind with a little flutter, and the player's push.
     const wind = windAt(env, xz)
-    const flutter = sin(env.time.mul(3.1).add(angle).sub(xz.dot(env.windDirection).mul(0.6))).mul(0.06)
+    const flutter = sin(env.time.mul(3.1).add(angle).sub(xz.dot(env.windDirection).mul(0.6))).mul(0.1)
     const toPlayer = xz.sub(uniforms.player.xz)
     const playerDist = toPlayer.length().max(1e-3)
     const bendRadius = uniforms.bendRadius.max(1e-4)
