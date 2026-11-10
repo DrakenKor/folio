@@ -52,7 +52,7 @@ export function createMeadow(seed: number) {
   const banners = createBanners(env, field)
   scene.add(terrain.mesh, grass.mesh, flowers.mesh, sky.group, trees.trunks, trees.canopies, rocks.mesh, monolith.group, banners.group)
 
-  const sunSettings: SunSettings = { elevation: 30, azimuth: 105, intensity: 3.0, fill: 2.0 }
+  const sunSettings: SunSettings = { elevation: 43, azimuth: 105, intensity: 3.0, fill: 2.0 }
   const shadowFocus = new Vector3()
   let shadowExtent = 60
 

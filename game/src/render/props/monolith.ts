@@ -59,9 +59,7 @@ export function createMonolith(env: Environment, field: Heightfield) {
   const stoneMaterial = new CelMaterial(env, {
     colorNode: attribute('color', 'vec3'),
     flatShading: true,
-    outlineColor: vec3(0.12, 0.1, 0.12),
-    outlineNormal: attribute('hull', 'vec3'),
-    outlineWidth: 1
+    outlineNormal: attribute('hull', 'vec3')
   })
   stoneMaterial.name = 'platform'
   const platformMesh = new Mesh(platform.build(), stoneMaterial)
@@ -85,9 +83,7 @@ export function createMonolith(env: Environment, field: Heightfield) {
     colorNode: attribute('color', 'vec3'),
     emissiveNode: glow,
     flatShading: true,
-    outlineColor: vec3(0.02, 0.025, 0.06),
-    outlineNormal: attribute('hull', 'vec3'),
-    outlineWidth: 1.25
+    outlineNormal: attribute('hull', 'vec3')
   })
   shaftMaterial.mrtNode = mrt({ glow: vec4(glow, 1) })
   shaftMaterial.name = 'monolith'
@@ -102,9 +98,7 @@ export function createMonolith(env: Environment, field: Heightfield) {
   const crystalMaterial = new CelMaterial(env, {
     color: 0xc9fbf4,
     emissiveNode: crystalGlow.mul(0.9),
-    flatShading: true,
-    outlineColor: vec3(0.02, 0.12, 0.14),
-    outlineWidth: 1
+    flatShading: true
   })
   crystalMaterial.mrtNode = mrt({ glow: vec4(crystalGlow.mul(1.1), 1) })
   crystalMaterial.name = 'crystal'
