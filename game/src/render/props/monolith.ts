@@ -48,7 +48,7 @@ function createCrystal(env: Environment): Group {
   material.mrtNode = mrt({ glow: vec4(color(CYAN).mul(energy).mul(core.mul(1.6).add(0.7)), 1) })
   group.add(new Mesh(geometry, material))
 
-  const fade = smoothstep(0.5, 0, uv().sub(0.5).length()).pow(2.5)
+  const fade = smoothstep(0, 0.5, uv().sub(0.5).length()).oneMinus().pow(2.5)
   const halo = new SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending })
   halo.colorNode = vec4(color(CYAN).mul(fade).mul(energy).mul(0.3), 1)
   halo.mrtNode = mrt({ glow: vec4(color(CYAN).mul(fade).mul(energy).mul(1.2), 1) })

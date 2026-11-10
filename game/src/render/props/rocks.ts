@@ -65,7 +65,7 @@ export function createRocks(env: Environment, field: Heightfield, trees: TreeSit
   }
 
   const vertexColor = attribute('color', 'vec3')
-  const moss = smoothstep(0.78, 0.98, normalWorld.y).mul(smoothstep(0.15, 0.72, attribute('moss', 'float'))).mul(0.86)
+  const moss = smoothstep(0.65, 0.92, normalWorld.y).mul(smoothstep(0.15, 0.72, attribute('moss', 'float'))).mul(0.72)
   const material = new CelMaterial(env, {
     colorNode: mix(vertexColor, color('#5f7a3c'), moss),
     outlineNormal: attribute('hull', 'vec3'),

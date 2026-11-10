@@ -1,54 +1,42 @@
-// An irregular boulder: a jittered faceted sphere sliced by a few planes, so
-// broad flat faces (a tilted top, a buried base, two sides) meet rows of small
-// chamfer facets that catch the light.
-import { BufferGeometry, Float32BufferAttribute, IcosahedronGeometry, Vector3 } from 'three/webgpu'
-
-interface Cut { normal: Vector3; offset: number }
+// Broad stone faces meet a worn top and narrow, softly lit chamfers.
+import { BufferGeometry, Float32BufferAttribute, Vector3 } from 'three/webgpu'
 
 export function stoneGeometry(random: () => number): BufferGeometry {
-  const side = () => {
-    const a = random() * Math.PI * 2
-    return { normal: new Vector3(Math.cos(a), (random() - 0.3) * 0.5, Math.sin(a)).normalize(), offset: 0.7 + random() * 0.14 }
-  }
-  const cuts: Cut[] = [
-    { normal: new Vector3((random() - 0.5) * 0.6, 1, (random() - 0.5) * 0.6).normalize(), offset: 0.62 + random() * 0.12 },
-    { normal: new Vector3(0, -1, 0), offset: 0.62 },
-    side(),
-    side()
-  ]
-  // One displaced position per shared corner, so facets stay closed.
-  const corners = new Map<string, Vector3>()
-  const shape = (p: Vector3) => {
-    const key = `${p.x.toFixed(4)},${p.y.toFixed(4)},${p.z.toFixed(4)}`
-    let q = corners.get(key)
-    if (!q) {
-      q = p.clone().multiplyScalar(0.86 + random() * 0.26)
-      for (const { normal, offset } of cuts) {
-        const over = q.dot(normal) - offset
-        if (over > 0) q.addScaledVector(normal, -over)
-      }
-      corners.set(key, q)
-    }
-    return q
-  }
-
-  const sphere = new IcosahedronGeometry(1, 1)
-  const source = sphere.attributes.position!
+  const count = 5 + Math.floor(random() * 3)
+  const corners = Array.from({ length: count }, (_, i) => {
+    const angle = (i + (random() - 0.5) * 0.35) / count * Math.PI * 2
+    const radius = 0.78 + random() * 0.34
+    return new Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius)
+  })
+  const tilt = new Vector3((random() - 0.5) * 0.32, 0, (random() - 0.5) * 0.32)
+  const topScale = corners.map(() => 0.57 + random() * 0.22)
+  const rings = [[0.80, -0.22], [1, -0.03], [0.94, 0.48], [0.70, 0.77]].map(([scale, y], ring) =>
+    corners.map((p, i) => {
+      const s = ring === 3 ? topScale[i]! : scale!
+      const wear = ring === 2 ? Math.sin(i * 2.3) * 0.075 : 0
+      return new Vector3(p.x * s + (ring > 1 ? 0.08 : 0), y! + p.dot(tilt) + wear, p.z * s)
+    }))
   const positions: number[] = []
   const normals: number[] = []
-  const p = new Vector3()
-  for (let i = 0; i < source.count; i += 3) {
-    const tri = [0, 1, 2].map(k => shape(p.fromBufferAttribute(source, i + k)))
-    const normal = tri[1]!.clone().sub(tri[0]!).cross(tri[2]!.clone().sub(tri[0]!))
-    // Cuts can collapse a facet to a sliver; drop those.
-    if (normal.lengthSq() < 1e-8) continue
-    normal.normalize()
-    for (const q of tri) {
-      positions.push(q.x, q.y, q.z)
-      normals.push(normal.x, normal.y, normal.z)
+  const polygon = (points: Vector3[]) => {
+    const face = points[1]!.clone().sub(points[0]!).cross(points[2]!.clone().sub(points[0]!)).normalize()
+    for (let i = 1; i < points.length - 1; i++) {
+      for (const p of [points[0]!, points[i]!, points[i + 1]!]) {
+        const rounded = new Vector3(p.x, p.y * 0.6, p.z).normalize()
+        const n = face.clone().lerp(rounded, 0.24).normalize()
+        positions.push(p.x, p.y, p.z)
+        normals.push(n.x, n.y, n.z)
+      }
     }
   }
-  sphere.dispose()
+  for (let r = 0; r < rings.length - 1; r++) {
+    for (let i = 0; i < count; i++) {
+      const j = (i + 1) % count
+      polygon([rings[r]![i]!, rings[r + 1]![i]!, rings[r + 1]![j]!, rings[r]![j]!])
+    }
+  }
+  polygon([...rings[rings.length - 1]!].reverse())
+  polygon(rings[0]!)
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
   geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3))

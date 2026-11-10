@@ -32,7 +32,9 @@ export function createTrees(env: Environment, field: Heightfield) {
     const conifer = site.radius < 1.9
     const ground = field.heightAt(site.x, site.z)
     const phase = random() * Math.PI * 2
-    const trunkHeight = conifer ? 2.1 : 2.8 + random() * 0.7
+    const variant = i % 4
+    const lean = new Vector3((random() - 0.35) * 0.22, 0, (random() - 0.5) * 0.18)
+    const trunkHeight = conifer ? 2.1 : (variant === 1 ? 3.6 : 2.5) + random() * 0.6
     const crownHeight = conifer ? 5.8 + random() * 1.6 : site.radius * 2.3
     const treeHeight = trunkHeight + crownHeight
     const sway = (p: Vector3, offset = 0) => ({
@@ -46,7 +48,7 @@ export function createTrees(env: Environment, field: Heightfield) {
       new Vector2(radius * 0.78, trunkHeight * 0.65),
       new Vector2(radius * 0.42, trunkHeight + site.radius * 0.7)
     ], 20)
-    matrix.makeTranslation(site.x, ground, site.z)
+    matrix.set(1, lean.x, 0, site.x, 0, 1, 0, ground, 0, lean.z, 1, site.z, 0, 0, 0, 1)
     trunks.add(trunk, matrix, { color: linearColor('#78543b'), vertex: p => sway(p) })
     trunk.dispose()
 
@@ -70,23 +72,29 @@ export function createTrees(env: Environment, field: Heightfield) {
         cone.dispose()
       }
     } else {
-      const centre = new Vector3(site.x, ground + trunkHeight + site.radius * 0.72, site.z)
-      const clumps = [{ centre: centre.clone().add(new Vector3(0, site.radius * 0.3, 0)), radius: site.radius * 0.86 }]
-      const count = 3 + (i % 2)
+      const tall = variant === 1
+      const spread = variant === 2
+      const swept = variant === 3
+      const centre = new Vector3(site.x, ground + trunkHeight + site.radius * 0.65, site.z)
+        .addScaledVector(lean, trunkHeight)
+      const count = [4, 3, 5, 3][variant]!
       const angle = random() * Math.PI * 2
+      const clumps: Array<{ centre: Vector3; radius: number; stretch: Vector3 }> = []
+      if (tall) clumps.push({ centre: centre.clone().add(new Vector3(0, site.radius * 0.65, 0)), radius: site.radius * 0.72, stretch: new Vector3(0.95, 1.5, 0.95) })
       for (let b = 0; b < count; b++) {
         const a = angle + b / count * Math.PI * 2
+        const reach = site.radius * (spread ? 0.72 : tall ? 0.30 : 0.50)
         const c = centre.clone().add(new Vector3(
-          Math.cos(a) * site.radius * 0.7,
-          site.radius * (-0.22 + (b % 2) * 0.18),
-          Math.sin(a) * site.radius * 0.7
+          Math.cos(a) * reach + (swept ? b * site.radius * 0.25 : 0),
+          tall ? b * site.radius * 0.62 : site.radius * (b === 0 ? 0.55 : -0.12 + random() * 0.28),
+          Math.sin(a) * reach
         ))
-        clumps.push({ centre: c, radius: site.radius * (0.64 + random() * 0.1) })
-        if (b < 2) {
-          const start = new Vector3(site.x, ground + trunkHeight * 0.67, site.z)
-          const end = c.clone().add(new Vector3(0, -site.radius * 0.35, 0))
-          const length = start.distanceTo(end)
-          const branch = new CylinderGeometry(radius * 0.2, radius * 0.58, length, 12)
+        const r = site.radius * (tall ? 0.58 : spread ? 0.65 : 0.75) * (0.88 + random() * 0.22)
+        clumps.push({ centre: c, radius: r, stretch: new Vector3(spread ? 1.2 : 1, tall ? 1.2 : swept ? 0.72 : 0.94, 0.88 + random() * 0.18) })
+        if (b < 3) {
+          const start = new Vector3(site.x, ground + trunkHeight * 0.65, site.z).addScaledVector(lean, trunkHeight * 0.65)
+          const end = c.clone().add(new Vector3(0, -r * 0.4, 0))
+          const branch = new CylinderGeometry(radius * 0.20, radius * 0.55, start.distanceTo(end), 12)
           rotation.setFromUnitVectors(up, end.clone().sub(start).normalize())
           matrix.compose(start.add(end).multiplyScalar(0.5), rotation, new Vector3(1, 1, 1))
           trunks.add(branch, matrix, { color: linearColor('#78543b'), vertex: p => sway(p) })
@@ -95,9 +103,9 @@ export function createTrees(env: Environment, field: Heightfield) {
       }
       clumps.forEach((clump, b) => {
         rotation.setFromAxisAngle(up, angle + b * 0.8)
-        matrix.compose(clump.centre, rotation, new Vector3(clump.radius, clump.radius * (0.84 + b * 0.025), clump.radius * 0.94))
+        matrix.compose(clump.centre, rotation, clump.stretch.multiplyScalar(clump.radius))
         canopies.add(sphere, matrix, {
-          color: linearColor(tint, 0.94 + b * 0.035),
+          color: linearColor(tint, 0.97 + random() * 0.06),
           vertex: p => sway(p, b * 0.3)
         })
       })
@@ -107,14 +115,15 @@ export function createTrees(env: Environment, field: Heightfield) {
 
   const data = attribute('sway', 'vec4')
   const swayNode = (canopy: boolean) => Fn(() => {
-    const gust = gustAt(env, vec2(data.x, data.y)).toVar()
+    const anchor = vec2(data.x, data.y)
+    const gust = gustAt(env, anchor.add(env.windDirection.mul(1.8))).toVar()
     const h = data.z.mul(data.z)
-    // A steady sway every tree shares, with the gust adding lean on top, so trees between gusts still move.
-    const pulse = sin(env.time.mul(1.2).add(data.w)).mul(canopy ? 0.12 : 0.02)
-    const along = gust.mul(canopy ? 0.5 : 0.12).add(canopy ? 0.06 : 0.02)
-      .add(pulse.mul(gust.mul(0.5).add(0.7))).mul(h).mul(env.windStrength)
-    const side = sin(env.time.mul(1.6).add(data.w)).mul(canopy ? 0.11 : 0.02)
-      .mul(gust.mul(0.4).add(0.6)).mul(h).mul(env.windStrength)
+    const phase = env.time.mul(1.2).sub(anchor.dot(env.windDirection).mul(0.20))
+    const along = gust.mul(0.88).add(0.08).add(sin(phase).mul(0.08))
+      .mul(h).mul(env.windStrength)
+    const side = sin(phase.mul(0.8)).mul(0.035)
+      .add(sin(env.time.mul(2).add(data.w)).mul(canopy ? 0.018 : 0))
+      .mul(gust.mul(0.6).add(0.4)).mul(h).mul(env.windStrength)
     const wind = env.windDirection
     return positionLocal.add(vec3(
       wind.x.mul(along).sub(wind.y.mul(side)),
