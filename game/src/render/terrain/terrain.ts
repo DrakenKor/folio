@@ -32,8 +32,7 @@ export function createTerrain(env: Environment, field: Heightfield) {
     const edgeNoise = fine.sub(0.5).mul(0.5)
     const pathAmount = smoothstep(0.2, 0.6, sample.g.add(edgeNoise))
     const dirt = mix(color('#9a7f58'), color('#c4a97a'), smoothstep(0.55, 0.95, sample.g).mul(fine.mul(0.4).add(0.6)))
-    const worn = mix(meadow, color('#7a7446'), smoothstep(0.05, 0.3, sample.g.add(edgeNoise)))
-    let ground = mix(worn, dirt, pathAmount)
+    let ground = mix(meadow, dirt, pathAmount)
     // Bare rock where the hills get steep.
     const rock = mix(color('#7d7a86'), color('#a29fa6'), mid)
     ground = mix(ground, rock, smoothstep(0.66, 0.82, normalWorld.y.add(fine.sub(0.5).mul(0.08))).oneMinus())
