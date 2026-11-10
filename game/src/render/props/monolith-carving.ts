@@ -1,5 +1,5 @@
 import { Group, Mesh, Vector3, type Node } from 'three/webgpu'
-import { abs, attribute, color, float, max, mod, mrt, smoothstep, vec4 } from 'three/tsl'
+import { abs, attribute, color, float, max, mod, mrt, smoothstep, vec2, vec4 } from 'three/tsl'
 import { CelMaterial, inkColor } from '../materials/cel'
 import type { Environment } from '../materials/environment'
 import { carve, split, StoneGeometry, type Cut, type Point } from './monolith-cells'
@@ -34,20 +34,21 @@ export function createCarvedShaft(env: Environment): Group {
   for (let face = 0; face < 4; face++) {
     for (const cell of cells) {
       const top = cell.map(p => facePoint(p, face, 0))
-      surface.polygon(top, 1, cell)
+      surface.polygon(top, 1, cell.map(faceUv))
       for (let i = 0; i < cell.length; i++) {
         const j = (i + 1) % cell.length
-        if (!grooveEdge(cell[i]!, cell[j]!, cuts)) continue
+        const bevel = grooveBevel(cell[i]!, cell[j]!, cuts)
+        if (bevel === 0) continue
         const a = cell[i]!
         const b = cell[j]!
         const length = Math.hypot(b[0] - a[0], b[1] - a[1])
-        const wall = (p: Point): Point => [p[0] + (b[1] - a[1]) / length * 0.012, p[1] - (b[0] - a[0]) / length * 0.012]
+        const wall = (p: Point): Point => [p[0] + (b[1] - a[1]) / length * bevel, p[1] - (b[0] - a[0]) / length * bevel]
         surface.polygon([top[i]!, facePoint(wall(a), face, GROOVE_DEPTH), facePoint(wall(b), face, GROOVE_DEPTH), top[j]!], 0.86)
       }
     }
     for (const [left, right] of [[-1, -0.93], [-0.93, 0.93], [0.93, 1]] as Point[]) {
       const quad: Point[] = [[left, 0], [right, 0], [right, SHAFT_HEIGHT], [left, SHAFT_HEIGHT]]
-      floor.polygon(quad.map(p => facePoint(p, face, GROOVE_DEPTH + 0.002)), 1, quad)
+      floor.polygon(quad.map(p => facePoint(p, face, GROOVE_DEPTH + 0.002)), 1, quad.map(faceUv))
       cap.polygon([facePoint([left, SHAFT_HEIGHT], face, 0), facePoint([right, SHAFT_HEIGHT], face, 0), new Vector3(0, SHAFT_BASE + SHAFT_HEIGHT + 0.95, 0)], 1)
     }
   }
@@ -78,10 +79,10 @@ export function createCarvedShaft(env: Environment): Group {
 }
 
 /** Only exposed cut boundaries have walls; polygon partition edges stay flush. */
-function grooveEdge(a: Point, b: Point, cuts: Cut[]): boolean {
+function grooveBevel(a: Point, b: Point, cuts: Cut[]): number {
   const x = (a[0] + b[0]) * 0.5
   const y = (a[1] + b[1]) * 0.5
-  return cuts.some(cut => {
+  const cut = cuts.find(cut => {
     const dx = cut.b[0] - cut.a[0]
     const dy = cut.b[1] - cut.a[1]
     const length = Math.hypot(dx, dy)
@@ -89,11 +90,12 @@ function grooveEdge(a: Point, b: Point, cuts: Cut[]): boolean {
     const across = Math.abs((x - cut.a[0]) * dy - (y - cut.a[1]) * dx) / length
     return along > -1e-6 && along < length + 1e-6 && Math.abs(across - cut.width) < 1e-6
   })
+  return cut ? Math.min(0.012, cut.width * 0.35) : 0
 }
 
 /** The spine carries the crest; diamonds and triangular cells illuminate in its wake. */
 function grooveGlow(env: Environment): Node<'vec3'> {
-  const uv = attribute('carveUv', 'vec2')
+  const uv = carvingUv()
   const spine = smoothstep(0.025, 0.078, abs(uv.x)).oneMinus()
   let diamond: Node<'float'> = float(0)
   for (const [width, height] of DIAMONDS) {
@@ -108,7 +110,7 @@ function grooveGlow(env: Environment): Node<'vec3'> {
 
 /** Triangular cells respond after the crest, with the outside cells following the centre. */
 function latticeWake(env: Environment): Node<'float'> {
-  const uv = attribute('carveUv', 'vec2')
+  const uv = carvingUv()
   let energy: Node<'float'> = float(0)
   for (let band = 0; band < 3; band++) {
     const low = LATTICE_ROWS[band]!
@@ -120,6 +122,16 @@ function latticeWake(env: Environment): Node<'float'> {
     energy = max(energy, region.mul(wake))
   }
   return energy
+}
+
+/** Interpolate physical face coordinates before undoing the shaft's taper. */
+function faceUv([u, y]: Point): Point {
+  return [u * (1.24 - y / SHAFT_HEIGHT * 0.40), y]
+}
+
+function carvingUv(): Node<'vec2'> {
+  const p = attribute('carveUv', 'vec2')
+  return vec2(p.x.div(p.y.mul(-0.40 / SHAFT_HEIGHT).add(1.24)), p.y)
 }
 
 /** Two nested diamonds lead into triangular rows doubling towards the crown. */
