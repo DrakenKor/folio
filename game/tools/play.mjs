@@ -12,7 +12,9 @@ import { gzipSync } from 'node:zlib'
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const defaultOut = join(root, 'game/.play-out')
 const sessionFile = join(defaultOut, 'session.json')
-const endpoint = 'http://127.0.0.1:9555'
+const cdpPort = Number(process.env.PLAY_CDP_PORT ?? 9555)
+assert(Number.isInteger(cdpPort) && cdpPort > 0 && cdpPort <= 65535, 'PLAY_CDP_PORT must be a valid TCP port')
+const endpoint = `http://127.0.0.1:${cdpPort}`
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const report = (command, result) => console.log(JSON.stringify({ command, ...result }))
 const json = file => JSON.parse(readFileSync(file, 'utf8'))
@@ -128,14 +130,14 @@ async function launch() {
   // Never attach to, or close, a browser that this harness did not launch.
   await new Promise((resolve, reject) => {
     const probe = createServer()
-    probe.once('error', () => reject(new Error('CDP port 9555 is occupied')))
-    probe.listen(9555, '127.0.0.1', () => probe.close(resolve))
+    probe.once('error', () => reject(new Error(`CDP port ${cdpPort} is occupied`)))
+    probe.listen(cdpPort, '127.0.0.1', () => probe.close(resolve))
   })
   mkdirSync(defaultOut, { recursive: true })
   const profile = mkdtempSync(join(tmpdir(), 'arpg-play-'))
   const log = openSync(join(defaultOut, 'brave.log'), 'a')
   const child = spawn(process.env.BRAVE_BIN ?? '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser', [
-    '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=9555', '--remote-allow-origins=*',
+    '--remote-debugging-address=127.0.0.1', `--remote-debugging-port=${cdpPort}`, '--remote-allow-origins=*',
     `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check',
     '--disable-extensions', '--disable-component-update', '--disable-background-networking',
     '--window-size=1280,800', 'about:blank'
@@ -391,7 +393,7 @@ async function stop() {
   const saved = json(sessionFile)
   const current = await version()
   if (current) {
-    assert.equal(current.webSocketDebuggerUrl, saved.browserUrl, 'Port 9555 belongs to a different browser; refusing to close it')
+    assert.equal(current.webSocketDebuggerUrl, saved.browserUrl, `Port ${cdpPort} belongs to a different browser; refusing to close it`)
     const client = browser ?? await connect(saved.browserUrl)
     await client.send('Browser.close')
     await until(async () => !(await version()), 'Brave shutdown')
