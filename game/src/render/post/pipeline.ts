@@ -43,6 +43,11 @@ export function createPost(renderer: WebGPURenderer, scene: Scene, camera: Camer
     uniforms,
     render() {
       pipeline.render()
+    },
+    dispose() {
+      pipeline.dispose()
+      scenePass.dispose()
+      bloomPass.dispose()
     }
   }
 }

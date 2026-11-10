@@ -10,12 +10,8 @@
       "expression": "(() => { const p = __game.state('entities.0'); return Math.hypot(p.pos.x + 20, p.pos.z) <= 0.5 && p.vel.x === 0 && p.vel.z === 0 })()",
       "expect": true
     },
-    { "op": "shot", "bookmark": "overview", "out": "smoke-overview.png" },
-    { "op": "shot", "bookmark": "player", "out": "smoke-player.png" },
-    {
-      "op": "eval",
-      "expression": "__game.camera.register('meadow-wide', {position:{x:-18,y:26,z:18},target:{x:-10,y:0,z:0}})"
-    },
+    { "op": "shot", "bookmark": "meadow-player", "out": "smoke-player.png" },
+    { "op": "shot", "bookmark": "meadow-monolith", "out": "smoke-monolith.png" },
     { "op": "shot", "bookmark": "meadow-wide", "out": "smoke-meadow-wide.png" },
     { "op": "eval", "expression": "__game.camera.follow(); __game.resume()" },
     { "op": "perf", "seconds": 2 },

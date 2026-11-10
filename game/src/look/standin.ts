@@ -98,7 +98,7 @@ function createHero(env: Environment): Group {
   return hero
 }
 
-function createEnemy(env: Environment): Group {
+export function createEnemy(env: Environment): Group {
   const enemy = new Group()
   const body = new CelMaterial(env, { color: 0x5b3f86, outlineColor: vec3(0.07, 0.02, 0.1), outlineWidth: 1.1 })
   const shell = new CelMaterial(env, { color: 0xb05ad8, outlineColor: vec3(0.12, 0.02, 0.15), outlineWidth: 1, flatShading: true })

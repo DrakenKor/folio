@@ -4,12 +4,14 @@ import type { Vec2 } from '../../sim/core/index'
 export interface CameraPose {
   position: { x: number; y: number; z: number }
   target: { x: number; y: number; z: number }
+  fov?: number
 }
 
 /** Three-quarter follow camera with deterministic screenshot bookmarks. */
 export class CameraRig {
   readonly camera = new PerspectiveCamera(45, 1, 0.1, 500)
   private following = true
+  activeBookmark: string | null = null
   private player: Vec2 = { x: 0, z: 0 }
   private target = new Vector3()
   private ray = new Raycaster()
@@ -19,7 +21,11 @@ export class CameraRig {
     ['player', { position: { x: 0, y: 14, z: 10 }, target: { x: 0, y: 0, z: 0 } }]
   ])
 
-  constructor(private canvas: HTMLCanvasElement) { this.update({ x: 0, z: 0 }) }
+  constructor(private canvas: HTMLCanvasElement, private followPose: CameraPose = {
+    position: { x: 0, y: 20, z: 14 }, target: { x: 0, y: 0, z: 0 }
+  }) { this.update({ x: 0, z: 0 }) }
+
+  get isFollowing(): boolean { return this.following }
 
   register(name: string, pose: CameraPose): void { this.bookmarks.set(name, structuredClone(pose)) }
 
@@ -28,25 +34,32 @@ export class CameraRig {
     if (!pose) throw new RangeError(`Unknown camera bookmark: ${name}`)
     const offset = name === 'player' ? this.player : { x: 0, z: 0 }
     this.set({ position: { x: pose.position.x + offset.x, y: pose.position.y, z: pose.position.z + offset.z },
-      target: { x: pose.target.x + offset.x, y: pose.target.y, z: pose.target.z + offset.z } })
+      target: { x: pose.target.x + offset.x, y: pose.target.y, z: pose.target.z + offset.z }, fov: pose.fov })
+    this.activeBookmark = name
   }
 
   set(pose: CameraPose): void {
     if (![pose?.position?.x, pose?.position?.y, pose?.position?.z,
       pose?.target?.x, pose?.target?.y, pose?.target?.z].every(Number.isFinite)) throw new TypeError('Invalid camera pose')
     this.following = false
+    this.activeBookmark = null
     this.camera.position.set(pose.position.x, pose.position.y, pose.position.z)
     this.target.set(pose.target.x, pose.target.y, pose.target.z)
+    if (pose.fov !== undefined) { this.camera.fov = pose.fov; this.camera.updateProjectionMatrix() }
     this.look()
   }
 
-  follow(): void { this.following = true }
+  follow(): void { this.following = true; this.activeBookmark = null }
 
-  update(player: Vec2): void {
+  update(player: Vec2 & { y?: number }): void {
     this.player = { ...player }
+    this.ground.constant = -(player.y ?? 0)
     if (!this.following) return
-    this.target.set(player.x, 0, player.z)
-    this.camera.position.set(player.x, 20, player.z + 14)
+    const { position, target, fov } = this.followPose
+    const height = player.y ?? 0
+    this.target.set(player.x + target.x, height + target.y, player.z + target.z)
+    this.camera.position.set(player.x + position.x, height + position.y, player.z + position.z)
+    if (fov !== undefined && this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix() }
     this.look()
   }
 

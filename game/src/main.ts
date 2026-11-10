@@ -3,6 +3,7 @@ import { Clock } from './platform/clock'
 import { Input } from './platform/input'
 import { initialWorld, storeSession } from './platform/session'
 import { BasicView } from './render/basic/view'
+import { MeadowView } from './render/meadow-view'
 import { createAPI } from './debug/api'
 import { graphicsStopped, toast } from './debug/overlay'
 
@@ -12,9 +13,15 @@ const initial = await initialWorld(url)
 const renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: url.searchParams.get('backend') === 'webgl' })
 await renderer.init()
 document.body.dataset.backend = 'isWebGPUBackend' in renderer.backend ? 'webgpu' : 'webgl2'
-const view = new BasicView(renderer)
-const input = new Input(canvas, () => view.camera.basis(), (x, y) => view.camera.groundPoint(x, y))
-const clock = new Clock(initial.world, world => input.command(world), world => input.afterStep(world))
+const view = url.searchParams.get('view') === 'basic' ? new BasicView(renderer) : await MeadowView.create(renderer, initial.world)
+const input = new Input(canvas, () => view.camera.basis(), (x, y) => view instanceof MeadowView ? view.groundPoint(x, y) : view.camera.groundPoint(x, y))
+const clock = new Clock(initial.world, world => {
+  if (view instanceof MeadowView) view.advance(world)
+  return input.command(world)
+}, world => {
+  input.afterStep(world)
+  if (view instanceof MeadowView) view.advance(world)
+})
 if (initial.paused) clock.pause()
 if (url.searchParams.has('bookmark')) view.camera.bookmark(url.searchParams.get('bookmark')!)
 
@@ -60,6 +67,15 @@ function loseDevice(): void {
 }
 
 const api = createAPI(clock, input, view.camera, ready, loseDevice)
+Object.assign(api.debug, { view })
+Object.assign(api, {
+  async sheet(entity: string, clip: string): Promise<string> {
+    const subject = clock.world.entities.find(candidate => entity === 'player' ? candidate.id === clock.world.playerId : String(candidate.id) === entity)
+    if (!subject || subject.kind !== 'player') throw new Error(`No knight entity: ${entity}`)
+    const { renderCharacterSheet } = await import('./render/characters/sheet')
+    return renderCharacterSheet(view instanceof MeadowView ? view.asset : undefined, clip, url.searchParams.get('backend') === 'webgl')
+  }
+})
 if (import.meta.env.DEV || url.searchParams.get('debug') === '1') window.__game = api
 
 window.addEventListener('keydown', async event => {

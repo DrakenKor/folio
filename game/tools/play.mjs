@@ -67,7 +67,7 @@ async function connect(url) {
       else request.resolve(message.result)
     } else for (const listener of listeners) listener(message)
   }
-  ws.onclose = () => fail(new Error('CDP connection closed'))
+  ws.onclose = event => fail(new Error(`CDP connection closed (${event.code}: ${event.reason})`))
   await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = () => reject(new Error(`Cannot connect: ${url}`)) })
   const client = {
     send(method, params = {}, timeout = 30000) {
@@ -122,6 +122,7 @@ async function attach() {
   await page.send('Network.setCacheDisabled', { cacheDisabled: true })
   await page.send('Page.bringToFront')
   await page.send('Emulation.setFocusEmulationEnabled', { enabled: true })
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1.5, mobile: false })
   consoleEntries.push(...session.console ?? [])
 }
 
@@ -224,6 +225,16 @@ async function shot(bookmark, filename = `${bookmark}.png`) {
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, Buffer.from(screenshot.data, 'base64'))
   report('shot', { bookmark, file })
+}
+
+async function sheet(entity, clip, filename) {
+  assert(entity && clip && filename, 'Usage: sheet <entity> <clip> <out.png>')
+  const data = await evaluate(`__game.sheet(${JSON.stringify(entity)}, ${JSON.stringify(clip)})`)
+  assert(data?.startsWith('data:image/png;base64,'), 'Character sheet did not return a PNG')
+  const file = resolve(out, filename)
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, Buffer.from(data.slice('data:image/png;base64,'.length), 'base64'))
+  report('sheet', { entity, clip, file })
 }
 
 async function consoleSample(ms = 0, expectEmpty = false) {
@@ -411,9 +422,8 @@ try {
   if (command === 'boot') await boot(positional[0])
   else if (command === 'run') await run(positional[0])
   else if (command === 'stop') await stop()
-  else if (command === 'sheet') {
-    report('sheet', { supported: false, reason: 'Animation contact sheets are unsupported until a character exists.' })
-  } else if (['shot', 'console', 'perf', 'net'].includes(command)) {
+  else if (command === 'sheet') { await attach(); await sheet(...positional) }
+  else if (['shot', 'console', 'perf', 'net'].includes(command)) {
     await attach()
     if (command === 'shot') await shot(...positional)
     if (command === 'console') await consoleSample(positional[0] ?? 0)
