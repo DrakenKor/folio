@@ -256,7 +256,9 @@ async function perf(seconds = 2) {
       else {
         frames.sort((a,b) => a-b);
         const at = p => frames[Math.max(0, Math.ceil(frames.length*p)-1)] ?? 0;
-        resolve({frameMs:{median:at(0.5),p95:at(0.95),samples:frames.length},game:__game.perf()});
+        const canvas = document.querySelector('#stage');
+        resolve({frameMs:{median:at(0.5),p95:at(0.95),samples:frames.length},game:__game.perf(),
+          viewport:{width:innerWidth,height:innerHeight,pixelRatio:devicePixelRatio,bufferWidth:canvas.width,bufferHeight:canvas.height}});
       }
     }
     requestAnimationFrame(frame);
