@@ -15,11 +15,11 @@ export function stoneGeometry(random: () => number): BufferGeometry {
   const topZ = (random() - 0.5) * 0.3
   const profiles: Array<[number, number]> = [[0.8, -0.7], [1, -0.32], [0.96, 0.3], [topRadius, 0.82]]
   const rings = profiles.map(([radius, height], ring) =>
-    corners.map(p => new Vector3(
-      p.x * radius + (ring === 3 ? topX : 0),
-      height + p.x * tiltX + p.z * tiltZ,
-      p.z * radius + (ring === 3 ? topZ : 0)
-    ))
+    corners.map(p => {
+      const x = p.x * radius + (ring === 3 ? topX : 0)
+      const z = p.z * radius + (ring === 3 ? topZ : 0)
+      return new Vector3(x, height + x * tiltX + z * tiltZ, z)
+    })
   )
   const positions: number[] = []
   const normals: number[] = []
