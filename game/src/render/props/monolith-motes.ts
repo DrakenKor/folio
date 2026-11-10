@@ -1,12 +1,12 @@
-import { InstancedBufferGeometry, Mesh, SphereGeometry } from 'three/webgpu'
+import { AdditiveBlending, InstancedBufferGeometry, Mesh, MeshBasicNodeMaterial, SphereGeometry } from 'three/webgpu'
 import { color, cos, fract, hash, instanceIndex, mrt, normalView, positionLocal, positionViewDirection, sin, smoothstep, vec3, vec4 } from 'three/tsl'
-import { CelMaterial } from '../materials/cel'
 import type { Environment } from '../materials/environment'
 import { windAt } from '../materials/wind'
+import { CYAN } from './monolith-carving'
 
-/** Sparse soft spheres spiral upward and lean downwind with the meadow's shared gust. */
+/** Sparse soft glows spiral upward and lean downwind with the meadow's shared gust. */
 export function createMonolithMotes(env: Environment): Mesh {
-  const source = new SphereGeometry(0.045, 10, 8)
+  const source = new SphereGeometry(0.15, 10, 8)
   const geometry = new InstancedBufferGeometry()
   geometry.index = source.index
   geometry.setAttribute('position', source.attributes.position!)
@@ -22,12 +22,12 @@ export function createMonolithMotes(env: Environment): Mesh {
   const drift = env.windDirection.mul(life.mul(2.4).add(wind.lean.mul(0.45)))
   const centre = vec3(cos(angle).mul(radius).add(drift.x), life.mul(9).add(0.5), sin(angle).mul(radius).add(drift.y))
   const fade = smoothstep(0, 0.18, life).mul(smoothstep(0.75, 1, life).oneMinus())
-  const glow = color('#65e9df').mul(fade).mul(1.1)
-  const material = new CelMaterial(env, { color: '#a3ded4', outlineColor: null, transparent: true, depthWrite: false })
-  material.positionNode = positionLocal.mul(fade.mul(0.6).add(0.3)).add(centre)
-  material.opacityNode = smoothstep(0, 0.7, normalView.dot(positionViewDirection).max(0)).mul(fade).mul(0.72)
-  material.emissiveNode = glow
-  material.mrtNode = mrt({ glow: vec4(glow, 1) })
+  // A bright centre with a soft halo: the sphere's face-on middle is opaque, its rim fades out.
+  const halo = normalView.dot(positionViewDirection).max(0).pow(3).mul(fade)
+  const material = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending })
+  material.positionNode = positionLocal.mul(fade.mul(0.5).add(0.5)).add(centre)
+  material.colorNode = vec4(color(CYAN).mul(halo).mul(1.1), 1)
+  material.mrtNode = mrt({ glow: vec4(color(CYAN).mul(halo).mul(2.4), 1) })
   material.name = 'monolith-motes'
   const mesh = new Mesh(geometry, material)
   mesh.frustumCulled = false

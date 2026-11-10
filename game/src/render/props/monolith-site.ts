@@ -4,10 +4,10 @@ import { GeometryBuilder, linearColor } from '../geometry'
 import { CelMaterial } from '../materials/cel'
 import type { Environment } from '../materials/environment'
 import type { Heightfield } from '../terrain/heightfield'
-import { STONE_TURN } from './monolith-carving'
-import { carve, inset, StoneGeometry, type Cut, type Point } from './monolith-cells'
+import { climbingPulse, CYAN, MONOLITH_STONE, STONE_TURN } from './monolith-carving'
+import { StoneGeometry, type Point } from './monolith-cells'
 
-/** Three worn chamfered tiers and a terrain-conforming ring of nested diamond cuts. */
+/** Three worn chamfered tiers, mossy on their upward edges, and a glowing groove cut into the ground around them. */
 export function createMonolithSite(env: Environment, field: Heightfield): Group {
   const group = new Group()
   const builder = new GeometryBuilder()
@@ -17,7 +17,7 @@ export function createMonolithSite(env: Environment, field: Heightfield): Group 
     const geometry = new ExtrudeGeometry(shape, { depth: height - 0.16, bevelEnabled: true, bevelSize: 0.10, bevelThickness: 0.08, bevelSegments: 1, steps: 1 })
     const matrix = new Matrix4().makeRotationX(-Math.PI / 2).setPosition(0, y + 0.08, 0)
     builder.add(geometry, matrix, {
-      color: linearColor('#b4ac99'),
+      color: linearColor(MONOLITH_STONE),
       vertex: p => ({ tierHalf: [size], hull: [p.x / size, 0.3, p.z / size] })
     })
     geometry.dispose()
@@ -25,10 +25,11 @@ export function createMonolithSite(env: Environment, field: Heightfield): Group 
   }
   const edge = max(abs(positionLocal.x), abs(positionLocal.z)).div(attribute('tierHalf', 'float'))
   const patch = sin(positionLocal.x.mul(1.15).add(positionLocal.z.mul(0.55))).add(sin(positionLocal.z.mul(1.5))).mul(0.25).add(0.5)
-  const moss = smoothstep(0.65, 0.92, edge).mul(smoothstep(0.25, 0.65, patch)).mul(smoothstep(0.65, 0.92, normalWorld.y))
+  const moss = smoothstep(0.5, 0.85, edge).mul(smoothstep(0.2, 0.55, patch)).mul(smoothstep(0.7, 0.95, normalWorld.y))
   const material = new CelMaterial(env, {
-    colorNode: mix(attribute('color', 'vec3'), color('#697b45'), moss.mul(0.8)),
-    outlineNormal: attribute('hull', 'vec3')
+    colorNode: mix(attribute('color', 'vec3'), color('#5f7a3c'), moss.mul(0.88)),
+    outlineNormal: attribute('hull', 'vec3'),
+    landmarkSpill: 0.75
   })
   material.name = 'monolith-plinth'
   const plinth = new Mesh(builder.build(), material)
@@ -57,44 +58,42 @@ function tierShape(size: number): Shape {
   return shape
 }
 
+const RING_RADIUS = 4.95
+/** Groove cross-section from its outer edge to the floor: offset from the centre line, height above ground. */
+const RING_PROFILE: Point[] = [[0.34, -0.03], [0.24, 0.035], [0.19, 0.035], [0.15, 0.02]]
+
 function carvedRing(env: Environment, field: Heightfield): Group {
   const group = new Group()
-  const top = new StoneGeometry()
+  const stone = new StoneGeometry()
   const floor = new StoneGeometry()
-  const diamond: Point[] = [[0, -0.22], [0.85, 0], [0, 0.22], [-0.85, 0]]
-  const cuts: Cut[] = diamond.map((a, i) => ({ a, b: diamond[(i + 1) % 4]!, width: 0.028 }))
-  cuts.push({ a: [-1, 0], b: [1, 0], width: 0.025 })
-  const cells = carve([[-1, -0.34], [1, -0.34], [1, 0.34], [-1, 0.34]], cuts)
-  const point = ([u, r]: Point, section: number, height: number) => {
-    const angle = (section + (u + 1) / 2) / 16 * Math.PI * 2
-    const x = Math.cos(angle) * (4.95 + r)
-    const z = Math.sin(angle) * (4.95 + r)
-    const shoulder = (0.34 - r) * 0.35
-    return new Vector3(x, field.heightAt(field.monolith.x + x, field.monolith.z + z) - field.monolith.y + 0.25 + shoulder + height, z)
+  const at = (angle: number, offset: number, lift: number) => {
+    const x = Math.cos(angle) * (RING_RADIUS + offset)
+    const z = Math.sin(angle) * (RING_RADIUS + offset)
+    return new Vector3(x, field.heightAt(field.monolith.x + x, field.monolith.z + z) - field.monolith.y + 0.25 + lift, z)
   }
-  for (let section = 0; section < 16; section++) {
-    for (const cell of cells) {
-      const outer = inset(cell, cell.map(() => -0.01)) ?? cell
-      top.polygon(cell.map(p => point(p, section, 0.09)), 1)
-      for (let i = 0; i < cell.length; i++) {
-        const j = (i + 1) % cell.length
-        top.polygon([point(cell[i]!, section, 0.09), point(outer[i]!, section, 0.035), point(outer[j]!, section, 0.035), point(cell[j]!, section, 0.09)], 0.65)
+  const segments = 96
+  const [floorOffset, floorLift] = RING_PROFILE[RING_PROFILE.length - 1]!
+  for (let s = 0; s < segments; s++) {
+    const a0 = s / segments * Math.PI * 2
+    const a1 = (s + 1) / segments * Math.PI * 2
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < RING_PROFILE.length - 1; i++) {
+        const [o0, h0] = RING_PROFILE[i]!
+        const [o1, h1] = RING_PROFILE[i + 1]!
+        const quad = [at(a0, side * o0, h0), at(a1, side * o0, h0), at(a1, side * o1, h1), at(a0, side * o1, h1)]
+        stone.polygon(side > 0 ? quad.reverse() : quad, i === RING_PROFILE.length - 2 ? 0.66 : 1)
       }
     }
-    for (let part = 0; part < 8; part++) {
-      const u = part / 4 - 1
-      const v = (part + 1) / 4 - 1
-      floor.polygon([[u, -0.34], [v, -0.34], [v, 0.34], [u, 0.34]].map(p => point(p as Point, section, 0.034)), 1)
-    }
+    floor.polygon([at(a0, -floorOffset, floorLift), at(a1, -floorOffset, floorLift), at(a1, floorOffset, floorLift), at(a0, floorOffset, floorLift)], 1)
   }
-  const stone = new CelMaterial(env, { colorNode: color('#aca38e').mul(attribute('stoneValue', 'float')), outlineColor: null })
-  stone.name = 'monolith-ring-stone'
-  const mesh = new Mesh(top.build(), stone)
+  const material = new CelMaterial(env, { colorNode: color(MONOLITH_STONE).mul(attribute('stoneValue', 'float')), outlineColor: null })
+  material.name = 'monolith-ring-stone'
+  const mesh = new Mesh(stone.build(), material)
   mesh.receiveShadow = true
-  const glow = color('#65e9df').mul(0.32)
-  const inlay = new CelMaterial(env, { color: '#48473e', emissiveNode: glow, outlineColor: null })
-  inlay.name = 'monolith-ring-grooves'
-  inlay.mrtNode = mrt({ glow: vec4(glow, 1) })
+  const glow = color(CYAN).mul(climbingPulse(env, 0).mul(0.25).add(0.7))
+  const inlay = new CelMaterial(env, { color: '#2f3532', emissiveNode: glow, outlineColor: null })
+  inlay.name = 'monolith-ring-groove'
+  inlay.mrtNode = mrt({ glow: vec4(glow.mul(1.6), 1) })
   group.add(mesh, new Mesh(floor.build(), inlay))
   return group
 }
