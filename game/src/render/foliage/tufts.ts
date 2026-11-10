@@ -15,11 +15,13 @@ export const CLUMP_CELL = 0.5
  * reads it filtered, so far ground never speckles.
  */
 export function clumpGrowth(env: Environment, xz: Node<'vec2'>, exact = false): Node<'float'> {
-  const broad = texture(env.noise, xz.div(14))
-  const fine = texture(env.noise, xz.div(40))
+  const broad = texture(env.noise, xz.div(160))
+  const middle = texture(env.noise, xz.div(22))
+  const fine = texture(env.noise, xz.div(14))
   const b = exact ? broad.level(float(0)).r : broad.r
+  const m = exact ? middle.level(float(0)).r : middle.r
   const f = exact ? fine.level(float(0)).g : fine.g
-  return smoothstep(0.32, 0.68, b.mul(0.55).add(f.mul(0.45)))
+  return smoothstep(0.39, 0.61, b.mul(0.2).add(m.mul(0.65)).add(f.mul(0.15)))
 }
 
 /** The tuft in a clump cell: its hash, a jittered centre, a radius and a height scale that reaches 0 in the gaps. */
@@ -27,10 +29,10 @@ export function tuftAt(env: Environment, cell: Node<'vec2'>) {
   const seed = cell.x.toInt().add(4096).mul(8192).add(cell.y.toInt().add(4096)).toVar()
   const rand = (salt: number) => hash(seed.add(salt))
   const centre = cell.add(vec2(rand(0x9e37), rand(0x51ed)).mul(0.9).add(0.05)).mul(CLUMP_CELL).toVar()
-  const growth = clumpGrowth(env, centre, true).add(rand(0x5d17).sub(0.5).mul(0.35)).toVar()
+  const growth = clumpGrowth(env, centre, true).add(rand(0x5d17).sub(0.5).mul(0.18)).toVar()
   const radius = mix(float(0.08), float(0.2), rand(0x2c1b)).mul(growth.mul(0.5).add(0.75))
   const height = mix(float(0.7), float(1.25), rand(0x7f4a)).mul(mix(float(0.55), float(1.15), growth))
-    .mul(smoothstep(0.12, 0.42, growth))
+    .mul(smoothstep(0.25, 0.65, growth))
   return { seed, rand, centre, radius, height }
 }
 

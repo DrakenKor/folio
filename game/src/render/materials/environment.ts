@@ -45,7 +45,7 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     /** How much haze drains saturation before tinting, 0..1. */
     hazeDesaturate: uniform(0.2),
     /** Wind heading on the ground plane (unit) and strength 0..2. */
-    windDirection: uniform(new Vector2(0.8, 0.6).normalize()),
+    windDirection: uniform(new Vector2(0.45, -0.89).normalize()),
     windStrength: uniform(1),
     /** A soft local light shared by every cel surface; disabled until a landmark is placed. */
     landmark: {
