@@ -84,7 +84,7 @@ export function createGrass(env: Environment, field: Heightfield) {
 
     // The tuft: a jittered centre, a radius, a height and a hue of its own.
     const centre = cell.add(vec2(clumpRand(0x9e37), clumpRand(0x51ed)).mul(0.7).add(0.15)).mul(CLUMP_CELL)
-    const radius = mix(float(0.07), float(0.17), clumpRand(0x2c1b))
+    const radius = mix(float(0.1), float(0.22), clumpRand(0x2c1b))
     const tuftHeight = mix(float(0.75), float(1.2), clumpRand(0x7f4a))
     const tuftHue = clumpRand(0x3b9d).sub(0.5).mul(0.32)
 
@@ -93,16 +93,16 @@ export function createGrass(env: Environment, field: Heightfield) {
     const angle = bladeRand(0x2345).mul(6.283)
     const out = vec2(cos(angle), sin(angle))
     const xz = centre.add(out.mul(r.mul(radius))).toVar()
-    const site = fieldAt(xz)
+    const site = fieldAt(xz).toVar()
     const groundY = site.r
 
     // Path edges thin blade by blade; the middle band thins and shortens with distance.
     const mask = site.b
-    const fade = nearFade(vec3(xz.x, groundY, xz.y))
+    const fade = nearFade(vec3(xz.x, groundY, xz.y)).toVar()
     const threshold = bladeRand(0x3456).mul(0.85)
     const keep = step(bladeRand(0x4567), mask.mul(1.15)).mul(step(clumpRand(0x6d2b), uniforms.density))
-    const trample = trampleAt(env, xz)
-    const height = mix(float(0.2), float(0.38), bladeRand(0x5678))
+    const trample = trampleAt(env, xz).toVar()
+    const height = mix(float(0.23), float(0.42), bladeRand(0x5678))
       .mul(tuftHeight)
       .mul(r.mul(0.35).oneMinus())
       .mul(uniforms.height)
@@ -110,8 +110,8 @@ export function createGrass(env: Environment, field: Heightfield) {
       .mul(mask.mul(0.5).add(0.5))
       .mul(mix(float(1), float(0.48), trample))
       .mul(smoothstep(threshold, threshold.add(0.15), fade))
-      .mul(fade.mul(0.35).add(0.65))
-    const width = mix(float(0.045), float(0.07), bladeRand(0x6789))
+      .mul(fade.mul(0.35).add(0.65)).toVar()
+    const width = mix(float(0.05), float(0.075), bladeRand(0x6789)).mul(fade.mul(0.5).add(0.5))
 
     // Bend: the tuft's splay, the shared wind with a little flutter, and the player's push.
     const wind = windAt(env, xz)
