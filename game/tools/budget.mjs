@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { gzipSync } from 'node:zlib'
+import ts from 'typescript'
 
 const MB = 1024 * 1024
 const CAPS = {
@@ -42,11 +43,36 @@ const jsGzip = sum(
 )
 const siteRaw = existsSync('out') ? sum(files('out').map(f => statSync(f).size)) : null
 
-// First playable download, as written by `npm run game:play -- net`.
-let firstLoad = null
+// Vite inlines __BUILD_ID__ in literal `build` properties. Parse emitted JS,
+// including split chunks, rather than trusting filenames or the current HEAD.
+const builds = new Set()
+for (const file of gameFiles.filter(f => ['.js', '.mjs'].includes(extname(f)))) {
+  const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  const visit = node => {
+    if (ts.isPropertyAssignment(node) && node.name.getText(source).replace(/^['"]|['"]$/g, '') === 'build' &&
+        (ts.isStringLiteral(node.initializer) || ts.isNoSubstitutionTemplateLiteral(node.initializer))) {
+      builds.add(node.initializer.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+}
+
+let firstLoad
 try {
-  firstLoad = JSON.parse(readFileSync('game/.play-out/net.json', 'utf8')).bytes ?? null
-} catch {}
+  const reportFile = 'game/.play-out/net.json'
+  if (!existsSync(reportFile)) throw new Error(`${reportFile} is missing; run game:play -- boot, then game:play -- net`)
+  const network = JSON.parse(readFileSync(reportFile, 'utf8'))
+  if (typeof network.build !== 'string' || !network.build) throw new Error(`${reportFile} has no valid build id; boot and measure again`)
+  if (builds.size !== 1 || ![...builds][0]) throw new Error('Cannot read an unambiguous build id from public/play/; run game:build')
+  const [build] = builds
+  if (network.build !== build) throw new Error(`Network build mismatch: report ${network.build}, public/play/ ${build}; boot and measure again`)
+  if (!Number.isSafeInteger(network.bytes) || network.bytes <= 0) throw new Error(`${reportFile} has invalid transfer bytes; boot and measure again`)
+  firstLoad = network.bytes
+} catch (error) {
+  console.error(`game:budget: ${error.message}`)
+  process.exit(1)
+}
 
 // Every blob ever committed under game/, on every branch.
 let gitGrowth = null

@@ -38,6 +38,7 @@ let launched = false
 let consoleEntries = []
 let requests = new Map()
 let mainLoader
+const heldKeys = new Set()
 
 async function until(predicate, description, ms = 20000) {
   const deadline = Date.now() + ms
@@ -53,7 +54,9 @@ async function connect(url) {
   const pending = new Map()
   const listeners = []
   let id = 0
+  let closed
   const fail = error => {
+    closed = error
     for (const request of pending.values()) { clearTimeout(request.timer); request.reject(error) }
     pending.clear()
   }
@@ -72,10 +75,11 @@ async function connect(url) {
   const client = {
     send(method, params = {}, timeout = 30000) {
       return new Promise((resolve, reject) => {
+        if (closed || ws.readyState !== WebSocket.OPEN) { reject(closed ?? new Error('CDP connection is not open')); return }
         const request = ++id
         const timer = setTimeout(() => { pending.delete(request); reject(new Error(`Timed out: ${method}`)) }, timeout)
         pending.set(request, { resolve, reject, timer })
-        ws.send(JSON.stringify({ id: request, method, params }))
+        try { ws.send(JSON.stringify({ id: request, method, params })) } catch (error) { fail(error) }
       })
     },
     on(listener) { listeners.push(listener) },
@@ -143,6 +147,7 @@ async function launch() {
     '--disable-extensions', '--disable-component-update', '--disable-background-networking',
     // Keep the window visible when other apps cover it, so only tab switches hide the game.
     '--disable-backgrounding-occluded-windows',
+    ...(process.env.PLAY_HEADLESS === '1' ? ['--headless=new'] : []),
     '--window-size=1280,800', 'about:blank'
   ], { detached: true, stdio: ['ignore', log, log] })
   closeSync(log)
@@ -172,9 +177,17 @@ async function launch() {
 }
 
 async function evaluate(expression, timeout) {
-  const { result, exceptionDetails } = await page.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, timeout)
+  return remoteResult(await page.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, timeout)).value
+}
+
+function remoteResult({ result, exceptionDetails }) {
   if (exceptionDetails) throw new Error(exceptionDetails.exception?.description ?? exceptionDetails.text)
-  return result.value
+  return result
+}
+
+async function callOn(objectId, functionDeclaration, values = []) {
+  return remoteResult(await page.send('Runtime.callFunctionOn', { objectId, functionDeclaration,
+    arguments: values.map(value => ({ value })), awaitPromise: true, returnByValue: true })).value
 }
 
 const observe = () => evaluate(`(() => {
@@ -212,7 +225,9 @@ async function boot(url, scenario = options.scenario, snap = options.snap) {
   await until(() => navigation.loaderId ? mainLoader === navigation.loaderId : mainLoader && mainLoader !== previousLoader, 'new game document')
   await until(() => evaluate('!!window.__game').catch(() => false), 'window.__game')
   await evaluate('__game.ready.then(() => true)')
-  const network = { bytes: [...requests.values()].reduce((total, request) => total + request.bytes, 0), requests: [...requests.values()] }
+  const build = await evaluate('__game.build')
+  assert(typeof build === 'string' && build, 'Game has no build id')
+  const network = { build, bytes: [...requests.values()].reduce((total, request) => total + request.bytes, 0), requests: [...requests.values()] }
   await page.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: icon.identifier })
   session = { ...session, url: target.href, network, console: consoleEntries }
   save(sessionFile, session)
@@ -222,10 +237,43 @@ async function boot(url, scenario = options.scenario, snap = options.snap) {
 async function shot(bookmark, filename = `${bookmark}.png`) {
   assert(bookmark, 'Usage: shot <bookmark> <out.png>')
   await evaluate(`__game.camera.bookmark(${JSON.stringify(bookmark)}); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`)
-  const screenshot = await page.send('Page.captureScreenshot', { format: 'png' })
+  const { width, height, ratio } = await evaluate('({width:innerWidth,height:innerHeight,ratio:devicePixelRatio})')
+  const canvas = remoteResult(await page.send('Runtime.evaluate', {
+    expression: `({canvas:new OffscreenCanvas(${Math.round(width * ratio)},${Math.round(height * ratio)})})`
+  })).objectId
   const file = resolve(out, filename)
-  mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, Buffer.from(screenshot.data, 'base64'))
+  try {
+    // Bound even incompressible RGBA tiles well below Node WebSocket's 4 MiB reply limit.
+    const pixelWidth = Math.round(width * ratio)
+    const pixelHeight = Math.round(height * ratio)
+    for (let y = 0; y < pixelHeight; y += 512) {
+      for (let x = 0; x < pixelWidth; x += 512) {
+        const screenshot = await page.send('Page.captureScreenshot', { format: 'png',
+          clip: { x: x / ratio, y: y / ratio, width: Math.min(512, pixelWidth - x) / ratio,
+            height: Math.min(512, pixelHeight - y) / ratio, scale: 1 } })
+        await callOn(canvas, `async function(data,x,y) {
+          const image = await createImageBitmap(await (await fetch('data:image/png;base64,'+data)).blob());
+          this.canvas.getContext('2d').drawImage(image,x,y); image.close();
+        }`, [screenshot.data, x, y])
+      }
+    }
+    const length = await callOn(canvas, `async function() {
+      const blob = await this.canvas.convertToBlob({type:'image/png'});
+      this.data = await new Promise((resolve,reject) => {
+        const reader = new FileReader(); reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob);
+      });
+      return this.data.length;
+    }`)
+    const chunks = []
+    for (let offset = 0; offset < length; offset += 512 * 1024) {
+      chunks.push(await callOn(canvas, 'function(offset) { return this.data.slice(offset,offset+524288) }', [offset]))
+    }
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, Buffer.from(chunks.join(''), 'base64'))
+  } finally {
+    await page.send('Runtime.releaseObject', { objectId: canvas })
+  }
   report('shot', { bookmark, file })
 }
 
@@ -274,7 +322,7 @@ function net() {
   assert(session.network?.bytes > 0, 'No ready-time network measurement; boot first')
   const result = { url: session.url, ...session.network }
   save(join(out, 'net.json'), result)
-  report('net', { bytes: result.bytes, requests: result.requests.length, file: join(out, 'net.json') })
+  report('net', { build: result.build, bytes: result.bytes, requests: result.requests.length, file: join(out, 'net.json') })
 }
 
 function duration(value, label) {
@@ -288,6 +336,8 @@ async function key(type, code) {
   const key = code.startsWith('Key') ? code.slice(3).toLowerCase() : code.startsWith('Digit') ? code.slice(5) : code === 'Space' ? ' ' : code
   await page.send('Input.dispatchKeyEvent', { type, code, key,
     windowsVirtualKeyCode: code.startsWith('Key') ? code.charCodeAt(3) : code.startsWith('Digit') ? code.charCodeAt(5) : code === 'Space' ? 32 : code.startsWith('F') ? 111 + Number(code.slice(1)) : undefined })
+  if (type === 'keyDown') heldKeys.add(code)
+  else heldKeys.delete(code)
 }
 
 async function background(seconds) {
@@ -325,28 +375,63 @@ async function background(seconds) {
 
 async function blur(ms = 250) {
   duration(ms, 'blur milliseconds')
-  await evaluate('__game.resume()')
-  let other
+  const snapshot = await evaluate('__game.pause(); __game.snapshot()')
+  // A child game models the folio iframe: moving focus to its parent blurs
+  // the game document even when Brave is headless or another app is in front.
+  const focus = remoteResult(await page.send('Runtime.evaluate', { expression: `(() => {
+    const previous = document.activeElement;
+    const frame = document.createElement('iframe');
+    const outside = document.createElement('input');
+    frame.style.cssText = 'position:fixed;left:-10000px;width:1px;height:1px';
+    outside.style.cssText = 'position:fixed;left:-10000px';
+    document.body.append(outside);
+    return {frame,outside,previous};
+  })()` })).objectId
+  const child = expression => callOn(focus, `function() {
+    const game = this.frame.contentWindow.__game;
+    const document = this.frame.contentDocument;
+    ${expression}
+  }`)
+  const state = () => child(`const world = game.state();
+    return {tick:world.tick,player:world.entities.find(e=>e.id===world.playerId),
+      hidden:document.hidden,focused:document.hasFocus(),description:game.describe()};`)
   try {
-    await page.send('Emulation.setFocusEmulationEnabled', { enabled: false })
-    other = await browser.send('Target.createTarget', { url: 'about:blank', newWindow: true, width: 320, height: 180 })
-    await browser.send('Target.activateTarget', { targetId: other.targetId })
-    await until(() => evaluate('!document.hasFocus()'), 'game loses focus')
-    const before = await observe()
+    await callOn(focus, `async function() {
+      await new Promise((resolve,reject) => {
+        this.frame.onload = resolve; this.frame.onerror = () => reject(new Error('Blur frame failed to load'));
+        const url = new URL(location.href); url.hash = ''; url.searchParams.set('paused','1');
+        this.frame.src = url.href; document.body.append(this.frame);
+      });
+    }`)
+    await until(() => child('return !!game'), 'iframe game')
+    await child('return game.ready.then(()=>true)')
+    await callOn(focus, `function(snapshot) {
+      const game = this.frame.contentWindow.__game; game.restore(snapshot);
+      this.frame.contentWindow.focus(); this.frame.contentDocument.querySelector('canvas').focus();
+    }`, [snapshot])
+    for (const code of heldKeys) await key('keyDown', code)
+    await child('game.resume(); game.step(1)')
+    const running = await state()
+    assert(running.description.includes('running'), 'Iframe game did not resume before blur')
+    if ([...heldKeys].some(code => ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(code))) {
+      assert(Math.hypot(running.player.vel.x, running.player.vel.z) > 0, 'Held movement did not reach the iframe game')
+    }
+    await callOn(focus, 'function() { this.outside.focus() }')
+    const before = await state()
     assert.equal(before.hidden, false, 'Blur check requires a visible game')
+    assert.equal(before.focused, false, 'Game did not lose focus inside the page')
     assert(before.description.includes('paused'), 'Game did not pause on blur')
     await sleep(ms)
-    assert.equal((await observe()).tick, before.tick, 'Simulation advanced while blurred')
-    await evaluate('__game.step(10)')
-    const after = await observe()
+    assert.equal((await state()).tick, before.tick, 'Simulation advanced while blurred')
+    await child('game.step(10)')
+    const after = await state()
     assert.deepEqual(after.player.pos, before.player.pos, 'Held input survived blur')
     assert.deepEqual(after.player.vel, { x: 0, z: 0 })
     report('blur', { tick: before.tick, hidden: before.hidden, focused: before.focused, released: true })
   } finally {
-    await evaluate('__game.pause()')
-    if (other) await browser.send('Target.closeTarget', { targetId: other.targetId })
-    await page.send('Page.bringToFront')
-    await page.send('Emulation.setFocusEmulationEnabled', { enabled: true })
+    try {
+      await callOn(focus, 'function() { this.frame.remove(); this.outside.remove(); window.focus(); this.previous?.focus() }')
+    } finally { await page.send('Runtime.releaseObject', { objectId: focus }) }
   }
 }
 
