@@ -1,8 +1,8 @@
 import { Group, Mesh, Vector3, type Node } from 'three/webgpu'
 import { abs, attribute, color, float, max, mod, mrt, smoothstep, vec2, vec4 } from 'three/tsl'
-import { CelMaterial, inkColor } from '../materials/cel'
+import { CelMaterial } from '../materials/cel'
 import type { Environment } from '../materials/environment'
-import { carve, split, StoneGeometry, type Cut, type Point } from './monolith-cells'
+import { carve, inset, split, StoneGeometry, type Cut, type Point } from './monolith-cells'
 
 export const SHAFT_BASE = 1.25
 export const SHAFT_HEIGHT = 6.6
@@ -10,7 +10,7 @@ export const STONE_TURN = -0.24
 export const MONOLITH_STONE = '#a59e90'
 export const CYAN = '#65e9df'
 export const CRYSTAL_RISE = SHAFT_HEIGHT + 2.05
-const GROOVE_DEPTH = 0.075
+const GROOVE_DEPTH = 0.025
 const DIAMONDS: Point[] = [[0.76, 2.22], [0.40, 1.17]]
 const DIAMOND_CENTRE = 2.55
 const LATTICE_ROWS = [4.65, 5.30, 5.95, SHAFT_HEIGHT]
@@ -34,16 +34,22 @@ export function createCarvedShaft(env: Environment): Group {
   for (let face = 0; face < 4; face++) {
     for (const cell of cells) {
       const top = cell.map(p => facePoint(p, face, 0))
+      const boundaries = cell.map((a, i) => grooveBoundary(a, cell[(i + 1) % cell.length]!, cuts))
+      const lower = inset(cell, boundaries.map(cut => -(cut?.width ?? 0) * 0.38)) ?? cell
       surface.polygon(top, 1, cell.map(faceUv))
+      const at = (k: number, scale: number, depth: number) => facePoint([
+        cell[k]![0] + (lower[k]![0] - cell[k]![0]) * scale,
+        cell[k]![1] + (lower[k]![1] - cell[k]![1]) * scale
+      ], face, GROOVE_DEPTH * depth)
       for (let i = 0; i < cell.length; i++) {
         const j = (i + 1) % cell.length
-        const bevel = grooveBevel(cell[i]!, cell[j]!, cuts)
-        if (bevel === 0) continue
-        const a = cell[i]!
-        const b = cell[j]!
-        const length = Math.hypot(b[0] - a[0], b[1] - a[1])
-        const wall = (p: Point): Point => [p[0] + (b[1] - a[1]) / length * bevel, p[1] - (b[0] - a[0]) / length * bevel]
-        surface.polygon([top[i]!, facePoint(wall(a), face, GROOVE_DEPTH), facePoint(wall(b), face, GROOVE_DEPTH), top[j]!], 0.86)
+        if (!boundaries[i]) continue
+        const profiles: Point[] = [[0, 0], [0.35, 0.76], [1, 1]]
+        for (let level = 0; level < 2; level++) {
+          const [s0, d0] = profiles[level]!
+          const [s1, d1] = profiles[level + 1]!
+          surface.polygon([at(i, s0, d0), at(i, s1, d1), at(j, s1, d1), at(j, s0, d0)], level === 0 ? 0.56 : 0.88)
+        }
       }
     }
     for (const [left, right] of [[-1, -0.93], [-0.93, 0.93], [0.93, 1]] as Point[]) {
@@ -54,7 +60,6 @@ export function createCarvedShaft(env: Environment): Group {
   }
   const material = new CelMaterial(env, {
     colorNode: color(MONOLITH_STONE).mul(attribute('stoneValue', 'float')),
-    emissiveNode: color(CYAN).mul(latticeWake(env)).mul(0.18),
     outlineColor: null, landmarkSpill: 0.15
   })
   material.name = 'monolith-stone'
@@ -70,19 +75,21 @@ export function createCarvedShaft(env: Environment): Group {
   const glow = grooveGlow(env)
   const inlay = new CelMaterial(env, {
     color: '#56605b', emissiveNode: glow, landmarkSpill: 0.15,
-    outlineColor: inkColor(env, color(MONOLITH_STONE).rgb), outlineNormal: attribute('hull', 'vec3')
+    outlineColor: null
   })
   inlay.name = 'monolith-groove-floor'
   inlay.mrtNode = mrt({ glow: vec4(glow.mul(1.7), 1) })
-  group.add(new Mesh(floor.build(), inlay))
+  const grooveFloor = new Mesh(floor.build(), inlay)
+  grooveFloor.receiveShadow = true
+  group.add(grooveFloor)
   return group
 }
 
 /** Only exposed cut boundaries have walls; polygon partition edges stay flush. */
-function grooveBevel(a: Point, b: Point, cuts: Cut[]): number {
+function grooveBoundary(a: Point, b: Point, cuts: Cut[]): Cut | undefined {
   const x = (a[0] + b[0]) * 0.5
   const y = (a[1] + b[1]) * 0.5
-  const cut = cuts.find(cut => {
+  return cuts.find(cut => {
     const dx = cut.b[0] - cut.a[0]
     const dy = cut.b[1] - cut.a[1]
     const length = Math.hypot(dx, dy)
@@ -90,7 +97,6 @@ function grooveBevel(a: Point, b: Point, cuts: Cut[]): number {
     const across = Math.abs((x - cut.a[0]) * dy - (y - cut.a[1]) * dx) / length
     return along > -1e-6 && along < length + 1e-6 && Math.abs(across - cut.width) < 1e-6
   })
-  return cut ? Math.min(0.012, cut.width * 0.35) : 0
 }
 
 /** The spine carries the crest; diamonds and triangular cells illuminate in its wake. */
@@ -100,7 +106,7 @@ function grooveGlow(env: Environment): Node<'vec3'> {
   let diamond: Node<'float'> = float(0)
   for (const [width, height] of DIAMONDS) {
     const distance = abs(abs(uv.x).div(width).add(abs(uv.y.sub(DIAMOND_CENTRE)).div(height)).sub(1)).mul(width)
-    diamond = max(diamond, smoothstep(0.008, 0.030, distance).oneMinus())
+    diamond = max(diamond, smoothstep(0.012, 0.040, distance).oneMinus())
   }
   const pulse = climbingPulse(env, uv.y)
   const lit = spine.mul(pulse.mul(3.6).add(0.42)).max(diamond.mul(pulse.mul(1.15).add(0.30)))
@@ -136,21 +142,21 @@ function carvingUv(): Node<'vec2'> {
 
 /** Two nested diamonds lead into triangular rows doubling towards the crown. */
 function carvingCuts(): Cut[] {
-  const cuts: Cut[] = [{ a: [0, 0], b: [0, SHAFT_HEIGHT], width: 0.095 }]
+  const cuts: Cut[] = [{ a: [0, 0], b: [0, SHAFT_HEIGHT], width: 0.11 }]
   for (const [width, height] of DIAMONDS) {
     const diamond: Point[] = [[0, DIAMOND_CENTRE - height], [width, DIAMOND_CENTRE], [0, DIAMOND_CENTRE + height], [-width, DIAMOND_CENTRE]]
-    diamond.forEach((a, i) => cuts.push({ a, b: diamond[(i + 1) % 4]!, width: 0.032 }))
+    diamond.forEach((a, i) => cuts.push({ a, b: diamond[(i + 1) % 4]!, width: 0.048 }))
   }
   for (let band = 0; band < 3; band++) {
     const count = 2 ** band
     const low = LATTICE_ROWS[band]!
     const high = LATTICE_ROWS[band + 1]!
-    cuts.push({ a: [-1, low], b: [1, low], width: 0.012 })
+    cuts.push({ a: [-1, low], b: [1, low], width: 0.023 })
     for (let i = 0; i < count; i++) {
       const left = -1 + i * 2 / count
       const right = -1 + (i + 1) * 2 / count
       const tip: Point = [(left + right) * 0.5, high]
-      cuts.push({ a: [left, low], b: tip, width: 0.012 }, { a: tip, b: [right, low], width: 0.012 })
+      cuts.push({ a: [left, low], b: tip, width: 0.023 }, { a: tip, b: [right, low], width: 0.023 })
     }
   }
   return cuts

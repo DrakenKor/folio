@@ -1,11 +1,13 @@
 import { ExtrudeGeometry, Group, Matrix4, Mesh, Shape, Vector3 } from 'three/webgpu'
-import { abs, attribute, color, max, mix, mrt, normalWorld, positionLocal, sin, smoothstep, vec4 } from 'three/tsl'
+import { abs, attribute, color, min, mix, mrt, positionLocal, vec4 } from 'three/tsl'
 import { GeometryBuilder, linearColor } from '../geometry'
 import { CelMaterial } from '../materials/cel'
 import type { Environment } from '../materials/environment'
 import type { Heightfield } from '../terrain/heightfield'
 import { climbingPulse, CYAN, MONOLITH_STONE, STONE_TURN } from './monolith-carving'
 import { StoneGeometry, type Point } from './monolith-cells'
+import { smoothStoneNormals } from './stone-geometry'
+import { stoneMoss } from './stone-moss'
 
 /** Three worn chamfered tiers, mossy on their upward edges, and a glowing groove cut into the ground around them. */
 export function createMonolithSite(env: Environment, field: Heightfield): Group {
@@ -24,7 +26,7 @@ export function createMonolithSite(env: Environment, field: Heightfield): Group 
       const top = Math.max(0, Math.min(1, (positions.getZ(i) + 0.12) / height))
       positions.setZ(i, positions.getZ(i) - wear * top)
     }
-    geometry.computeVertexNormals()
+    smoothStoneNormals(geometry)
     const matrix = new Matrix4().makeRotationX(-Math.PI / 2).setPosition(0, y + 0.12, 0)
     builder.add(geometry, matrix, {
       color: linearColor(MONOLITH_STONE),
@@ -33,12 +35,12 @@ export function createMonolithSite(env: Environment, field: Heightfield): Group 
     geometry.dispose()
     y += height
   }
-  const edge = max(abs(positionLocal.x), abs(positionLocal.z)).div(attribute('tierHalf', 'float'))
-  const patch = sin(positionLocal.x.mul(1.15).add(positionLocal.z.mul(0.55))).add(sin(positionLocal.z.mul(1.5))).mul(0.25).add(0.5)
-  const moss = smoothstep(0.55, 0.88, edge).mul(smoothstep(0.10, 0.45, patch)).mul(smoothstep(0.05, 0.65, normalWorld.y))
+  const corner = min(abs(positionLocal.x), abs(positionLocal.z)).div(attribute('tierHalf', 'float'))
+  const moss = stoneMoss(corner.mul(0.30).sub(0.08))
   const material = new CelMaterial(env, {
     colorNode: mix(attribute('color', 'vec3'), color('#526d34'), moss.mul(0.95)),
     outlineNormal: attribute('hull', 'vec3'),
+    outlineWidth: 0.7,
     landmarkSpill: 0.32
   })
   material.name = 'monolith-plinth'
@@ -70,7 +72,7 @@ function tierShape(size: number): Shape {
 
 const RING_RADIUS = 4.95
 /** Groove cross-section from its outer edge to the floor: offset from the centre line, height above ground. */
-const RING_PROFILE: Point[] = [[0.34, -0.03], [0.24, 0.035], [0.19, 0.035], [0.15, 0.02]]
+const RING_PROFILE: Point[] = [[0.65, -0.03], [0.56, 0.10], [0.28, 0.16], [0.20, 0.16], [0.13, 0.055]]
 
 function carvedRing(env: Environment, field: Heightfield): Group {
   const group = new Group()
@@ -98,12 +100,14 @@ function carvedRing(env: Environment, field: Heightfield): Group {
   }
   const material = new CelMaterial(env, { colorNode: color(MONOLITH_STONE).mul(attribute('stoneValue', 'float')), outlineColor: null })
   material.name = 'monolith-ring-stone'
-  const mesh = new Mesh(stone.build(), material)
+  const paving = stone.build()
+  smoothStoneNormals(paving)
+  const mesh = new Mesh(paving, material)
   mesh.receiveShadow = true
-  const glow = color(CYAN).mul(climbingPulse(env, 0).mul(0.25).add(0.7))
+  const glow = color(CYAN).mul(climbingPulse(env, 0).mul(0.10).add(0.12))
   const inlay = new CelMaterial(env, { color: '#2f3532', emissiveNode: glow, outlineColor: null })
   inlay.name = 'monolith-ring-groove'
-  inlay.mrtNode = mrt({ glow: vec4(glow.mul(1.6), 1) })
+  inlay.mrtNode = mrt({ glow: vec4(glow, 1) })
   group.add(mesh, new Mesh(floor.build(), inlay))
   return group
 }
