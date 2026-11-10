@@ -3,11 +3,12 @@
 import { RenderPipeline, type Camera, type Scene, type WebGPURenderer } from 'three/webgpu'
 import { color, dot, float, mix, mrt, output, screenUV, smoothstep, uniform, vec3, vec4 } from 'three/tsl'
 import { bloom } from 'three/addons/tsl/display/BloomNode.js'
+import { inkWidth } from '../materials/cel'
 import { celOutlinePass } from './outline'
 
 export function createPost(renderer: WebGPURenderer, scene: Scene, camera: Camera) {
   const uniforms = {
-    outlineWidth: uniform(2.1),
+    outlineWidth: inkWidth,
     bloomStrength: uniform(0.9),
     bloomRadius: uniform(0.55),
     saturation: uniform(1.08),
