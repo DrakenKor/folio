@@ -131,7 +131,7 @@ export function createTrees(env: Environment, field: Heightfield) {
   trunkMaterial.name = 'trunk'
 
   const soft = attribute('soft', 'vec3')
-  const leafNoise = triplanarNoise(env, positionLocal, soft, 0.11)
+  const leafNoise = triplanarNoise(env, positionLocal, soft, 0.055)
   const canopyMaterial = new CelMaterial(env, {
     colorNode: vertexColor.mul(mix(float(0.9), float(1.1), texture(env.noise, positionLocal.xz.mul(0.05)).g)),
     positionNode: swayNode(0.035),
@@ -140,7 +140,7 @@ export function createTrees(env: Environment, field: Heightfield) {
     outlineColor: vertexColor.mul(0.32).add(vec3(0.0, 0.012, 0.03)),
     outlineNormal: attribute('hull', 'vec3'),
     outlineWidth: 1.1,
-    bandOffset: leafNoise.sub(0.5).mul(0.45)
+    bandOffset: leafNoise.sub(0.5).mul(0.28)
   })
   canopyMaterial.name = 'canopy'
 

@@ -3,7 +3,7 @@
 import { BufferAttribute, InstancedBufferGeometry, Mesh, DoubleSide } from 'three/webgpu'
 import { attribute, color, cos, float, floor, Fn, hash, instanceIndex, mix, mod, sin, smoothstep, step, texture, vec2, vec3, vec4, positionGeometry, varyingProperty } from 'three/tsl'
 import { CelMaterial } from '../materials/cel'
-import type { Environment } from '../materials/environment'
+import { trampleAt, type Environment } from '../materials/environment'
 import { gustAt } from '../materials/wind'
 import { GRID, type Heightfield, TERRAIN_HALF } from '../terrain/heightfield'
 import type { createGrass } from './grass'
@@ -15,7 +15,7 @@ const CELL_RATIO = 3.5
 export function createFlowers(env: Environment, field: Heightfield, grass: ReturnType<typeof createGrass>) {
   const geometry = starGeometry()
   geometry.instanceCount = SIDE * SIDE
-  const { focus, player, cell: grassCell, height: grassHeight, shortenRadius } = grass.uniforms
+  const { focus, cell: grassCell, height: grassHeight } = grass.uniforms
   const vKind = varyingProperty('float', 'vFlowerKind')
   const side = float(SIDE)
 
@@ -36,8 +36,8 @@ export function createFlowers(env: Environment, field: Heightfield, grass: Retur
     // Drifts: flowers gather where a mid-scale noise is high.
     const drift = smoothstep(0.5, 0.68, texture(env.noise, xz.div(23)).level(float(0)).g)
     const fromFocus = xz.sub(focus).length().div(side.mul(cellSize).mul(0.5))
-    const nearPlayer = smoothstep(shortenRadius.mul(0.6), shortenRadius, xz.sub(player.xz).length())
-    const keep = step(r2, drift.mul(0.85).mul(step(0.85, site.b))).mul(smoothstep(1, 0.6, fromFocus)).mul(nearPlayer)
+    const nearPlayer = trampleAt(env, xz).oneMinus()
+    const keep = step(r2, drift.mul(0.85).mul(step(0.85, site.b))).mul(smoothstep(0.6, 1, fromFocus).oneMinus()).mul(nearPlayer)
     const size = mix(float(0.06), float(0.1), r3).mul(keep)
     const height = mix(float(0.26), float(0.5), r0).mul(grassHeight)
     const gust = gustAt(env, xz)

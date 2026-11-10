@@ -35,7 +35,7 @@ export function createMeadow(seed: number) {
   sun.castShadow = true
   sun.shadow.mapSize.set(2048, 2048)
   sun.shadow.bias = -0.0006
-  sun.shadow.normalBias = 0.07
+  sun.shadow.normalBias = 0.18
   sun.shadow.radius = 1.4
   installSmoothShadows(sun.shadow)
   scene.add(sun, sun.target)

@@ -1,7 +1,7 @@
 // Uniforms shared by every material in one scene: time, light, wind and haze.
 // Each scene owns one Environment, so two views never fight over globals.
 import { Color, type Node, type UniformNode, DataTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, RGBAFormat, UnsignedByteType, Vector2, Vector3 } from 'three/webgpu'
-import { abs, positionWorld, smoothstep, texture, uniform } from 'three/tsl'
+import { abs, positionWorld, smoothstep, step, texture, uniform } from 'three/tsl'
 import { Noise2D, subSeed } from '../rng'
 
 export interface Palette {
@@ -99,7 +99,8 @@ export function triplanarNoise(env: Environment, p: Node<'vec3'>, n: Node<'vec3'
 
 /** 1 at the player's feet, fading to 0 at the trample radius. */
 export function trampleAt(env: Environment, xz: Node<'vec2'>) {
-  return smoothstep(env.trampleRadius, env.trampleRadius.mul(0.35), xz.sub(env.player.xz).length())
+  const radius = env.trampleRadius.max(1e-4)
+  return smoothstep(radius.mul(0.35), radius, xz.sub(env.player.xz).length()).oneMinus().mul(step(1e-4, env.trampleRadius))
 }
 
 /** A colour uniform typed as vec3, so it composes with vector maths. */

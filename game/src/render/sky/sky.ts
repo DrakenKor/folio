@@ -20,14 +20,15 @@ export function createSky(env: Environment) {
   const cloudUv = dir.xz.div(up.max(0.03).add(0.12)).mul(0.1).add(env.windDirection.mul(env.time.mul(0.0022)))
   const body = cloudDensity(env, cloudUv)
   const towardSun = cloudDensity(env, cloudUv.add(env.sunDirection.xz.normalize().mul(0.022)))
+  const cover = smoothstep(env.cloudCover, env.cloudCover.add(0.045), body).mul(smoothstep(0.01, 0.16, up))
+  const disk = smoothstep(0.99955, 0.99975, sunDot).mul(cover.oneMinus())
 
   const colorNode = Fn(() => {
     const gradient = smoothstep(-0.02, 0.7, up).pow(0.7)
     let sky = mix(env.horizon, env.zenith, gradient)
     sky = sky.add(env.sunHaze.mul(sunDot.pow(12).mul(0.5)))
     const coverage = env.cloudCover
-    // A crisp painted edge with soft tone inside it.
-    const cover = smoothstep(coverage, coverage.add(0.018), body).mul(smoothstep(0.01, 0.16, up))
+    // Soft painted edges and warm tops over lavender undersides.
     const shaded = smoothstep(-0.006, 0.02, towardSun.sub(body)).mul(smoothstep(coverage, coverage.add(0.12), body).mul(0.6).add(0.4))
     const lit = mix(color('#fffaf0'), env.sunHaze, sunDot.pow(3).mul(0.45))
     const under = mix(color('#a7aed2'), color('#c3c3dc'), smoothstep(coverage.add(0.05), coverage.add(0.2), body))
@@ -36,11 +37,9 @@ export function createSky(env: Environment) {
     const cloudFinal = mix(env.horizon, cloud, smoothstep(0.0, 0.25, up).mul(0.7).add(0.3))
     sky = mix(sky, cloudFinal, cover)
     sky = mix(env.haze, sky, smoothstep(-0.06, 0.02, up))
-    const disk = smoothstep(0.99955, 0.99975, sunDot).mul(cover.oneMinus())
     return vec4(sky.add(env.sunColor.mul(disk).mul(0.5)), 1)
   })()
 
-  const disk = smoothstep(0.99955, 0.99975, sunDot)
   const material = new MeshBasicNodeMaterial({ side: BackSide, depthWrite: false })
   material.colorNode = colorNode
   material.mrtNode = mrt({ glow: vec4(env.sunColor.mul(disk).mul(0.35), 1) })

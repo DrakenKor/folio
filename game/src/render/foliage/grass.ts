@@ -30,11 +30,10 @@ import {
   varyingProperty
 } from 'three/tsl'
 import { CelMaterial } from '../materials/cel'
-import type { Environment } from '../materials/environment'
+import { trampleAt, type Environment } from '../materials/environment'
 import { GRID, type Heightfield, TERRAIN_HALF } from '../terrain/heightfield'
 import { meadowPatch, meadowTones } from '../terrain/terrain'
 import { gustAt } from '../materials/wind'
-import { trampleAt } from '../materials/environment'
 
 /** Instances per side of the grid: 384² is about 147k blades. */
 export const GRASS_SIDE = 384
@@ -88,7 +87,7 @@ export function createGrass(env: Environment, field: Heightfield) {
 
     // Fade at the edge of the field, thin out along the path, cut near the player.
     const fromFocus = xz.sub(uniforms.focus).length().div(half)
-    const edge = smoothstep(1.0, 0.55, fromFocus)
+    const edge = smoothstep(0.55, 1.0, fromFocus).oneMinus()
     const mask = site.b
     const keep = step(r5, mask.mul(1.15)).mul(step(r4, uniforms.density))
     const toPlayer = xz.sub(uniforms.player.xz)
@@ -106,7 +105,8 @@ export function createGrass(env: Environment, field: Heightfield) {
 
     const yaw = r2.mul(6.283)
     const leanDir = vec2(cos(yaw.add(1.3)), sin(yaw.add(1.3)))
-    const push = smoothstep(uniforms.bendRadius, uniforms.bendRadius.mul(0.15), playerDist).mul(1.2).add(trample.mul(1.3))
+    const radius = uniforms.bendRadius.max(1e-4)
+    const push = smoothstep(radius.mul(0.15), radius, playerDist).oneMinus().mul(step(1e-4, uniforms.bendRadius)).mul(1.2).add(trample.mul(1.3))
     const bend = leanDir.mul(r4.mul(0.25).add(0.12)).add(env.windDirection.mul(windAmount)).add(toPlayer.div(playerDist).mul(push))
     const amount = bend.length().max(1e-4)
     const bendDir = bend.div(amount)

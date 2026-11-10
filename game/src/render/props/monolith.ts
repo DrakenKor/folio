@@ -147,11 +147,11 @@ function lattice(env: Environment) {
     const lit = step(0.5, hash(cell.x.add(37).mul(131).add(cell.y.add(91)).add(faceIndex.mul(977)).toUint()))
     const line = (d: Node<'float'>) => {
       const w = fwidth(d).max(1e-4)
-      return smoothstep(w.mul(1.6).add(0.035), float(0.035), d)
+      return smoothstep(float(0.035), w.mul(1.6).add(0.035), d).oneMinus()
     }
     const lines = max(line(d1), max(line(d2), line(d3))).mul(lit)
     // Lattice nodes always glow a little.
-    const node = smoothstep(0.16, 0.08, vec2(min(f.x, f.x.oneMinus()), min(f.y, f.y.oneMinus())).length())
+    const node = smoothstep(0.08, 0.16, vec2(min(f.x, f.x.oneMinus()), min(f.y, f.y.oneMinus())).length()).oneMinus()
     // Faces only: the caps and the platform end stay dark.
     const onFace = step(abs(normalLocal.y), 0.6).mul(step(1.2, p.y)).mul(step(p.y, MONOLITH_HEIGHT + 0.5))
     const pulse = smoothstep(0.55, 1, sin(p.y.mul(1.3).sub(env.time.mul(1.7))).mul(0.5).add(0.5))
@@ -176,7 +176,7 @@ function createMotes(env: Environment, height: number): Mesh {
   const angle = r2.mul(6.283).add(env.time.mul(0.25)).add(life.mul(2))
   const dist = r0.mul(2.6).add(1.2)
   const centre = vec3(cos(angle).mul(dist), life.mul(height + 2).add(0.6), sin(angle).mul(dist))
-  const fade = smoothstep(0, 0.15, life).mul(smoothstep(1, 0.7, life))
+  const fade = smoothstep(0, 0.15, life).mul(smoothstep(0.7, 1, life).oneMinus())
   const material = new CelMaterial(env, { outlineColor: null, color: 0xffffff })
   material.positionNode = positionLocal.mul(fade.mul(1.4).add(0.2)).add(centre)
   const glow = color(GLOW).mul(fade).mul(2.5)
@@ -188,4 +188,3 @@ function createMotes(env: Environment, height: number): Mesh {
   mesh.frustumCulled = false
   return mesh
 }
-

@@ -54,7 +54,7 @@ export function createTerrain(env: Environment, field: Heightfield) {
     ground = mix(ground, mix(ground, color('#b5ad6a'), 0.55), trampleAt(env, xz).mul(fine.mul(0.4).add(0.6)))
     // Bare rock where the hills get steep.
     const rock = mix(color('#7d7a86'), color('#a29fa6'), mid)
-    ground = mix(ground, rock, smoothstep(0.82, 0.66, normalWorld.y.add(fine.sub(0.5).mul(0.08))))
+    ground = mix(ground, rock, smoothstep(0.66, 0.82, normalWorld.y.add(fine.sub(0.5).mul(0.08))).oneMinus())
     return ground
   })()
 
@@ -70,4 +70,3 @@ export function createTerrain(env: Environment, field: Heightfield) {
   mesh.receiveShadow = true
   return { mesh, material }
 }
-

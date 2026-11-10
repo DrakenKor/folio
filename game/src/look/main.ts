@@ -66,7 +66,6 @@ const standIns = createStandIns(meadow.env, meadow.field, { x: meadow.field.play
 meadow.scene.add(standIns.group)
 
 const post = createPost(renderer, meadow.scene, camera)
-look.debug = { meadow, post, camera, renderer }
 
 function resize() {
   const ratio = Math.min(window.devicePixelRatio, 1.5)
@@ -83,6 +82,17 @@ let running = frozenAt === null
 let timeBase = frozenAt ?? 0
 let runStart = performance.now()
 const sceneTime = (now: number) => (running ? timeBase + (now - runStart) / 1000 : timeBase)
+
+look.debug = {
+  meadow, post, camera, renderer,
+  /** Freeze at a scene time, or resume from the current time with null. */
+  setTime(seconds: number | null) {
+    const now = performance.now()
+    timeBase = seconds ?? sceneTime(now)
+    runStart = now
+    running = seconds === null
+  }
+}
 
 let onFrame: ((now: number) => void) | null = null
 let framesDrawn = 0

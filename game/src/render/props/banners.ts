@@ -72,7 +72,7 @@ export function createBanners(env: Environment, field: Heightfield) {
       const base = i % 2 === 0 ? color('#c6402e') : color('#2f5fa8')
       const band = step(0.1, t.x).mul(step(t.x, 0.18))
       const cloth = mix(base, color('#f1e6cc'), band)
-      return mix(cloth, cloth.mul(0.22), smoothstep(0.035, 0.018, edge))
+      return mix(cloth, cloth.mul(0.22), smoothstep(0.018, 0.035, edge).oneMinus())
     })()
 
     const flagMaterial = new CelMaterial(env, {
