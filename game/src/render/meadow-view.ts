@@ -118,10 +118,7 @@ export class MeadowView implements RenderView {
         if (this.camera.activeBookmark === 'meadow-player') this.camera.bookmark('meadow-player')
         this.camera.update({ x, y, z })
         this.meadow.setPlayer(x, z)
-        if (this.camera.isFollowing || this.camera.activeBookmark === 'meadow-player') {
-          this.meadow.grass.uniforms.cell.value = 0.2
-          this.meadow.setFocus(x, z - 2, 28)
-        }
+        if (this.camera.isFollowing || this.camera.activeBookmark === 'meadow-player') this.meadow.setFocus(x, z - 2, 28)
       } else {
         let dummy = this.dummies.get(entity.id)
         if (!dummy) {
@@ -141,7 +138,6 @@ export class MeadowView implements RenderView {
     if (name !== this.framing) {
       if (name?.startsWith('meadow-') && name !== 'meadow-player') {
         const pose = bookmark(name.slice(7) as BookmarkName, this.meadow.field)
-        this.meadow.grass.uniforms.cell.value = pose.grassCell
         this.meadow.setFocus(...pose.focus, pose.shadowExtent)
       }
       this.framing = name

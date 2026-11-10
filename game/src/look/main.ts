@@ -58,7 +58,6 @@ const view = bookmark(camName, meadow.field)
 camera.position.set(...view.position)
 camera.lookAt(...view.target)
 camera.fov = view.fov
-meadow.grass.uniforms.cell.value = view.grassCell
 meadow.setFocus(view.focus[0], view.focus[1], view.shadowExtent)
 meadow.setPlayer(meadow.field.player.x, meadow.field.player.z)
 

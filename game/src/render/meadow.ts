@@ -45,7 +45,7 @@ export function createMeadow(seed: number) {
   const terrain = createTerrain(env, field)
   const grass = createGrass(env, field)
   const sky = createSky(env)
-  const flowers = createFlowers(env, field, grass)
+  const flowers = createFlowers(env, field)
   const trees = createTrees(env, field)
   const rocks = createRocks(env, field, trees.sites)
   const monolith = createMonolith(env, field)
@@ -97,9 +97,8 @@ export function createMeadow(seed: number) {
     banners,
     sunSettings,
     applySun,
-    /** Centres grass density and the shadow map on a ground point. */
+    /** Centres the shadow map on a ground point; the grass follows the camera itself. */
     setFocus(x: number, z: number, extent: number) {
-      grass.setFocus(x, z)
       shadowFocus.set(x, field.heightAt(x, z), z)
       shadowExtent = extent
       placeShadow()
