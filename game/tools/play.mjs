@@ -141,6 +141,8 @@ async function launch() {
     '--remote-debugging-address=127.0.0.1', `--remote-debugging-port=${cdpPort}`, '--remote-allow-origins=*',
     `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check',
     '--disable-extensions', '--disable-component-update', '--disable-background-networking',
+    // Keep the window visible when other apps cover it, so only tab switches hide the game.
+    '--disable-backgrounding-occluded-windows',
     '--window-size=1280,800', 'about:blank'
   ], { detached: true, stdio: ['ignore', log, log] })
   closeSync(log)
@@ -307,7 +309,8 @@ async function background(seconds) {
     report('background', { seconds, beforeTick: before.tick, hiddenTick: hidden.tick, endTick: end.tick })
   } finally {
     if (other) await browser.send('Target.closeTarget', { targetId: other.targetId })
-    await page.send('Page.bringToFront')
+    // The closing tab can stay active briefly; retry until the game tab is really visible again.
+    await until(async () => { await page.send('Page.bringToFront'); return evaluate('!document.hidden') }, 'game tab visible')
     await page.send('Emulation.setFocusEmulationEnabled', { enabled: true })
   }
   await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
