@@ -14,10 +14,11 @@ export function gustAt(env: Environment, xz: Node<'vec2'>): Node<'float'> {
   const dir = env.windDirection
   const along = xz.dot(dir).sub(env.time.mul(GUST_SPEED))
   const across = xz.dot(vec2(dir.y.negate(), dir.x))
-  const warp = texture(env.noise, vec2(across.div(300), float(0.37))).level(float(0)).r
-  const front = mod(along.add(warp.sub(0.5).mul(12)), 32).toVar()
-  // A long trailing release and a firmer downwind leading edge.
-  return smoothstep(0, 6, front).mul(smoothstep(8, 10, front).oneMinus())
+  const warp = texture(env.noise, vec2(across.div(160), float(0.37))).level(float(0)).r.sub(0.5).mul(22)
+    .add(sin(across.mul(0.055)).mul(4))
+  const front = mod(along.add(warp), 38).toVar()
+  // Soft shoulders keep the travelling front from reading as a straight stripe.
+  return smoothstep(0, 7, front).mul(smoothstep(7, 14, front).oneMinus())
 }
 
 /** Wind at a ground position: the gust 0..1 and the downwind lean it causes, base sway included. */

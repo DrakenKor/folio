@@ -43,7 +43,7 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     hazeDensity: uniform(0.0022),
     hazeStart: uniform(24),
     /** How much haze drains saturation before tinting, 0..1. */
-    hazeDesaturate: uniform(0.55),
+    hazeDesaturate: uniform(0.2),
     /** Wind heading on the ground plane (unit) and strength 0..2. */
     windDirection: uniform(new Vector2(0.8, 0.6).normalize()),
     windStrength: uniform(1),

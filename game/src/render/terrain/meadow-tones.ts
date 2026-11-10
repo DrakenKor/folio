@@ -19,8 +19,8 @@ export function meadowPatch(env: Environment, xz: Node<'vec2'>, vertexStage = fa
  * ground grass, which is the blades' average colour so fading blades leave no hole.
  */
 export function meadowTones(patch: Node<'float'>) {
-  const base = mix(color('#465e4c'), color('#57664d'), patch)
-  const body = mix(color('#6f8a60'), color('#7e9062'), patch)
+  const base = mix(color('#425a49'), color('#5a6950'), patch)
+  const body = mix(color('#69845c'), color('#839466'), patch)
   const tip = mix(color('#a5b489'), color('#afb086'), patch)
   return { base, body, tip, ground: mix(mix(base, body, 0.8), tip, 0.12) }
 }
