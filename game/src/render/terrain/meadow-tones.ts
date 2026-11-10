@@ -13,8 +13,8 @@ export function meadowPatch(env: Environment, xz: Node<'vec2'>, vertexStage = fa
 /** Root, body and warm tip tones shared at every distance. */
 export function meadowTones(patch: Node<'float'>) {
   const base = mix(color('#3b6e31'), color('#5f8032'), patch)
-  const body = mix(color('#68a03b'), color('#8aa83b'), patch)
-  const tip = mix(color('#b3d463'), color('#d9d87a'), patch)
+  const body = mix(color('#4b8b35'), color('#8fa83d'), patch)
+  const tip = mix(color('#9ccc5d'), color('#dcd779'), patch)
   return { base, body, tip, ground: mix(mix(base, body, 0.8), tip, 0.16) }
 }
 
