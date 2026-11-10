@@ -43,3 +43,4 @@ __pycache__/
 /game/assets-local/
 /game/.packs/
 /game/.play-out/
+/game/node_modules/
