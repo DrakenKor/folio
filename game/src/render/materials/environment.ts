@@ -67,7 +67,7 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
       terminator: uniform(0.02),
       highlight: uniform(0.5),
       mid: uniform(0.6),
-      softness: uniform(0.07)
+      softness: uniform(0.035)
     },
     /** Shade, rim and ink rules shared by every cel material. */
     shading: {
