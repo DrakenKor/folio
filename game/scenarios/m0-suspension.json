@@ -1,0 +1,17 @@
+{
+  "scenario": "meadow-start",
+  "seed": 7,
+  "steps": [
+    { "op": "keyDown", "code": "KeyW" },
+    { "op": "wait", "ticks": 2 },
+    { "op": "eval", "expression": "__game.state('entities.0.vel.z') < 0", "expect": true },
+    { "op": "background", "seconds": 10 },
+    { "op": "keyUp", "code": "KeyW" },
+    { "op": "keyDown", "code": "KeyW" },
+    { "op": "wait", "ticks": 2 },
+    { "op": "eval", "expression": "__game.state('entities.0.vel.z') < 0", "expect": true },
+    { "op": "blur", "ms": 250 },
+    { "op": "keyUp", "code": "KeyW" },
+    { "op": "console", "ms": 0, "expectEmpty": true }
+  ]
+}
