@@ -31,11 +31,11 @@ import {
   varyingProperty
 } from 'three/tsl'
 import type { Node } from 'three/webgpu'
-import { CelMaterial } from '../materials/cel'
 import { trampleAt, type Environment } from '../materials/environment'
 import { windAt } from '../materials/wind'
+import { MeadowMaterial } from '../terrain/meadow-material'
 import { GRID, type Heightfield, TERRAIN_HALF } from '../terrain/heightfield'
-import { bladeTone, dryGrass, gustSheen, meadowPatch, meadowTones } from '../terrain/meadow-tones'
+import { bladeTone, dryGrass, meadowPatch, meadowTones } from '../terrain/meadow-tones'
 import { fieldFocus, nearFade } from './bands'
 import { CLUMP_CELL, tuftAt } from './tufts'
 /** Clump cells per side of the field: 112 × 0.5 m covers 56 m. */
@@ -136,8 +136,8 @@ export function createGrass(env: Environment, field: Heightfield) {
     const offset = positionGeometry.x.mul(width).mul(t.mul(0.75).oneMinus())
 
     // Lit like the ground under it: the slope's normal, tipped a little by the blade.
-    const slope = vec3(fieldAt(xz.sub(vec2(5, 0))).r.sub(fieldAt(xz.add(vec2(5, 0))).r), 10, fieldAt(xz.sub(vec2(0, 5))).r.sub(fieldAt(xz.add(vec2(0, 5))).r)).normalize()
-    vNormal.assign(slope.add(vec3(bendDir.x, 0, bendDir.y).mul(t.mul(0.2).mul(fade))).add(vec3(across.y.negate(), 0, across.x).mul(fade.mul(0.12))).normalize())
+    const slope = vec3(fieldAt(xz.sub(vec2(9, 0))).r.sub(fieldAt(xz.add(vec2(9, 0))).r), 18, fieldAt(xz.sub(vec2(0, 9))).r.sub(fieldAt(xz.add(vec2(0, 9))).r)).normalize()
+    vNormal.assign(vec3(slope.x.mul(1.8), slope.y, slope.z.mul(1.8)).normalize().add(vec3(bendDir.x, 0, bendDir.y).mul(t.mul(0.2).mul(fade))).add(vec3(across.y.negate(), 0, across.x).mul(fade.mul(0.12))).normalize())
     vT.assign(t)
     vFade.assign(fade)
     vGust.assign(wind.gust)
@@ -156,18 +156,17 @@ export function createGrass(env: Environment, field: Heightfield) {
     const tones = meadowTones(vPatch.clamp(0, 1))
     let c = mix(tones.ground, bladeTone(tones, vT), vFade)
     c = c.mul(vVariety.sub(0.5).mul(0.06).mul(vFade).add(1))
-    c = gustSheen(c, vGust.mul(vT.mul(0.45).add(0.15)))
     c = dryGrass(c, vTrample)
     return vec4(c, 1)
   })()
 
-  const material = new CelMaterial(env, {
+  const material = new MeadowMaterial(env, {
     colorNode,
     positionNode,
     normalNode: cameraViewMatrix.mul(vec4(vNormal, 0)).xyz.normalize(),
     side: DoubleSide,
     outlineColor: null
-  })
+  }, vGust.mul(vT.mul(0.65).add(0.35)).mul(vTrample.mul(0.75).oneMinus()))
   material.name = 'grass'
 
   const mesh = new Mesh(geometry, material)

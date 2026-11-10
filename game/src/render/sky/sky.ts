@@ -3,7 +3,8 @@
 // apart, that the haze carries towards the horizon blue.
 import { BackSide, BufferAttribute, BufferGeometry, Group, Mesh, MeshBasicNodeMaterial, SphereGeometry, type Camera } from 'three/webgpu'
 import { cameraPosition, color, float, Fn, mix, mrt, normalize, normalWorld, positionWorld, smoothstep, texture, vec4 } from 'three/tsl'
-import { cloudDensity, type Environment } from '../materials/environment'
+import type { Environment } from '../materials/environment'
+import { cumulus } from './cumulus'
 import { Noise2D, subSeed } from '../rng'
 
 const SKY_RADIUS = 1800
@@ -16,25 +17,15 @@ export function createSky(env: Environment) {
   const up = dir.y
   const sunDot = dir.dot(env.sunDirection).max(0)
 
-  // Project the view ray onto a flat cloud layer.
-  const toLayer = dir.xz.mul(float(300).sub(cameraPosition.y).div(up.max(0.03)))
-  const cloudUv = cameraPosition.xz.add(toLayer).mul(0.0011).sub(env.windDirection.mul(env.time.mul(0.0022)))
-  const body = cloudDensity(env, cloudUv)
-  const towardSun = cloudDensity(env, cloudUv.add(env.sunDirection.xz.normalize().mul(0.05)))
-  const cover = smoothstep(env.cloudCover.sub(0.01), env.cloudCover.add(0.045), body).mul(smoothstep(0.01, 0.16, up))
+  const clouds = cumulus(env, dir)
+  const cover = clouds.cover
   const disk = smoothstep(0.99955, 0.99975, sunDot).mul(cover.oneMinus())
 
   const colorNode = Fn(() => {
     const gradient = smoothstep(-0.02, 0.7, up).pow(0.7)
     let sky = mix(env.horizon, env.zenith, gradient)
     sky = sky.add(env.sunHaze.mul(sunDot.pow(12).mul(0.5)))
-    // Soft painted edges and warm tops over lavender undersides.
-    const shaded = smoothstep(-0.08, 0.06, towardSun.sub(body)).mul(0.35)
-    const lit = mix(color('#fff2da'), env.sunHaze, sunDot.pow(3).mul(0.45))
-    const under = color('#a4b0cd')
-    const cloud = mix(lit, under, shaded)
-    // Clouds near the horizon sink into the haze.
-    const cloudFinal = mix(env.horizon, cloud, smoothstep(0.0, 0.25, up).mul(0.7).add(0.3))
+    const cloudFinal = mix(env.horizon, clouds.tone, smoothstep(0, 0.3, up).mul(0.65).add(0.35))
     sky = mix(sky, cloudFinal, cover)
     sky = mix(env.haze, sky, smoothstep(-0.06, 0.02, up))
     return vec4(sky.add(env.sunColor.mul(disk).mul(0.5)), 1)
