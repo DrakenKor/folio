@@ -72,11 +72,11 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     /** Shade, rim and ink rules shared by every cel material. */
     shading: {
       /** Shade hue; surfaces keep their luminance and take this hue by `shadeHue`. */
-      shadeTint: uniform(new Vector3(0.52, 0.54, 1)),
+      shadeTint: uniform(new Vector3(0.66, 0.62, 1)),
       /** How far shade moves from the surface colour to the shade hue, 0..1. */
-      shadeHue: uniform(0.8),
+      shadeHue: uniform(0.7),
       /** Shade brightness relative to the surface under the sky fill. */
-      shadeValue: uniform(1.1),
+      shadeValue: uniform(1.35),
       /** How much of the fill lit faces lose, 0..1. */
       fillInLight: uniform(0.75),
       litSaturation: uniform(0.85),
