@@ -2,7 +2,7 @@ import { Group, Mesh, Vector3, type Node } from 'three/webgpu'
 import { abs, attribute, color, float, max, mod, mrt, smoothstep, vec2, vec4 } from 'three/tsl'
 import { CelMaterial } from '../materials/cel'
 import type { Environment } from '../materials/environment'
-import { carve, split, StoneGeometry, type Cut, type Point } from './monolith-cells'
+import { carve, inset, split, StoneGeometry, type Cut, type Point } from './monolith-cells'
 
 export const SHAFT_BASE = 1.25
 export const SHAFT_HEIGHT = 6.6
@@ -10,7 +10,7 @@ export const STONE_TURN = -0.24
 export const MONOLITH_STONE = '#a59e90'
 export const CYAN = '#65e9df'
 export const CRYSTAL_RISE = SHAFT_HEIGHT + 2.05
-const GROOVE_DEPTH = 0.075
+const GROOVE_DEPTH = 0.025
 const DIAMONDS: Point[] = [[0.76, 2.22], [0.40, 1.17]]
 const DIAMOND_CENTRE = 2.55
 const LATTICE_ROWS = [4.65, 5.30, 5.95, SHAFT_HEIGHT]
@@ -34,16 +34,22 @@ export function createCarvedShaft(env: Environment): Group {
   for (let face = 0; face < 4; face++) {
     for (const cell of cells) {
       const top = cell.map(p => facePoint(p, face, 0))
+      const boundaries = cell.map((a, i) => grooveBoundary(a, cell[(i + 1) % cell.length]!, cuts))
+      const lower = inset(cell, boundaries.map(cut => -(cut?.width ?? 0) * 0.38)) ?? cell
       surface.polygon(top, 1, cell.map(faceUv))
+      const at = (k: number, scale: number, depth: number) => facePoint([
+        cell[k]![0] + (lower[k]![0] - cell[k]![0]) * scale,
+        cell[k]![1] + (lower[k]![1] - cell[k]![1]) * scale
+      ], face, GROOVE_DEPTH * depth)
       for (let i = 0; i < cell.length; i++) {
         const j = (i + 1) % cell.length
-        const bevel = grooveBevel(cell[i]!, cell[j]!, cuts)
-        if (bevel === 0) continue
-        const a = cell[i]!
-        const b = cell[j]!
-        const length = Math.hypot(b[0] - a[0], b[1] - a[1])
-        const wall = (p: Point): Point => [p[0] + (b[1] - a[1]) / length * bevel, p[1] - (b[0] - a[0]) / length * bevel]
-        surface.polygon([top[i]!, facePoint(wall(a), face, GROOVE_DEPTH), facePoint(wall(b), face, GROOVE_DEPTH), top[j]!], 0.78)
+        if (!boundaries[i]) continue
+        const profiles: Point[] = [[0, 0], [0.35, 0.76], [1, 1]]
+        for (let level = 0; level < 2; level++) {
+          const [s0, d0] = profiles[level]!
+          const [s1, d1] = profiles[level + 1]!
+          surface.polygon([at(i, s0, d0), at(i, s1, d1), at(j, s1, d1), at(j, s0, d0)], level === 0 ? 0.56 : 0.88)
+        }
       }
     }
     for (const [left, right] of [[-1, -0.93], [-0.93, 0.93], [0.93, 1]] as Point[]) {
@@ -80,10 +86,10 @@ export function createCarvedShaft(env: Environment): Group {
 }
 
 /** Only exposed cut boundaries have walls; polygon partition edges stay flush. */
-function grooveBevel(a: Point, b: Point, cuts: Cut[]): number {
+function grooveBoundary(a: Point, b: Point, cuts: Cut[]): Cut | undefined {
   const x = (a[0] + b[0]) * 0.5
   const y = (a[1] + b[1]) * 0.5
-  const cut = cuts.find(cut => {
+  return cuts.find(cut => {
     const dx = cut.b[0] - cut.a[0]
     const dy = cut.b[1] - cut.a[1]
     const length = Math.hypot(dx, dy)
@@ -91,7 +97,6 @@ function grooveBevel(a: Point, b: Point, cuts: Cut[]): number {
     const across = Math.abs((x - cut.a[0]) * dy - (y - cut.a[1]) * dx) / length
     return along > -1e-6 && along < length + 1e-6 && Math.abs(across - cut.width) < 1e-6
   })
-  return cut ? cut.width * 0.38 : 0
 }
 
 /** The spine carries the crest; diamonds and triangular cells illuminate in its wake. */
