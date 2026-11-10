@@ -16,7 +16,16 @@
     "keys:issue": "tsx scripts/keys.ts issue",
     "keys:inspect": "tsx scripts/keys.ts inspect",
     "blog:rewrite": "python3 scripts/qwen-rewrite.py",
-    "blog:publish": "NODE_ENV=production tsx scripts/blog-publish.ts"
+    "blog:publish": "NODE_ENV=production tsx scripts/blog-publish.ts",
+    "game:dev": "vite --config game/vite.config.mts",
+    "game:typecheck": "tsc --noEmit -p game/tsconfig.json",
+    "game:build": "npm run game:typecheck && vite build --config game/vite.config.mts",
+    "game:test": "vitest run --config game/vitest.config.mts",
+    "game:sim": "tsx game/tools/sim.ts",
+    "game:play": "node game/tools/play.mjs",
+    "game:budget": "node game/tools/budget.mjs",
+    "game:pack": "node game/tools/pack.mjs",
+    "game:fetch": "node game/tools/fetch.mjs"
   },
   "dependencies": {
     "@react-three/drei": "10.7.8",
