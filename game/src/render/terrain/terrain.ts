@@ -2,13 +2,13 @@
 // with ground grass that shows the travelling gusts, the worn path and rock on
 // steep slopes.
 import { Mesh, PlaneGeometry } from 'three/webgpu'
-import { color, Fn, mix, normalWorld, positionWorld, smoothstep, texture } from 'three/tsl'
+import { color, dot, Fn, mix, normalWorld, positionWorld, smoothstep, texture, vec3 } from 'three/tsl'
 import { CelMaterial } from '../materials/cel'
 import { trampleAt, triplanarNoise, type Environment } from '../materials/environment'
 import { gustAt } from '../materials/wind'
 import { nearFade } from '../foliage/bands'
 import { GRID, type Heightfield, TERRAIN_HALF, TERRAIN_SIZE } from './heightfield'
-import { dryGrass, groundGrass, meadowPatch } from './meadow-tones'
+import { dryGrass, groundGrass, meadowPatch, meadowTones } from './meadow-tones'
 
 export function createTerrain(env: Environment, field: Heightfield) {
   const geometry = new PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, GRID - 1, GRID - 1)
@@ -17,7 +17,16 @@ export function createTerrain(env: Environment, field: Heightfield) {
   for (let k = 0; k < pos.count; k++) {
     pos.setY(k, field.heights[k]!)
   }
-  geometry.computeVertexNormals()
+  // Broad slope normals keep hill lighting in calm bands while preserving ground contact.
+  const normals = geometry.attributes.normal!
+  for (let k = 0; k < pos.count; k++) {
+    const x = pos.getX(k)
+    const z = pos.getZ(k)
+    const nx = field.heightAt(x - 5, z) - field.heightAt(x + 5, z)
+    const nz = field.heightAt(x, z - 5) - field.heightAt(x, z + 5)
+    const length = Math.hypot(nx, 10, nz)
+    normals.setXYZ(k, nx / length, 10 / length, nz / length)
+  }
   geometry.computeBoundingSphere()
 
   const xz = positionWorld.xz
@@ -31,11 +40,14 @@ export function createTerrain(env: Environment, field: Heightfield) {
     const near = nearFade(positionWorld).mul(sample.b).mul(trample.mul(0.6).oneMinus())
     // Ground-plane detail would stretch down steep slopes, so it calms there as in the trampled ring.
     const calm = trample.max(smoothstep(0.78, 0.95, normalWorld.y).oneMinus())
-    const meadow = dryGrass(groundGrass(env, xz, meadowPatch(env, xz), gustAt(env, xz), near, calm), trample.mul(fine.mul(0.4).add(0.6)))
+    const patch = meadowPatch(env, xz).toVar()
+    const meadow = dryGrass(groundGrass(env, xz, patch, gustAt(env, xz), near, calm), trample.mul(fine.mul(0.4).add(0.6)))
     // The path: soft edges broken in half-metre bites where the ground grass thins into worn earth.
     const edgeNoise = texture(env.noise, xz.div(9)).g.sub(0.5).mul(0.4).add(fine.sub(0.5).mul(0.1))
     const pathAmount = smoothstep(0.22, 0.62, sample.g.add(edgeNoise))
-    const dirt = mix(color('#967d59'), color('#b39b74'), smoothstep(0.55, 0.95, sample.g).mul(fine.mul(0.4).add(0.6)))
+    const earth = mix(color('#967d59'), color('#a88e66'), fine.mul(0.25).add(0.4))
+    const luma = vec3(0.2126, 0.7152, 0.0722)
+    const dirt = earth.mul(dot(meadowTones(patch).ground, luma).div(dot(earth, luma)))
     let ground = mix(meadow, dirt, pathAmount)
     // Bare rock where the hills get steep, its noise projected along the slope so it never stretches.
     const rockNoise = triplanarNoise(env, positionWorld, normalWorld, 1 / 31)
@@ -46,8 +58,7 @@ export function createTerrain(env: Environment, field: Heightfield) {
 
   const material = new CelMaterial(env, {
     colorNode,
-    outlineColor: null,
-    bandOffset: triplanarNoise(env, positionWorld, normalWorld, 1 / 7).sub(0.5).mul(0.12)
+    outlineColor: null
   })
   material.name = 'terrain'
 

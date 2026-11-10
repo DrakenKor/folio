@@ -14,11 +14,11 @@ export function gustAt(env: Environment, xz: Node<'vec2'>): Node<'float'> {
   const dir = env.windDirection
   const along = xz.dot(dir).sub(env.time.mul(GUST_SPEED))
   const across = xz.dot(vec2(dir.y.negate(), dir.x))
-  const warp = texture(env.noise, vec2(across.div(160), float(0.37))).level(float(0)).r.sub(0.5).mul(22)
-    .add(sin(across.mul(0.055)).mul(4))
-  const front = mod(along.add(warp), 38).toVar()
+  const warp = texture(env.noise, vec2(across.div(300), float(0.37))).level(float(0)).r.sub(0.5).mul(16)
+    .add(sin(across.mul(0.025)).mul(6))
+  const front = mod(along.add(warp), 64).toVar()
   // Soft shoulders keep the travelling front from reading as a straight stripe; the crest holds a few metres.
-  return smoothstep(0, 5, front).mul(smoothstep(9, 15, front).oneMinus())
+  return smoothstep(0, 2.5, front).mul(smoothstep(7, 13, front).oneMinus())
 }
 
 /** Wind at a ground position: the gust 0..1 and the downwind lean it causes, base sway included. */

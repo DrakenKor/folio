@@ -1,7 +1,7 @@
 // Uniforms shared by every material in one scene: time, light, wind and haze.
 // Each scene owns one Environment, so two views never fight over globals.
 import { Color, type Node, type UniformNode, DataTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, RGBAFormat, UnsignedByteType, Vector2, Vector3 } from 'three/webgpu'
-import { abs, float, positionWorld, smoothstep, step, texture, uniform } from 'three/tsl'
+import { abs, float, positionWorld, smoothstep, step, texture, uniform, vec2 } from 'three/tsl'
 import { Noise2D, subSeed } from '../rng'
 
 export interface Palette {
@@ -94,11 +94,22 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
 
 export type Environment = ReturnType<typeof createEnvironment>
 
-/** Cloud density on the cloud layer at `uv`; the sky and the ground share it. */
+/** Four broad, lobed cloud masses on the shared drifting cloud layer. */
 export function cloudDensity(env: Environment, uv: Node<'vec2'>) {
-  return texture(env.noise, uv).level(float(2))
-    .r.mul(0.85)
-    .add(texture(env.noise, uv.mul(1.9).add(0.37)).level(float(2)).r.mul(0.15))
+  const drift = uv.add((env.seed % 17) * 0.002)
+  let density: Node<'float'> = float(0)
+  for (const [x, z, width, depth] of [
+    [-0.85, -0.5, 0.32, 0.3],
+    [1.65, -0.6, 0.4, 0.32],
+    [-0.3, -1.85, 0.45, 0.3],
+    [0.7, 0.85, 0.38, 0.28]
+  ] as const) {
+    for (const [dx, dz, scale] of [[-0.55, 0, 0.7], [0, 0.16, 1], [0.58, -0.06, 0.65]] as const) {
+      const p = drift.sub(vec2(x + dx * width, z + dz * depth)).div(vec2(width * scale, depth * scale))
+      density = density.max(p.length().mul(-0.4).add(1))
+    }
+  }
+  return density.clamp(0, 1)
 }
 
 /** 1 in open sun, lower under the large, soft shadow of a drifting cloud. */
