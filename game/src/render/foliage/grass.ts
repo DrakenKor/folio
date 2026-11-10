@@ -95,12 +95,12 @@ export function createGrass(env: Environment, field: Heightfield) {
     const site = fieldAt(xz).toVar()
     const groundY = site.r
 
-    // Path edges thin blade by blade; the middle band thins and shortens with distance.
+    // Path edges thin tuft by tuft; the middle band thins and shortens with distance.
     const mask = site.b
     const edge = xz.sub(focus).abs()
     const fade = nearFade(vec3(xz.x, groundY, xz.y))
       .mul(smoothstep(18, 26, edge.x.max(edge.y)).oneMinus()).toVar()
-    const keep = step(bladeRand(0x4567), mask.mul(1.15)).mul(step(clumpRand(0x6d2b), uniforms.density))
+    const keep = step(clumpRand(0x4567), mask.mul(1.15)).mul(step(clumpRand(0x6d2b), uniforms.density))
     const trample = trampleAt(env, xz).toVar()
     const height = mix(float(0.19), float(0.34), bladeRand(0x5678))
       .mul(tuftHeight)
