@@ -1,9 +1,11 @@
 import { BufferGeometry, Float32BufferAttribute, LatheGeometry, Vector2, Vector3 } from 'three/webgpu'
 
-/** An asymmetric leaf mass with clustered shoulders, deep notches and a shallow underside. */
-export function crownGeometry(phase: number): LatheGeometry {
-  const profile = [[0.001, -0.35], [0.58, -0.30], [0.92, -0.08], [1, 0.14], [0.81, 0.42], [0.46, 0.65], [0.001, 0.73]]
-  const segments = 48
+/** Lobed leaf masses give rounded, oval and umbrella crowns distinct outlines. */
+export function crownGeometry(phase: number, form: 'rounded' | 'oval' | 'umbrella'): LatheGeometry {
+  const profile = form === 'umbrella'
+    ? [[0.001, -0.35], [0.58, -0.30], [0.92, -0.08], [1, 0.14], [0.81, 0.42], [0.46, 0.65], [0.001, 0.73]]
+    : [[0.001, -0.72], [0.62, -0.53], [0.94, -0.15], [1, 0.22], [0.83, 0.66], [0.46, 0.96], [0.001, 1.1]]
+  const segments = 36
   const geometry = new LatheGeometry(profile.map(([r, y]) => new Vector2(r, y)), segments)
   const position = geometry.getAttribute('position')
   for (let i = 0; i < position.count; i++) {
@@ -21,7 +23,7 @@ export function crownGeometry(phase: number): LatheGeometry {
   geometry.computeVertexNormals()
   const normals = geometry.getAttribute('normal')
   for (let i = 0; i < position.count; i++) {
-    const broad = new Vector3(position.getX(i) * 0.7, (position.getY(i) - 0.14) * 2, position.getZ(i) * 0.7).normalize()
+    const broad = new Vector3(position.getX(i) * 0.7, (position.getY(i) - 0.14) * (form === 'umbrella' ? 2 : 0.8), position.getZ(i) * 0.7).normalize()
     const n = new Vector3().fromBufferAttribute(normals, i).lerp(broad, 0.6).normalize()
     normals.setXYZ(i, n.x, n.y, n.z)
   }

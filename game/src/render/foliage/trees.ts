@@ -17,8 +17,8 @@ export interface TreeSite {
   radius: number
 }
 
-const BROADLEAF = ['#8bab66', '#9caf69', '#80a579', '#aaa86d']
-const CONIFER = ['#7c9b7b', '#88a279', '#779983']
+const BROADLEAF = ['#659444', '#789c48', '#568d50', '#889e4b']
+const CONIFER = ['#52805a', '#60895c', '#4c7959']
 
 export function createTrees(env: Environment, field: Heightfield) {
   const random = rng(subSeed(field.seed, 'trees'))
@@ -92,6 +92,7 @@ export function createTrees(env: Environment, field: Heightfield) {
       const tall = variant === 1
       const spread = variant === 2
       const swept = variant === 3
+      const form = tall ? 'oval' : spread ? 'umbrella' : 'rounded'
       const centre = new Vector3(site.x, ground + trunkHeight + site.radius * 0.65, site.z)
         .addScaledVector(lean, trunkHeight)
       const count = [5, 5, 6, 5][variant]!
@@ -100,14 +101,14 @@ export function createTrees(env: Environment, field: Heightfield) {
       if (tall) branch(new Vector3(site.x, ground + trunkHeight, site.z), centre.clone().add(new Vector3(0, site.radius * 1.4, 0)), radius * 0.55)
       for (let b = 0; b < count; b++) {
         const a = angle + b * 2.4
-        const reach = site.radius * (spread ? 1.05 : tall ? 0.52 : 0.85)
+        const reach = site.radius * (spread ? 1.05 : tall ? 0.38 : b === 0 ? 0.16 : 0.85)
         const c = centre.clone().add(new Vector3(
           Math.cos(a) * reach + (swept ? b * site.radius * 0.17 : 0),
-          tall ? b * site.radius * 0.34 : site.radius * (b === 0 ? 0.72 : -0.12 + b * 0.16),
+          tall ? b * site.radius * 0.43 : site.radius * (b === 0 ? 0.8 : -0.12 + b * 0.16),
           Math.sin(a) * reach
         ))
         const r = site.radius * (tall ? 0.65 : spread ? 0.64 : 0.66) * (0.88 + random() * 0.22)
-        clumps.push({ centre: c, radius: r, stretch: new Vector3(spread ? 1.2 : 1.08, tall ? 1.2 : swept ? 0.85 : 1, 0.88 + random() * 0.18) })
+        clumps.push({ centre: c, radius: r, stretch: new Vector3(spread ? 1.2 : tall ? 0.88 : 1.08, tall ? 1.25 : swept ? 0.95 : 1, 0.88 + random() * 0.18) })
         const start = new Vector3(site.x, ground + trunkHeight * 0.72 + (tall ? b * site.radius * 0.34 : 0), site.z).addScaledVector(lean, trunkHeight * 0.72)
         const elbow = start.clone().lerp(c, 0.58).add(new Vector3(Math.cos(a) * r * 0.18, r * 0.1, Math.sin(a) * r * 0.18))
         branch(start, elbow, radius * 0.63)
@@ -115,7 +116,7 @@ export function createTrees(env: Environment, field: Heightfield) {
         branch(elbow, c.clone().add(new Vector3(Math.sin(a) * r * 0.5, r * 0.08, -Math.cos(a) * r * 0.5)), radius * 0.18)
       }
       clumps.forEach((clump, b) => {
-        const crown = crownGeometry(phase + b * 1.7)
+        const crown = crownGeometry(phase + b * 1.7, form)
         rotation.setFromAxisAngle(up, angle + b * 0.8)
         matrix.compose(clump.centre, rotation, clump.stretch.clone().multiplyScalar(clump.radius))
         canopies.add(crown, matrix, {
@@ -163,7 +164,7 @@ export function createTrees(env: Environment, field: Heightfield) {
     positionNode: swayNode(true),
     bandOffset: null,
     outlineWidth: 0.8
-  }, vGust.mul(0.9))
+  }, vGust.mul(0.4))
   canopyMaterial.name = 'canopy'
   const trunkMesh = new Mesh(trunks.build(), trunkMaterial)
   const canopyMesh = new Mesh(canopies.build(), canopyMaterial)
