@@ -1,14 +1,21 @@
-import { Color, DirectionalLight, GridHelper, HemisphereLight, Mesh, MeshToonNodeMaterial,
+import { Color, DirectionalLight, GridHelper, HemisphereLight, Mesh, NeutralToneMapping,
   PCFShadowMap, PerspectiveCamera, PlaneGeometry, Scene, WebGPURenderer } from 'three/webgpu'
 import { CharacterView, loadCharacter, type CharacterAsset } from './character'
+import { CelMaterial } from '../materials/cel'
+import { createEnvironment } from '../materials/environment'
+import { installSmoothShadows } from '../materials/shadow'
+import { createPost } from '../post/pipeline'
 
 /** Twelve fixed samples moving over a quarter-metre grid, for judging silhouette and foot contact. */
 export async function renderCharacterSheet(asset: CharacterAsset | undefined, clip: string, forceWebGL: boolean): Promise<string> {
   const canvas = document.createElement('canvas')
   const renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL })
   await renderer.init()
-  const character = new CharacterView(asset ?? await loadCharacter(`${import.meta.env.BASE_URL}pack/characters/knight.glb`))
+  renderer.toneMapping = NeutralToneMapping
+  const env = createEnvironment(7)
+  const character = new CharacterView(asset ?? await loadCharacter(`${import.meta.env.BASE_URL}pack/characters/knight.glb`), { env })
   const scene = new Scene()
+  let post: ReturnType<typeof createPost> | undefined
   try {
     const duration = character.duration(clip)
     const gait = clip === 'walk' ? character.walk : clip === 'run' ? character.run : null
@@ -21,18 +28,20 @@ export async function renderCharacterSheet(asset: CharacterAsset | undefined, cl
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = PCFShadowMap
     scene.background = new Color(0xc9d3d6)
-    scene.add(new HemisphereLight(0xbcd4ff, 0x5c5346, 1.1))
-    const sun = new DirectionalLight(0xffe2b8, 2.6)
+    scene.add(new HemisphereLight(env.palette.skyFill, env.palette.groundFill, 2))
+    const sun = new DirectionalLight(env.palette.sun, 3)
     const centre = travel / 2 + 0.3
     sun.position.set(centre - 5, 10, 7)
     sun.target.position.set(centre, 0, 0)
+    env.sunDirection.value.copy(sun.position).sub(sun.target.position).normalize()
     sun.castShadow = true
     sun.shadow.mapSize.set(2048, 2048)
     sun.shadow.camera.left = sun.shadow.camera.bottom = -8
     sun.shadow.camera.right = sun.shadow.camera.top = 8
     sun.shadow.normalBias = 0.02
+    installSmoothShadows(sun.shadow)
     scene.add(sun, sun.target, character.object)
-    const plane = new Mesh(new PlaneGeometry(80, 80), new MeshToonNodeMaterial({ color: 0x9aa392 }))
+    const plane = new Mesh(new PlaneGeometry(80, 80), new CelMaterial(env, { color: 0x9aa392, outlineColor: null }))
     plane.rotation.x = -Math.PI / 2
     plane.receiveShadow = true
     const minor = new GridHelper(80, 320, 0x8a937f, 0x8a937f)
@@ -43,6 +52,7 @@ export async function renderCharacterSheet(asset: CharacterAsset | undefined, cl
     const camera = new PerspectiveCamera(2 * Math.atan(1.2 / 8) * 180 / Math.PI, cellWidth / cellHeight, 0.1, 200)
     camera.position.set(centre, 1.5, 8)
     camera.lookAt(centre, 0.9, 0)
+    post = createPost(renderer, scene, camera)
     const sheet = document.createElement('canvas')
     sheet.width = cellWidth * 4
     sheet.height = cellHeight * 3
@@ -51,10 +61,11 @@ export async function renderCharacterSheet(asset: CharacterAsset | undefined, cl
     for (let i = 0; i < 12; i++) {
       await new Promise(requestAnimationFrame)
       const time = i / 12 * duration
+      env.time.value = time
       character.object.position.set(speed * time, 0, 0)
       if (gait || clip === 'idle') character.pose({ speed, facing: 0, time, phase: time * character.cycleRate(speed) })
       else character.poseClip(clip, time)
-      renderer.render(scene, camera)
+      post.render()
       const x = i % 4 * cellWidth
       const y = Math.floor(i / 4) * cellHeight
       context.drawImage(canvas, x, y)
@@ -71,6 +82,8 @@ export async function renderCharacterSheet(asset: CharacterAsset | undefined, cl
     return sheet.toDataURL('image/png')
   } finally {
     character.dispose()
+    post?.dispose()
+    env.noise.dispose()
     await renderer.dispose()
   }
 }

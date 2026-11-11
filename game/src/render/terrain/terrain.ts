@@ -1,28 +1,14 @@
 // The ground mesh: 256 m square, one vertex per metre, painted in the shader
-// with meadow patches, the worn path and rock on steep slopes.
-import { Mesh, PlaneGeometry, type Node } from 'three/webgpu'
-import { color, Fn, mix, normalWorld, positionWorld, smoothstep, texture } from 'three/tsl'
-import { CelMaterial } from '../materials/cel'
-import { trampleAt, type Environment } from '../materials/environment'
+// with ground grass that shows the travelling gusts, the worn path and rock on
+// steep slopes.
+import { Mesh, PlaneGeometry } from 'three/webgpu'
+import { cameraViewMatrix, color, dot, Fn, mix, normalWorldGeometry, positionWorld, smoothstep, texture, vec3, vec4 } from 'three/tsl'
+import { trampleAt, triplanarNoise, type Environment } from '../materials/environment'
+import { gustAt } from '../materials/wind'
+import { createGrassPaint } from '../foliage/paint'
+import { MeadowMaterial } from './meadow-material'
 import { GRID, type Heightfield, TERRAIN_HALF, TERRAIN_SIZE } from './heightfield'
-
-/**
- * Meadow tones for a patch value in 0..1 (yellower patches high): the bare
- * ground, the grass body and the sunlit tips. Grass roots use the ground tone
- * so blades grow out of the terrain instead of floating on it.
- */
-export function meadowTones(patch: Node<'float'>) {
-  return {
-    ground: mix(color('#3f6e2e'), color('#6b8433'), patch),
-    body: mix(color('#5a9238'), color('#8ba23c'), patch),
-    tip: mix(color('#a8cc5e'), color('#d6d77c'), patch)
-  }
-}
-
-/** Patch value at a ground position: large soft areas of yellower and bluer grass. */
-export function meadowPatch(low: Node<'float'>, mid: Node<'float'>) {
-  return smoothstep(0.3, 0.7, low.add(mid.sub(0.5).mul(0.5)))
-}
+import { dryGrass, groundGrass, meadowPatch, meadowTones } from './meadow-tones'
 
 export function createTerrain(env: Environment, field: Heightfield) {
   const geometry = new PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, GRID - 1, GRID - 1)
@@ -31,38 +17,53 @@ export function createTerrain(env: Environment, field: Heightfield) {
   for (let k = 0; k < pos.count; k++) {
     pos.setY(k, field.heights[k]!)
   }
-  geometry.computeVertexNormals()
+  // Broad slope normals keep hill lighting in calm bands while preserving ground contact.
+  const normals = geometry.attributes.normal!
+  for (let k = 0; k < pos.count; k++) {
+    const x = pos.getX(k)
+    const z = pos.getZ(k)
+    const nx = field.heightAt(x - 9, z) - field.heightAt(x + 9, z)
+    const nz = field.heightAt(x, z - 9) - field.heightAt(x, z + 9)
+    const length = Math.hypot(nx, 18, nz)
+    normals.setXYZ(k, nx / length, 18 / length, nz / length)
+  }
   geometry.computeBoundingSphere()
 
+  const paint = createGrassPaint(env.seed)
   const xz = positionWorld.xz
   const fieldUv = xz.add(TERRAIN_HALF + 0.5).div(GRID)
   const sample = texture(field.texture, fieldUv)
-  const low = texture(env.noise, xz.div(110)).r
-  const mid = texture(env.noise, xz.div(31)).g
   const fine = texture(env.noise, xz.div(5)).b
+  const edgeNoise = texture(env.noise, xz.div(9)).g.sub(0.5).mul(0.4).add(fine.sub(0.5).mul(0.1))
+  const pathAmount = smoothstep(0.22, 0.62, sample.g.add(edgeNoise))
+  const rockNoise = triplanarNoise(env, positionWorld, normalWorldGeometry, 1 / 31)
+  const rockAmount = smoothstep(0.66, 0.82, normalWorldGeometry.y.add(rockNoise.sub(0.5).mul(0.08))).oneMinus()
 
   const colorNode = Fn(() => {
-    const tones = meadowTones(meadowPatch(low, mid))
-    // Seen from afar the grass reads as its body colour; up close the ground shows between blades.
-    const meadow = mix(tones.ground, tones.body, 0.45).mul(fine.mul(0.16).add(0.92))
-    const edgeNoise = fine.sub(0.5).mul(0.5)
-    const pathAmount = smoothstep(0.2, 0.6, sample.g.add(edgeNoise))
-    const dirt = mix(color('#9a7f58'), color('#c4a97a'), smoothstep(0.55, 0.95, sample.g).mul(fine.mul(0.4).add(0.6)))
-    const worn = mix(meadow, color('#7a7446'), smoothstep(0.05, 0.3, sample.g.add(edgeNoise)))
-    let ground = mix(worn, dirt, pathAmount)
-    // Trampled ground around the player: drier and paler, so the cut grass reads.
-    ground = mix(ground, mix(ground, color('#b5ad6a'), 0.55), trampleAt(env, xz).mul(fine.mul(0.4).add(0.6)))
-    // Bare rock where the hills get steep.
-    const rock = mix(color('#7d7a86'), color('#a29fa6'), mid)
-    ground = mix(ground, rock, smoothstep(0.66, 0.82, normalWorld.y.add(fine.sub(0.5).mul(0.08))).oneMinus())
+    const trample = trampleAt(env, xz).toVar()
+    // Ground-plane detail would stretch down steep slopes, so it calms there as in the trampled ring.
+    const calm = trample.max(smoothstep(0.78, 0.95, normalWorldGeometry.y).oneMinus())
+    const patch = meadowPatch(env, xz).toVar()
+    const meadow = dryGrass(groundGrass(env, paint, xz, patch, calm), trample.mul(fine.mul(0.4).add(0.6)))
+    // The path: soft edges broken in half-metre bites where the ground grass thins into worn earth.
+    const earth = mix(color('#867653'), color('#a18d68'), fine)
+    const luma = vec3(0.2126, 0.7152, 0.0722)
+    const dirt = earth.mul(dot(meadowTones(patch).ground, luma).div(dot(earth, luma)))
+    let ground = mix(meadow, dirt, pathAmount)
+    // Bare rock where the hills get steep, its noise projected along the slope so it never stretches.
+    const rock = mix(color('#7a746b'), color('#948c81'), rockNoise)
+    ground = mix(ground, rock, rockAmount)
     return ground
   })()
 
-  const material = new CelMaterial(env, {
+  const sheen = gustAt(env, xz).mul(smoothstep(0.05, 0.7, sample.b))
+    .mul(pathAmount.oneMinus()).mul(rockAmount.oneMinus())
+    .mul(trampleAt(env, xz).mul(0.75).oneMinus())
+  const material = new MeadowMaterial(env, {
     colorNode,
-    outlineColor: null,
-    bandOffset: texture(env.noise, xz.div(7)).b.sub(0.5).mul(0.12)
-  })
+    normalNode: cameraViewMatrix.mul(vec4(vec3(normalWorldGeometry.x.mul(1.8), normalWorldGeometry.y, normalWorldGeometry.z.mul(1.8)).normalize(), 0)).xyz,
+    outlineColor: null
+  }, sheen)
   material.name = 'terrain'
 
   const mesh = new Mesh(geometry, material)

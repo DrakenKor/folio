@@ -1,7 +1,7 @@
 // Uniforms shared by every material in one scene: time, light, wind and haze.
 // Each scene owns one Environment, so two views never fight over globals.
 import { Color, type Node, type UniformNode, DataTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, RGBAFormat, UnsignedByteType, Vector2, Vector3 } from 'three/webgpu'
-import { abs, positionWorld, smoothstep, step, texture, uniform } from 'three/tsl'
+import { abs, float, positionWorld, smoothstep, step, texture, uniform, vec2 } from 'three/tsl'
 import { Noise2D, subSeed } from '../rng'
 
 export interface Palette {
@@ -15,12 +15,12 @@ export interface Palette {
 }
 
 export const MEADOW_PALETTE: Palette = {
-  sun: '#ffe1b8',
-  skyFill: '#8fb3e8',
-  groundFill: '#8a8a5a',
+  sun: '#ffe7c2',
+  skyFill: '#b8b3e3',
+  groundFill: '#aca3d0',
   zenith: '#3a72c2',
-  horizon: '#c4d8ec',
-  haze: '#94b4dc',
+  horizon: '#b5cfee',
+  haze: '#b0c8e8',
   sunHaze: '#ffdcb0'
 }
 
@@ -40,25 +40,51 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     haze: colorUniform(palette.haze),
     sunHaze: colorUniform(palette.sunHaze),
     /** Haze extinction per metre, past `hazeStart`. */
-    hazeDensity: uniform(0.0032),
-    hazeStart: uniform(14),
+    hazeDensity: uniform(0.0022),
+    hazeStart: uniform(24),
+    /** How much haze drains saturation before tinting, 0..1. */
+    hazeDesaturate: uniform(0.2),
     /** Wind heading on the ground plane (unit) and strength 0..2. */
-    windDirection: uniform(new Vector2(0.8, 0.6).normalize()),
+    windDirection: uniform(new Vector2(0.45, -0.89).normalize()),
     windStrength: uniform(1),
+    /** A soft local light shared by every cel surface; disabled until a landmark is placed. */
+    landmark: {
+      position: uniform(new Vector3()),
+      color: colorUniform('#65e9df'),
+      radius: uniform(1),
+      strength: uniform(0)
+    },
     /** Where the player stands: grass bends away and the ground is trampled around it. */
     player: uniform(new Vector3()),
     /** Radius of trampled, shortened grass, as where fights happen. */
-    trampleRadius: uniform(3.6),
+    trampleRadius: uniform(2.3),
     /** Cloud density threshold: higher means clearer sky. */
     cloudCover: uniform(0.56),
     /** How much a passing cloud darkens the ground, 0..1. */
-    cloudShadow: uniform(0.85),
+    cloudShadow: uniform(0.32),
     /** Cel band shape shared by every cel material. */
     bands: {
-      terminator: uniform(0.04),
-      highlight: uniform(0.4),
-      mid: uniform(0.5),
-      softness: uniform(0.05)
+      terminator: uniform(0.02),
+      highlight: uniform(0.5),
+      mid: uniform(0.6),
+      softness: uniform(0.035)
+    },
+    /** Shade, rim and ink rules shared by every cel material. */
+    shading: {
+      /** Shade hue; surfaces keep their luminance and take this hue by `shadeHue`. */
+      shadeTint: uniform(new Vector3(0.5, 0.52, 1)),
+      /** How far shade moves from the surface colour to the shade hue, 0..1. */
+      shadeHue: uniform(0.65),
+      /** Shade brightness relative to the surface under the sky fill. */
+      shadeValue: uniform(1.05),
+      /** How much of the fill lit faces lose, 0..1. */
+      fillInLight: uniform(0.75),
+      litSaturation: uniform(1.08),
+      /** Faint warm rim on the lit side of silhouettes, 0..1. */
+      rim: uniform(0.45),
+      /** Outline colour: surface colour times this value, shifted by `inkTint`. */
+      inkValue: uniform(0.42),
+      inkTint: colorUniform('#d8dcf4')
     },
     /** Tileable seeded noise: r low, g mid, b high frequency, a cellular-ish. */
     noise: createNoiseTexture(subSeed(seed, 'noise'))
@@ -68,20 +94,31 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
 
 export type Environment = ReturnType<typeof createEnvironment>
 
-/** Cloud density on the cloud layer at `uv`; the sky and the ground share it. */
+/** Four broad, lobed cloud masses on the shared drifting cloud layer. */
 export function cloudDensity(env: Environment, uv: Node<'vec2'>) {
-  return texture(env.noise, uv)
-    .r.mul(0.8)
-    .add(texture(env.noise, uv.mul(2.3).add(0.37)).g.mul(0.16))
-    .add(texture(env.noise, uv.mul(6.1).add(0.71)).b.mul(0.04))
+  const drift = uv.add((env.seed % 17) * 0.002)
+  let density: Node<'float'> = float(0)
+  for (const [x, z, width, depth] of [
+    [-0.85, -0.5, 0.32, 0.3],
+    [1.65, -0.6, 0.4, 0.32],
+    [-0.3, -1.85, 0.45, 0.3],
+    [0.7, 0.85, 0.38, 0.28]
+  ] as const) {
+    for (const [dx, dz, scale] of [[-0.55, 0, 0.7], [0, 0.16, 1], [0.58, -0.06, 0.65]] as const) {
+      const p = drift.sub(vec2(x + dx * width, z + dz * depth)).div(vec2(width * scale, depth * scale))
+      density = density.max(p.length().mul(-0.4).add(1))
+    }
+  }
+  return density.clamp(0, 1)
 }
 
-/** 1 in open sun, lower under the drifting shadow of a cloud. */
+/** 1 in open sun, lower under the large, soft shadow of a drifting cloud. */
 export function cloudLight(env: Environment) {
   const toLayer = env.sunDirection.xz.div(env.sunDirection.y.max(0.15)).mul(positionWorld.y.negate().add(300))
-  const uv = positionWorld.xz.add(toLayer).mul(0.0026).add(env.windDirection.mul(env.time.mul(0.0022)))
-  const density = texture(env.noise, uv).r
-  return smoothstep(env.cloudCover.sub(0.03), env.cloudCover.add(0.06), density).mul(env.cloudShadow).oneMinus()
+  const uv = positionWorld.xz.add(toLayer).mul(0.0011).sub(env.windDirection.mul(env.time.mul(0.0022)))
+  const density = cloudDensity(env, uv)
+  // Only the densest cloud cores cast, so shadows stay sparse.
+  return smoothstep(env.cloudCover.add(0.04), env.cloudCover.add(0.2), density).mul(env.cloudShadow).oneMinus()
 }
 
 /**

@@ -39,7 +39,7 @@ export class MeadowView implements RenderView {
     })
     this.camera.camera.far = 4000
     this.meadow = createMeadow(world.seed)
-    this.knight = new CharacterView(asset)
+    this.knight = new CharacterView(asset, { env: this.meadow.env })
     this.meadow.scene.add(this.knight.object)
     this.post = createPost(renderer, this.meadow.scene, this.camera.camera)
     this.registerBookmarks()
@@ -82,6 +82,7 @@ export class MeadowView implements RenderView {
     if (frame.world.seed !== this.meadow.field.seed) {
       this.disposeScene()
       this.meadow = createMeadow(frame.world.seed)
+      this.knight.setEnvironment(this.meadow.env)
       this.meadow.scene.add(this.knight.object)
       this.post = createPost(this.renderer, this.meadow.scene, this.camera.camera)
       this.registerBookmarks()
@@ -118,10 +119,7 @@ export class MeadowView implements RenderView {
         if (this.camera.activeBookmark === 'meadow-player') this.camera.bookmark('meadow-player')
         this.camera.update({ x, y, z })
         this.meadow.setPlayer(x, z)
-        if (this.camera.isFollowing || this.camera.activeBookmark === 'meadow-player') {
-          this.meadow.grass.uniforms.cell.value = 0.2
-          this.meadow.setFocus(x, z - 2, 28)
-        }
+        if (this.camera.isFollowing || this.camera.activeBookmark === 'meadow-player') this.meadow.setFocus(x, z - 2, 28)
       } else {
         let dummy = this.dummies.get(entity.id)
         if (!dummy) {
@@ -141,7 +139,6 @@ export class MeadowView implements RenderView {
     if (name !== this.framing) {
       if (name?.startsWith('meadow-') && name !== 'meadow-player') {
         const pose = bookmark(name.slice(7) as BookmarkName, this.meadow.field)
-        this.meadow.grass.uniforms.cell.value = pose.grassCell
         this.meadow.setFocus(...pose.focus, pose.shadowExtent)
       }
       this.framing = name
