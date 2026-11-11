@@ -47,7 +47,7 @@ export function createHUD(restart: () => void) {
       const result = world.scenario.startsWith('m1-') ? encounterOutcome(world, world.scenario) : 'ongoing'
       outcome.hidden = result === 'ongoing'
       if (result !== 'ongoing') {
-        outcome.querySelector('h1')!.textContent = result === 'victory' ? 'The way is open' : 'The meadow holds'
+        outcome.querySelector('h1')!.textContent = result === 'victory' ? 'The way is open' : 'You fell'
         outcome.querySelector('p')!.textContent = result === 'victory' ? 'Clearing restored' : 'Read the windup. Find your opening.'
         outcome.querySelector('button')!.textContent = result === 'victory' ? 'Fight again' : 'Try again'
       }

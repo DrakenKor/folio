@@ -65,8 +65,8 @@ export class CameraRig {
   /** Bounded distance and yaw preserve the 55° gameplay pitch. */
   setOrbit(distance: number, yaw: number): void {
     if (!Number.isFinite(distance) || !Number.isFinite(yaw)) return
-    this.distance = Math.max(15, Math.min(22, distance))
-    this.yaw = Math.max(-5, Math.min(45, yaw))
+    this.distance = Math.max(17, Math.min(22, distance))
+    this.yaw = Math.max(-5, Math.min(35, yaw))
     const pitch = 55 * Math.PI / 180
     const angle = this.yaw * Math.PI / 180
     this.followPose.position = { x: Math.sin(angle) * Math.cos(pitch) * this.distance,

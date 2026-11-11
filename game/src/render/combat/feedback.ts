@@ -11,6 +11,7 @@ export class CombatFeedback {
   readonly object = new Group()
   private world: Readonly<World> | null = null
   private bursts: Burst[] = []
+  private seen = new Map<string, number>()
   private footprints = new Map<number, Group>()
   private darts = new Map<number, Group>()
   private readonly fragmentGeometry = new BufferGeometry().setAttribute('position', new BufferAttribute(new Float32Array([
@@ -24,6 +25,7 @@ export class CombatFeedback {
     if (this.world !== frame.world) { this.clear(); this.world = frame.world }
     const { world } = frame
     const time = world.tick + frame.alpha
+    for (const [key, tick] of this.seen) if (world.tick - tick >= 42) this.seen.delete(key)
     for (const event of frame.events) if (event.type === 'damage' && world.tick - event.tick < 42) this.contact(event)
     this.bursts = this.bursts.filter(burst => {
       const age = time - burst.tick
@@ -100,8 +102,8 @@ export class CombatFeedback {
     object.traverse(node => {
       if (!(node instanceof Mesh)) return
       for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
-        if (isCelMaterial(material)) material.emissive.setRGB(actor.hitFlashTicks > 0 ? 0.85 : 0,
-          actor.hitFlashTicks > 0 ? 0.68 : 0, actor.hitFlashTicks > 0 ? 0.42 : 0)
+        if (isCelMaterial(material)) material.emissive.setRGB(actor.hitFlashTicks > 0 ? 0.22 : 0,
+          actor.hitFlashTicks > 0 ? 0.16 : 0, actor.hitFlashTicks > 0 ? 0.08 : 0)
       }
     })
   }
@@ -109,6 +111,7 @@ export class CombatFeedback {
   clear(): void {
     this.bursts.forEach(burst => this.removeBurst(burst))
     this.bursts = []
+    this.seen.clear()
     for (const group of [...this.footprints.values(), ...this.darts.values()]) this.removeMeshGroup(group)
     this.footprints.clear()
     this.darts.clear()
@@ -123,7 +126,8 @@ export class CombatFeedback {
 
   private contact(event: Extract<SimEvent, { type: 'damage' }>): void {
     const key = `${event.tick}:${event.actorId}:${event.targetId}:${event.skillId}`
-    if (this.bursts.some(burst => burst.key === key)) return
+    if (this.seen.has(key)) return
+    this.seen.set(key, event.tick)
     if (this.bursts.length === 16) this.removeBurst(this.bursts.shift()!)
     const canvas = document.createElement('canvas')
     canvas.width = 128

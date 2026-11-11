@@ -139,7 +139,7 @@ export class MeadowView implements RenderView {
         const gait = Math.sin(entity.gait.phase * Math.PI * 2)
         const size = entity.radius / 0.4
         dummy.scale.set(size * (1 + windup * 0.06), size * (1 - windup * 0.18) * (1 - death * 0.85), size * (1 + windup * 0.1))
-        dummy.rotation.z = entity.death ? death * 0.25 : entity.impactPauseTicks ? 0 : gait * Math.min(0.045, entity.gait.speed * 0.025)
+        dummy.rotation.z = entity.death ? death * 0.25 : gait * Math.min(0.045, entity.gait.speed * 0.025)
         this.feedback.flash(dummy, entity)
       }
     }
