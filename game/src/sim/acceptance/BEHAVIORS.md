@@ -3,9 +3,9 @@
 Written before the tests; each numbered line is one behavior, with its `CONTRACT.md` rule in parentheses.
 Tests observe public world data, `step`, snapshots, hashes, `Recorder` and `verifyReplay`; they import no systems or combat internals.
 
-## 1. Movement, aim and dodge — 10 behaviors
+## 1. Movement, aim and dodge — 11 behaviors
 
-1. Cardinal and diagonal commands have equal resolved speed; body turning is bounded (Aim, facing and command precedence).
+1. Full cardinal/diagonal commands resolve at `GAIT.runSpeed` (2.521 m/s); body turning is bounded (Aim, facing and command precedence).
 2. Movement controls body direction independently of pointer aim; null/coincident aim retains direction (Aim, facing and command precedence).
 3. Actions lock their initial aim while later pointer input updates stored aim (Aim, facing and command precedence).
 4. Dodge covers exactly its configured distance, along movement or fallback facing (Integer phases; Aim, facing and command precedence).
@@ -15,6 +15,7 @@ Tests observe public world data, `step`, snapshots, hashes, `Recorder` and `veri
 8. Dodge interrupts windup/recovery, but blocked active/pause edges are consumed without buffering (Aim, facing and command precedence).
 9. Windup/active root movement; recovery permits cancellation exactly at its offset (Integer phases; Aim, facing and command precedence).
 10. Dodge wins input arbitration; held attacks repeat and Primary precedes eligible Secondary (Aim, facing and command precedence).
+11. Locomotion and dodge stop at the inclusive circular actor-centre boundary, including an offset centre (State and ownership).
 
 ## 2. Skills and phases — 10 behaviors
 
@@ -40,7 +41,7 @@ Tests observe public world data, `step`, snapshots, hashes, `Recorder` and `veri
 ## 4. Damage, pause and death — 11 behaviors
 
 1. Incoming projectiles apply fixed damage and ordered hit/damage events with stable identities and copied positions (Fixed system and hit resolution order).
-2. Knockback follows attack travel for its unpaused duration and is clipped by arena bounds (Hit-stop and interruption).
+2. Knockback follows attack travel for its unpaused duration and stops at circular bounds, including diagonal travel (Hit-stop and interruption).
 3. Later hits replace knockback and use maximum remaining pause/flash rather than adding durations (Hit-stop and interruption).
 4. Impact pause freezes action/facing/locomotion/gait/knockback for exactly its next ticks (Hit-stop and interruption).
 5. World ticks, aim/buttons, cooldowns, flash and flying projectiles continue during pause (Hit-stop and interruption).
@@ -48,7 +49,7 @@ Tests observe public world data, `step`, snapshots, hashes, `Recorder` and `veri
 7. Melee pauses both participants; projectile impact pauses only its target (Hit-stop and interruption).
 8. Positive damage interrupts pending melee/projectile actions; zero damage does not interrupt (Hit-stop and interruption).
 9. Lethal damage clamps applied damage, emits one death and clears action/motion/pause/owned projectiles (Hit-stop and interruption).
-10. Dead actors neither act nor collide; enemy death expires on schedule while player death persists (Hit-stop and interruption).
+10. Lethal damage derives despawn duration from `ai.enemyId`; AI-free actors hold their terminal pose, and dead actors never collide (Hit-stop and interruption).
 11. Immune dodge consumes incoming contact without damage, events, pause, flash, knockback or interruption (Hit-stop and interruption).
 
 ## 5. Snapshot continuation — 8 behaviors
@@ -68,16 +69,17 @@ Tests observe public world data, `step`, snapshots, hashes, `Recorder` and `veri
 2. Removing combat input reports divergence at the first affected 60-tick hash (Compatibility and verification).
 3. Recorder checkpoint rotation preserves a verifiable combat window of at least 3,600 ticks, including a partial final second (Compatibility and verification).
 
-## Fixture readings and proposed clarifications
+## Fixture contract readings
 
 - Neutral skills use 2/2/3 phases first; approved definitions independently use the M1 content card's values.
-- All targets have `ai: null`; the strike is equipped on the controlled fixture actor to test mechanics without T1.5 AI.
+- Targets have `ai: null` except the despawn-source case; its definition reference requires no T1.5 enemy behavior.
+- The strike is equipped on the controlled fixture actor to test mechanics independently of T1.5 AI.
 - Incoming projectiles are plain setup data with valid owners, shared ids and captured payloads; fixtures round-trip before stepping.
 - Phase probes have no contacts, so impact pause cannot shift the expected absolute tick; zero-windup dodge also checks pre-start.
-- Actor speed has no content field; compare normalized speeds without asserting 2.52 m/s. Propose an explicit movement-speed source.
-- Arena data defines a rectangle, while the bible describes a circle; test rectangular contract bounds and propose a circle representation.
-- AI-free actors have no enemy-definition reference for lethal despawn duration; seed `DeathState` for expiry, and propose an actor death-duration source.
-- Dart lifetime allows 43 sweeps at 14 m/s, or 10.033 m; use that contract and propose a travel budget for strict 10 m reach.
+- Full player input uses `GAIT.runSpeed` (2.521 m/s); enemies use their definition's `moveSpeed`, with no new state field.
+- Arena data is `{ center: Vec2; radius: number } | null`; actor centres satisfy `distance(pos, center) <= radius`, and null is unbounded.
+- At the lethal tick, `death.despawnAfterTicks` is the AI-referenced enemy definition's `deathTicks`, or null without AI; no seeded death is needed.
+- Dart's nominal 10 m reach is 43 sweeps at 14 m/s (10.033 m); lifetime alone controls expiry, without a travel budget.
 - The long harness uses twelve preplaced AI-free trios with normal M1 health/damage and one deterministic command stream, without heals/resets/spawns.
 - Each trio becomes the script's target in a successive 600-tick interval; this is a fixture, separate from T1.5's replenishing `m1-fight` scenario.
 - Recorder exports rotate; retain a separate tick-zero public replay for all 7,200 ticks, then verify rotated exports independently.

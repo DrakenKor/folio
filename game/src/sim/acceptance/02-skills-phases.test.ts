@@ -108,6 +108,7 @@ describe('2: skills and phase boundaries', () => {
     expect(world.projectiles).toHaveLength(1)
     expect(shot.ageTicks).toBe(shot.lifetimeTicks - 1)
     expect(shot.pos.x - launch.x).toBeCloseTo(shot.vel.x * (shot.lifetimeTicks - 1) / 60, 8)
+    expect(shot.pos.x).toBeCloseTo(shot.vel.x * shot.lifetimeTicks / 60, 8)
     step(world, command())
     expect(world.projectiles).toEqual([])
     step(world, command())

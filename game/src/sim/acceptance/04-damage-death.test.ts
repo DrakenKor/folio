@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { restore, serialize, step } from '../core'
-import { Button } from '../core/types'
+import { Button, GAIT, TICK_DT } from '../core/types'
 import { advance, command, fixture, incoming, m1Content, projectile, target } from './fixtures'
 
 describe('4: damage, knockback, pause and death', () => {
@@ -20,17 +20,29 @@ describe('4: damage, knockback, pause and death', () => {
     expect(impact.position).toEqual(saved)
   })
 
-  it.each([false, true])('moves bounded knockback for exactly four unpaused ticks, bounds=%s', bounded => {
+  it.each([
+    { bounded: false, direction: { x: 1, z: 0 } },
+    { bounded: true, direction: { x: 1, z: 0 } },
+    { bounded: true, direction: { x: 0.6, z: 0.8 } }
+  ])('moves knockback for exactly four unpaused ticks, bounds=$bounded direction=$direction', ({ bounded, direction }) => {
     const { world, player } = fixture(m1Content())
-    if (bounded) world.arena = { min: { x: -10, z: -10 }, max: { x: 0.1, z: 10 } }
-    incoming(world, player, { knockback: { speed: 0.15 * 60 / 4, ticks: 4 } })
+    if (bounded) world.arena = { center: { x: -4.9 * direction.x, z: -4.9 * direction.z }, radius: 5 }
+    incoming(world, player, {
+      pos: { x: -direction.x, z: -direction.z }, vel: { x: 120 * direction.x, z: 120 * direction.z },
+      knockback: { speed: 0.15 * 60 / 4, ticks: 4 }
+    })
+    expect(() => restore(serialize(world))).not.toThrow()
     step(world, command())
-    expect(player.knockback).toMatchObject({ vel: { x: 2.25, z: 0 }, remainingTicks: 4 })
+    expect(player.knockback?.remainingTicks).toBe(4)
+    expect(player.knockback?.vel.x).toBeCloseTo(2.25 * direction.x, 10)
+    expect(player.knockback?.vel.z).toBeCloseTo(2.25 * direction.z, 10)
     advance(world, 2)
     expect(player.pos.x).toBe(0)
     for (let age = 1; age <= 4; age++) {
       step(world, command())
-      expect(player.pos.x).toBeCloseTo(Math.min(0.15 * age / 4, bounded ? 0.1 : 0.15), 10)
+      const travel = Math.min(0.15 * age / 4, bounded ? 0.1 : 0.15)
+      expect(player.pos.x).toBeCloseTo(direction.x * travel, 10)
+      expect(player.pos.z).toBeCloseTo(direction.z * travel, 10)
       expect(player.gait).toEqual({ phase: 0, speed: 0 })
     }
     expect(player.knockback).toBeNull()
@@ -161,18 +173,37 @@ describe('4: damage, knockback, pause and death', () => {
     expect(player.death?.ageTicks).toBe(120)
   })
 
-  it('excludes dead actors from collision and removes seeded enemy death at its exact duration', () => {
-    const { world, player } = fixture()
-    const dead = target(world, { ...player.pos }, { health: 0, death: { startTick: 0, ageTicks: 0, despawnAfterTicks: 30 } })
+  it.each([false, true])('derives lethal despawn from the AI definition and excludes dead collisions, ai=%s', hasAI => {
+    const { world, player } = fixture(m1Content())
+    const definition = world.content.enemies[0]!
+    const dead = target(world, { x: 1.2, z: 0 }, {
+      ai: hasAI ? { enemyId: definition.id, phase: 'idle', ageTicks: 0, targetId: null } : null
+    })
+    projectile(world, player, { vel: { x: 120, z: 0 }, damage: 72, knockback: { speed: 0, ticks: 0 } })
     expect(() => restore(serialize(world))).not.toThrow()
-    advance(world, 29)
-    expect(player.pos).toEqual({ x: 0, z: 0 })
-    expect(dead.pos).toEqual({ x: 0, z: 0 })
-    expect(dead.death?.ageTicks).toBe(29)
+    expect(dead.death).toBeNull()
+    const events = step(world, command())
+    expect(events.filter(event => event.type === 'death')).toHaveLength(1)
+    expect(dead.death).toEqual({ startTick: 1, ageTicks: 0, despawnAfterTicks: hasAI ? definition.deathTicks : null })
+    if (hasAI) expect(dead.ai).toMatchObject({ phase: 'die' })
+    expect(() => restore(serialize(world))).not.toThrow()
+    advance(world, definition.deathTicks - 1, command(0, { x: 1, z: 0 }, null))
+    expect(player.pos.x).toBeCloseTo((definition.deathTicks - 1) * GAIT.runSpeed * TICK_DT, 10)
+    expect(player.pos.z).toBe(0)
+    expect(dead.pos).toEqual({ x: 1.2, z: 0 })
+    expect(dead.death?.ageTicks).toBe(definition.deathTicks - 1)
     expect(world.entities).toContain(dead)
-    expect(step(world, command())).toContainEqual({ type: 'despawn', id: dead.id, tick: 30 })
-    expect(world.entities).not.toContain(dead)
-    expect(advance(world, 2).filter(event => event.type === 'despawn')).toEqual([])
+    const expiry = step(world, command())
+    if (hasAI) {
+      expect(expiry).toContainEqual({ type: 'despawn', id: dead.id, tick: 1 + definition.deathTicks })
+      expect(world.entities).not.toContain(dead)
+    } else {
+      expect(expiry.filter(event => event.type === 'despawn')).toEqual([])
+      advance(world, 90)
+      expect(world.entities).toContain(dead)
+      expect(dead.death?.ageTicks).toBe(definition.deathTicks + 90)
+    }
+    expect(advance(world, 2).filter(event => event.type === 'death' || event.type === 'despawn')).toEqual([])
   })
 
   it('consumes immune contact without damage, feedback or action interruption', () => {

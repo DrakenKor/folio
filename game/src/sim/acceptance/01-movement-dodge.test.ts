@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { step } from '../core'
-import { BODY_TURN_PER_TICK, Button } from '../core/types'
+import { fmath, restore, serialize, step } from '../core'
+import { BODY_TURN_PER_TICK, Button, GAIT, TICK_DT } from '../core/types'
 import { advance, command, contentCases, fixture, incoming, m1Content } from './fixtures'
 
 describe('1: movement, aim and dodge', () => {
@@ -10,11 +10,25 @@ describe('1: movement, aim and dodge', () => {
     step(cardinal.world, command(0, { x: 1, z: 0 }, { x: 0, z: 100 }))
     step(diagonal.world, command(0, { x: 1, z: 1 }, { x: 0, z: 100 }))
     const distance = (pos: { x: number; z: number }) => Math.sqrt(pos.x * pos.x + pos.z * pos.z)
+    expect(cardinal.player.vel).toEqual({ x: GAIT.runSpeed, z: 0 })
+    expect(cardinal.player.pos.x).toBe(GAIT.runSpeed * TICK_DT)
     expect(distance(diagonal.player.pos)).toBeCloseTo(distance(cardinal.player.pos), 10)
     expect(cardinal.player.aim).toBeCloseTo(Math.PI / 2, 8)
     expect(cardinal.player.facing).toBe(0)
     expect(diagonal.player.facing).toBeCloseTo(BODY_TURN_PER_TICK, 8)
     expect(diagonal.player.vel.z).toBeGreaterThan(0)
+  })
+
+  it.each(['locomotion', 'dodge'] as const)('bounds %s by an offset circle without subtracting actor radius', mode => {
+    const center = { x: 2, z: -3 }
+    const { world, player } = fixture(undefined, { pos: { ...center }, facing: fmath.atan2(0.8, 0.6) })
+    world.arena = { center, radius: 1 }
+    expect(() => restore(serialize(world))).not.toThrow()
+    advance(world, mode === 'dodge' ? world.content.dodge.timing.activeTicks : 60,
+      command(mode === 'dodge' ? Button.Dodge : 0, { x: 0.6, z: 0.8 }, null))
+    expect(player.pos.x).toBeCloseTo(center.x + 0.6, 10)
+    expect(player.pos.z).toBeCloseTo(center.z + 0.8, 10)
+    expect(() => restore(serialize(world))).not.toThrow()
   })
 
   it('retains null/coincident aim and turns idle bodies at the maximum rate', () => {
