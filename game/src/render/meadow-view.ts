@@ -1,14 +1,14 @@
 import { Mesh, NeutralToneMapping, PCFShadowMap, type Group, type WebGPURenderer } from 'three/webgpu'
 import { bookmark, type BookmarkName } from '../look/bookmarks'
 import { createEnemy } from '../look/standin'
-import { TICK_DT, type World } from '../sim/core/types'
+import { TICK_DT, type Entity, type World } from '../sim/core/types'
 import { CameraRig } from './basic/camera'
 import { CharacterView, loadCharacter, type CharacterAsset } from './characters/character'
+import { actorPoseState } from './characters/pose'
+import { AimIndicator } from './characters/aim'
 import { createMeadow } from './meadow'
 import { createPost } from './post/pipeline'
 import type { Frame, RenderView } from './view'
-
-interface GaitState { x: number; z: number; phase: number; previousPhase: number }
 
 /** Tick-driven meadow presentation; simulation coordinates start at the meadow's player clearing. */
 export class MeadowView implements RenderView {
@@ -17,7 +17,9 @@ export class MeadowView implements RenderView {
   private post
   private knight: CharacterView
   private dummies = new Map<number, Group>()
-  private gaits = new Map<number, GaitState>()
+  private readonly aim = new AimIndicator()
+  private currentActor: Entity | undefined
+  private previousActor: Entity | undefined
   private world: Readonly<World> | null = null
   private tick = -1
   private framing: string | null | undefined
@@ -40,35 +42,23 @@ export class MeadowView implements RenderView {
     this.camera.camera.far = 4000
     this.meadow = createMeadow(world.seed)
     this.knight = new CharacterView(asset, { env: this.meadow.env })
-    this.meadow.scene.add(this.knight.object)
+    this.meadow.scene.add(this.knight.object, this.aim.object)
     this.post = createPost(renderer, this.meadow.scene, this.camera.camera)
     this.registerBookmarks()
     this.advance(world)
   }
 
-  /** Records distance at each simulation tick, including ticks stepped without rendering. */
+  /** Retain adjacent actor samples; all continuation data belongs to simulation. */
   advance(world: Readonly<World>): void {
     if (world !== this.world || world.tick < this.tick) {
-      this.gaits.clear()
+      this.currentActor = undefined
+      this.previousActor = undefined
       this.world = world
-      this.tick = world.tick
     }
-    for (const entity of world.entities) {
-      if (entity.id !== world.playerId) continue
-      const speed = Math.hypot(entity.vel.x, entity.vel.z)
-      let gait = this.gaits.get(entity.id)
-      if (!gait) {
-        // Snapshots contain ticks and poses; a restored cycle starts at this reproducible anchor.
-        const phase = world.tick * TICK_DT * this.knight.cycleRate(speed)
-        gait = { ...entity.pos, phase, previousPhase: phase }
-        this.gaits.set(entity.id, gait)
-      } else if (world.tick !== this.tick) {
-        const distance = Math.hypot(entity.pos.x - gait.x, entity.pos.z - gait.z)
-        gait.previousPhase = gait.phase
-        if (speed > 0) gait.phase += distance * this.knight.cycleRate(speed) / speed
-        gait.x = entity.pos.x
-        gait.z = entity.pos.z
-      }
+    if (world.tick !== this.tick || !this.currentActor) {
+      this.previousActor = world.tick === this.tick + 1 ? this.currentActor : undefined
+      const actor = world.entities.find(entity => entity.id === world.playerId)
+      this.currentActor = actor ? structuredClone(actor) : undefined
     }
     this.tick = world.tick
   }
@@ -83,7 +73,7 @@ export class MeadowView implements RenderView {
       this.disposeScene()
       this.meadow = createMeadow(frame.world.seed)
       this.knight.setEnvironment(this.meadow.env)
-      this.meadow.scene.add(this.knight.object)
+      this.meadow.scene.add(this.knight.object, this.aim.object)
       this.post = createPost(this.renderer, this.meadow.scene, this.camera.camera)
       this.registerBookmarks()
       this.framing = undefined
@@ -92,6 +82,7 @@ export class MeadowView implements RenderView {
     const present = new Set<number>()
     const time = (frame.world.tick + frame.alpha) * TICK_DT
     this.knight.object.visible = false
+    this.aim.object.visible = false
     for (const entity of frame.world.entities) {
       present.add(entity.id)
       const previous = frame.prev.get(entity.id) ?? { ...entity.pos, facing: entity.facing }
@@ -103,12 +94,11 @@ export class MeadowView implements RenderView {
       if (entity.id === frame.world.playerId) {
         this.knight.object.visible = true
         this.knight.object.position.set(x, y, z)
-        const gait = this.gaits.get(entity.id)!
-        const interpolating = previous.x !== entity.pos.x || previous.z !== entity.pos.z
-        const phase = interpolating ? gait.previousPhase + (gait.phase - gait.previousPhase) * frame.alpha : gait.phase
-        if (entity.action && this.knight.clips.includes(entity.action.id)) {
-          this.knight.poseClip(entity.action.id, time - entity.action.startTick * TICK_DT, facing)
-        } else this.knight.pose({ speed: Math.hypot(entity.vel.x, entity.vel.z), facing, time, phase })
+        const characterPose = this.knight.poseActor({ ...actorPoseState(entity, frame.world, this.previousActor),
+          actor: { ...entity, facing } }, frame.alpha)
+        this.aim.object.visible = entity.death === null
+        this.aim.object.position.set(x, y, z)
+        this.aim.point(characterPose.aim)
         const pose = bookmark('player', this.meadow.field)
         const ground = this.meadow.field.heightAt(this.meadow.field.player.x, this.meadow.field.player.z)
         this.camera.register('meadow-player', {
@@ -155,7 +145,7 @@ export class MeadowView implements RenderView {
     this.camera.camera.updateProjectionMatrix()
   }
 
-  dispose(): void { this.disposeScene(); this.knight.dispose() }
+  dispose(): void { this.disposeScene(); this.knight.dispose(); this.aim.dispose() }
 
   private registerBookmarks(): void {
     for (const name of ['wide', 'player', 'monolith'] as const) {
@@ -177,6 +167,7 @@ export class MeadowView implements RenderView {
 
   private disposeScene(): void {
     this.knight.object.removeFromParent()
+    this.aim.object.removeFromParent()
     this.meadow.scene.traverse(node => {
       if (!(node instanceof Mesh)) return
       node.geometry.dispose()

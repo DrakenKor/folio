@@ -288,11 +288,23 @@ async function shot(bookmark, filename = `${bookmark}.png`) {
 
 async function sheet(entity, clip, filename) {
   assert(entity && clip && filename, 'Usage: sheet <entity> <clip> <out.png>')
-  const data = await evaluate(`__game.sheet(${JSON.stringify(entity)}, ${JSON.stringify(clip)})`)
-  assert(data?.startsWith('data:image/png;base64,'), 'Character sheet did not return a PNG')
+  const sheetObject = remoteResult(await page.send('Runtime.evaluate', {
+    expression: `(async () => ({data:await __game.sheet(${JSON.stringify(entity)}, ${JSON.stringify(clip)})}))()`,
+    awaitPromise: true
+  }, 60000)).objectId
   const file = resolve(out, filename)
-  mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, Buffer.from(data.slice('data:image/png;base64,'.length), 'base64'))
+  try {
+    const length = await callOn(sheetObject, `function() {
+      if (!this.data?.startsWith('data:image/png;base64,')) throw new Error('Character sheet did not return a PNG');
+      this.data = this.data.slice('data:image/png;base64,'.length); return this.data.length;
+    }`)
+    const chunks = []
+    for (let offset = 0; offset < length; offset += 512 * 1024) {
+      chunks.push(await callOn(sheetObject, 'function(offset) { return this.data.slice(offset,offset+524288) }', [offset]))
+    }
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, Buffer.from(chunks.join(''), 'base64'))
+  } finally { await page.send('Runtime.releaseObject', { objectId: sheetObject }) }
   report('sheet', { entity, clip, file })
 }
 

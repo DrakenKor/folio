@@ -4,6 +4,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { applyToon } from './toon'
 import { createEnvironment, type Environment } from '../materials/environment'
+import { characterPose, type CharacterPose, type PoseState } from './pose'
 
 /** Clips that repeat; every other clip holds its last frame. */
 const LOOPS = new Set(['idle', 'walk', 'run', 'block'])
@@ -70,7 +71,16 @@ export class CharacterView {
     applyToon(this.model, env ?? this.ownEnvironment!)
     this.object.add(this.model)
     this.mixer = new AnimationMixer(this.model)
-    for (const clip of asset.clips) {
+    for (const source of asset.clips) {
+      const clip = source.clone()
+      if (clip.name === 'dodge') {
+        const track = clip.tracks.find(track => track.name === 'root.position')
+        if (!track) throw new Error('missing dodge root translation')
+        for (let i = 0; i < track.values.length; i += 3) {
+          track.values[i] = track.values[0]!
+          track.values[i + 2] = track.values[2]!
+        }
+      }
       const action = this.mixer.clipAction(clip)
       action.setLoop(LoopOnce, 1)
       action.clampWhenFinished = true
@@ -92,6 +102,14 @@ export class CharacterView {
   cycleRate(speed: number): number {
     const k = clamp01((speed - this.walk.speed) / (this.run.speed - this.walk.speed))
     return Math.max(0, speed) / (this.walk.stride + (this.run.stride - this.walk.stride) * k)
+  }
+
+  /** Apply the simulation pose without advancing presentation time. */
+  poseActor(state: Readonly<PoseState>, alpha = 0): CharacterPose {
+    const pose = characterPose(state, alpha)
+    this.setFacing(pose.facing)
+    this.apply(pose.clips)
+    return pose
   }
 
   /** Idle, walk and run blended by speed, with cadence matched to speed so the feet plant. */
@@ -141,7 +159,7 @@ export class CharacterView {
     this.object.rotation.y = Math.PI / 2 - facing
   }
 
-  private apply(weights: Record<string, [weight: number, time: number]>): void {
+  private apply(weights: Partial<Record<string, readonly [weight: number, time: number]>>): void {
     for (const [name, action] of this.actions) {
       const [weight, time] = weights[name] ?? [0, 0]
       action.reset()
