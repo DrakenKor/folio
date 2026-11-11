@@ -77,6 +77,7 @@ Tests observe public world data, `step`, snapshots, hashes, `Recorder` and `veri
 - Actor speed has no content field; compare normalized speeds without asserting 2.52 m/s. Propose an explicit movement-speed source.
 - Arena data defines a rectangle, while the bible describes a circle; test rectangular contract bounds and propose a circle representation.
 - AI-free actors have no enemy-definition reference for lethal despawn duration; seed `DeathState` for expiry, and propose an actor death-duration source.
+- Dart lifetime allows 43 sweeps at 14 m/s, or 10.033 m; use that contract and propose a travel budget for strict 10 m reach.
 - The long harness uses twelve preplaced AI-free trios with normal M1 health/damage and one deterministic command stream, without heals/resets/spawns.
 - Each trio becomes the script's target in a successive 600-tick interval; this is a fixture, separate from T1.5's replenishing `m1-fight` scenario.
 - Recorder exports rotate; retain a separate tick-zero public replay for all 7,200 ticks, then verify rotated exports independently.
