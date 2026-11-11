@@ -6,7 +6,12 @@ export const TICK_HZ = 60
 export const TICK_DT = 1 / TICK_HZ
 
 /** Bumped whenever the shape of `World` changes. */
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
+export const SIM_BUILD = 'm1-sim-v2'
+
+/** Fixed clip measurements at 1.8 m height; see game/ASSETS.md. */
+export const GAIT = Object.freeze({ walkSpeed: 0.561, runSpeed: 2.521, walkStride: 0.599, runStride: 2.017 })
+export const BODY_TURN_PER_TICK = 0.2617993877991494
 
 export type EntityId = number
 
@@ -19,11 +24,115 @@ export interface Vec2 {
 /** xoshiro128** state: four unsigned 32-bit integers. */
 export type RngState = [number, number, number, number]
 
-/** What an entity is doing, so presentation can derive animation time from ticks. */
+export interface ActionTiming {
+  windupTicks: number
+  activeTicks: number
+  recoveryTicks: number
+  /** Recovery ages before movement may cancel, in [0, recoveryTicks]. */
+  moveCancelTicks: number
+}
+
+export type ActionPhase = 'windup' | 'active' | 'recovery' | 'complete'
+
+export interface KnockbackSpec {
+  speed: number
+  ticks: number
+}
+
+interface SkillBase {
+  id: string
+  timing: ActionTiming
+  cooldownTicks: number
+  damage: number
+  knockback: KnockbackSpec
+  impactPauseTicks: number
+  hitFlashTicks: number
+}
+
+/** M1 fixed damage only; no modifiers, supports or presentation assets. */
+export type SkillDefinition = SkillBase & (
+  | { kind: 'melee'; range: number; arcRadians: number }
+  | { kind: 'projectile'; speed: number; radius: number; lifetimeTicks: number }
+)
+
+export interface DodgeDefinition {
+  timing: ActionTiming
+  distance: number
+  cooldownTicks: number
+  /** Half-open interval of action ages, within the active phase. */
+  invulnerableFrom: number
+  invulnerableUntil: number
+}
+
+export interface EnemyDefinition {
+  id: string
+  maxHealth: number
+  radius: number
+  moveSpeed: number
+  acquireRange: number
+  attackRange: number
+  skillId: string
+  deathTicks: number
+}
+
+/** Scenario-owned, immutable after construction, included in snapshots and hashes. */
+export interface CombatContent {
+  /** Sorted by id; `dodge` is reserved for the built-in action. */
+  skills: SkillDefinition[]
+  enemies: EnemyDefinition[]
+  dodge: DodgeDefinition
+}
+
+/** Age is the last processed action age, including zero on the starting tick. */
 export interface ActionState {
   id: string
+  kind: SkillDefinition['kind'] | 'dodge'
   startTick: number
-  durationTicks: number
+  ageTicks: number
+  /** Locked aim angle, or movement/facing angle for dodge. */
+  direction: number
+  /** Sorted unique target ids, retained even after a target despawns. */
+  hitTargetIds: EntityId[]
+  projectileSpawned: boolean
+}
+
+export interface GaitState {
+  /** Unwrapped cycles; advances only for resolved ordinary locomotion. */
+  phase: number
+  /** Resolved ordinary locomotion speed, excluding external displacement. */
+  speed: number
+}
+
+export interface DeathState {
+  startTick: number
+  ageTicks: number
+  /** Null holds the terminal pose indefinitely. */
+  despawnAfterTicks: number | null
+}
+
+export interface AIState {
+  enemyId: string
+  phase: 'idle' | 'acquire' | 'chase' | 'telegraph' | 'strike' | 'recover' | 'die'
+  ageTicks: number
+  targetId: EntityId | null
+}
+
+/** Separate from actors: projectiles never participate in circle separation. */
+export interface Projectile {
+  id: EntityId
+  ownerId: EntityId
+  faction: string
+  skillId: string
+  actionStartTick: number
+  pos: Vec2
+  vel: Vec2
+  radius: number
+  ageTicks: number
+  lifetimeTicks: number
+  damage: number
+  knockback: KnockbackSpec
+  impactPauseTicks: number
+  hitFlashTicks: number
 }
 
 export interface Entity {
@@ -34,8 +143,22 @@ export interface Entity {
   vel: Vec2
   /** Radians, measured from +x towards +z. */
   facing: number
+  /** Latest nonzero aim direction in radians, independent of body facing. */
+  aim: number
   radius: number
+  faction: string
+  health: number
+  maxHealth: number
+  death: DeathState | null
   action: ActionState | null
+  skills: { primary: string | null; secondary: string | null }
+  cooldowns: { primary: number; secondary: number; dodge: number }
+  previousButtons: number
+  impactPauseTicks: number
+  hitFlashTicks: number
+  knockback: { vel: Vec2; remainingTicks: number } | null
+  gait: GaitState
+  ai: AIState | null
 }
 
 /** The whole simulation state. Plain data: it serialises to canonical JSON. */
@@ -49,6 +172,11 @@ export interface World {
   rng: Record<string, RngState>
   /** Always sorted by ascending id, so iteration order is deterministic. */
   entities: Entity[]
+  /** Sorted by id, sharing the actors' nextId allocator. */
+  projectiles: Projectile[]
+  content: CombatContent
+  /** Inclusive actor-centre bounds; null leaves the M0 world unbounded. */
+  arena: { min: Vec2; max: Vec2 } | null
   playerId: EntityId | null
 }
 
@@ -62,6 +190,8 @@ export const Button = {
   Skill4: 1 << 6,
   Interact: 1 << 7
 } as const
+
+export const BUTTON_MASK = 0xff
 
 /** The player's input for one tick. */
 export interface Command {
@@ -84,6 +214,17 @@ export type SimEvent =
   | { type: 'spawn'; tick: number; id: EntityId; kind: string }
   | { type: 'despawn'; tick: number; id: EntityId }
   | { type: 'action'; tick: number; id: EntityId; action: string }
+  | (ImpactEvent & { type: 'hit'; skillId: string; actionStartTick: number; projectileId: EntityId | null })
+  | (ImpactEvent & { type: 'damage'; skillId: string; amount: number; health: number })
+  | (ImpactEvent & { type: 'death' })
+  | { type: 'dodge'; tick: number; actorId: EntityId; targetId: null; position: Vec2 }
+
+interface ImpactEvent {
+  tick: number
+  actorId: EntityId
+  targetId: EntityId
+  position: Vec2
+}
 
 export interface SnapshotEnvelope {
   format: 'folio.arpg.snapshot'

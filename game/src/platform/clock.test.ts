@@ -3,7 +3,7 @@ import { createWorld, hashWorld, spawnEntity, verifyReplay } from '../sim/core/i
 import { Clock } from './clock'
 
 function movingClock() {
-  const world = createWorld(7, 'test')
+  const world = createWorld(7)
   spawnEntity(world, { kind: 'player', pos: { x: 0, z: 0 }, radius: 0.4 })
   return new Clock(world, () => ({ move: { x: 1, z: 0 }, aim: null, buttons: 0 }))
 }
@@ -45,7 +45,7 @@ describe('browser clock', () => {
   it('resets interpolation and the recorder when the world changes', () => {
     const clock = movingClock()
     clock.advance(10)
-    const world = createWorld(9, 'test')
+    const world = createWorld(9)
     clock.replace(world)
     expect(clock.frame(1000).prev.size).toBe(0)
     const replay = clock.recorder.exportReplay()

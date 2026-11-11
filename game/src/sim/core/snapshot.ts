@@ -1,5 +1,6 @@
-import { SCHEMA_VERSION } from './types'
+import { SCHEMA_VERSION, SIM_BUILD } from './types'
 import type { SnapshotEnvelope, World } from './types'
+import { validateWorld } from './validation'
 
 /** Encode plain JSON data with lexically sorted object keys and finite numbers. */
 export function canonical(value: unknown): string {
@@ -28,30 +29,9 @@ export function restore(text: string): World {
   const envelope: SnapshotEnvelope = JSON.parse(text)
   if (envelope?.format !== 'folio.arpg.snapshot' || envelope.schema !== SCHEMA_VERSION) throw new TypeError('Unsupported snapshot format or schema')
   const world = envelope.world
-  if (!world || world.schema !== envelope.schema || typeof world.build !== 'string' || world.build !== envelope.build ||
-    !Number.isSafeInteger(world.seed) || !Number.isSafeInteger(world.tick) || world.tick < 0 ||
-    !Number.isSafeInteger(world.nextId) || world.nextId < 1 || !Array.isArray(world.entities) ||
-    !world.rng || typeof world.rng !== 'object' || Array.isArray(world.rng)) throw new TypeError('Invalid snapshot world')
+  if (envelope.build !== SIM_BUILD || world?.build !== envelope.build) throw new TypeError(`Unsupported simulation build; expected ${SIM_BUILD}`)
+  if (world.schema !== envelope.schema) throw new TypeError('Unsupported snapshot world schema')
   canonical(envelope)
-  let previousId = 0
-  for (const entity of world.entities) {
-    if (!entity || !Number.isSafeInteger(entity.id) || entity.id <= previousId || entity.id >= world.nextId ||
-      typeof entity.kind !== 'string' || !vector(entity.pos) || !vector(entity.vel) ||
-      !Number.isFinite(entity.facing) || !Number.isFinite(entity.radius) || entity.radius < 0 ||
-      (entity.action !== null && (!entity.action || typeof entity.action.id !== 'string' ||
-        !Number.isSafeInteger(entity.action.startTick) || !Number.isSafeInteger(entity.action.durationTicks) ||
-        entity.action.startTick < 0 || entity.action.durationTicks < 0))) throw new TypeError('Invalid snapshot entity')
-    previousId = entity.id
-  }
-  if (world.playerId !== null && !world.entities.some(entity => entity.id === world.playerId && entity.kind === 'player')) throw new TypeError('Invalid snapshot player')
-  for (const state of Object.values(world.rng)) {
-    if (!Array.isArray(state) || state.length !== 4 || state.some(word => !Number.isInteger(word) || word < 0 || word > 0xffffffff) ||
-      state.every(word => word === 0)) throw new TypeError('Invalid snapshot RNG stream')
-  }
+  validateWorld(world)
   return world
-}
-
-function vector(value: unknown): boolean {
-  const point = value as { x?: number; z?: number } | null
-  return !!point && Number.isFinite(point.x) && Number.isFinite(point.z)
 }

@@ -2,7 +2,7 @@
   "scenario": "meadow-start",
   "seed": 7,
   "steps": [
-    { "op": "expectHash", "hash": "7de31c7b" },
+    { "op": "expectHash", "hash": "2a5c16ec" },
     { "op": "moveTo", "x": -20, "z": 0 },
     { "op": "wait", "ticks": 1 },
     {
