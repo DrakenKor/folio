@@ -23,11 +23,15 @@ const CONIFER = ['#52805a', '#60895c', '#4c7959']
 export function createTrees(env: Environment, field: Heightfield) {
   const random = rng(subSeed(field.seed, 'trees'))
   const layout = placeTrees(field, random)
-  const sites = layout.filter(site => {
-    if (!field.arena) return true
+  const sites = layout.map(site => {
+    if (!field.arena) return site
     const { center, radius } = field.arena
-    // Keep crowns and their projected foreground silhouettes outside the fighting space.
-    return Math.hypot(site.x - center.x - 2, site.z - center.z - 4) > radius + site.radius * 2.4 + 3
+    const dx = site.x - center.x
+    const dz = site.z - center.z
+    const distance = Math.hypot(dx, dz)
+    const clearance = radius + site.radius * 2.2 + 0.8
+    if (distance >= clearance) return site
+    return { ...site, x: center.x + dx / distance * clearance, z: center.z + dz / distance * clearance }
   })
   const trunks = new GeometryBuilder()
   const canopies = new GeometryBuilder()
@@ -35,11 +39,8 @@ export function createTrees(env: Environment, field: Heightfield) {
   const rotation = new Quaternion()
   const up = new Vector3(0, 1, 0)
 
-  layout.forEach((site, i) => {
-    // Consume the same shape draws even when the arena omits this tree.
-    const add = (builder: GeometryBuilder, ...part: Parameters<GeometryBuilder['add']>) => {
-      if (sites.includes(site)) builder.add(...part)
-    }
+  sites.forEach((site, i) => {
+    const add = (builder: GeometryBuilder, ...part: Parameters<GeometryBuilder['add']>) => builder.add(...part)
     const conifer = site.radius < 1.9
     const ground = field.heightAt(site.x, site.z)
     const phase = random() * Math.PI * 2
@@ -148,7 +149,7 @@ export function createTrees(env: Environment, field: Heightfield) {
   const data = attribute('sway', 'vec4')
   const vGust = varyingProperty('float', 'vTreeGust')
   const swayNode = (canopy: boolean) => Fn(() => {
-    const anchor = positionLocal.xz
+    const anchor = data.xy
     const gust = gustAt(env, anchor).toVar()
     if (canopy) vGust.assign(gust)
     const h = data.z.mul(data.z)

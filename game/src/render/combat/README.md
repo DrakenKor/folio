@@ -1,5 +1,17 @@
 # T1.7 feedback — round 1
 
+## Round 2 final pass
+
+- [x] Build radius-sized folded plates, a dark under-fold and a distinct front using the knight's material language.
+- [x] Stack short-lived numbers per target and separate nearby screen labels; retain small visible contact fragments.
+- [x] Ground the ochre warning beneath actors, with a dark rim and advancing windup fill.
+- [x] Reconstruct dodge trails and folding, fragmenting enemy deaths from simulation state.
+- [x] Restore seeded tree and rock framing outside the arena and share broad travelling gust patches with crowns.
+- [ ] Capture both backends, compare rounds, verify restore, performance, build, tests and lint; sign green commits.
+
+Assumptions: keep all approved camera, HUD, arc, dart and palette decisions; change presentation only.
+Round 2 verification and final capture judgement will replace this checklist when complete.
+
 Implementation and both-backend verification are complete. Independent critic and director review remain pending.
 
 - Combat reads simulation poses, pause, flash, action age, projectiles and death; it never writes gameplay state.

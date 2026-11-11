@@ -1,6 +1,6 @@
 import { Mesh, NeutralToneMapping, PCFShadowMap, type Group, type WebGPURenderer } from 'three/webgpu'
 import { bookmark, type BookmarkName } from '../look/bookmarks'
-import { createEnemy } from '../look/standin'
+import { createEnemy, poseEnemy } from './combat/creaseback'
 import { TICK_DT, type Entity, type World } from '../sim/core/types'
 import { CombatFeedback } from './combat/feedback'
 import { CameraRig } from './basic/camera'
@@ -133,13 +133,8 @@ export class MeadowView implements RenderView {
         }
         dummy.position.set(x, y, z)
         dummy.rotation.y = Math.PI / 2 - facing
-        const death = entity.death ? Math.min(1, entity.death.ageTicks / 24) : 0
-        const age = entity.action?.ageTicks ?? 0
-        const windup = entity.ai?.phase === 'telegraph' ? Math.min(1, age / 24) : 0
-        const gait = Math.sin(entity.gait.phase * Math.PI * 2)
-        const size = entity.radius / 0.4
-        dummy.scale.set(size * (1 + windup * 0.06), size * (1 - windup * 0.18) * (1 - death * 0.85), size * (1 + windup * 0.1))
-        dummy.rotation.z = entity.death ? death * 0.25 : gait * Math.min(0.045, entity.gait.speed * 0.025)
+        const skill = frame.world.content.skills.find(skill => skill.id === entity.action?.id)
+        poseEnemy(dummy, entity, skill?.timing.windupTicks ?? 24)
         this.feedback.flash(dummy, entity)
       }
     }
@@ -154,6 +149,7 @@ export class MeadowView implements RenderView {
       }
       this.framing = name
     }
+    this.feedback.layout(this.camera.camera)
     this.meadow.update(time, this.camera.camera)
   }
 

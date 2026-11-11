@@ -3,7 +3,7 @@
 // through all of them together. Every read uses texture level 0, so the same
 // calls work in vertex and fragment stages.
 import type { Node } from 'three/webgpu'
-import { float, mod, sin, smoothstep, texture, vec2 } from 'three/tsl'
+import { float, sin, smoothstep, texture, vec2 } from 'three/tsl'
 import type { Environment } from './environment'
 
 /** Metres per second the gust bands travel downwind. */
@@ -14,11 +14,10 @@ export function gustAt(env: Environment, xz: Node<'vec2'>): Node<'float'> {
   const dir = env.windDirection
   const along = xz.dot(dir).sub(env.time.mul(GUST_SPEED))
   const across = xz.dot(vec2(dir.y.negate(), dir.x))
-  const warp = texture(env.noise, vec2(across.div(300), float(0.37))).level(float(0)).r.sub(0.5).mul(11)
-    .add(sin(across.mul(0.025)).mul(5))
-  const front = mod(along.add(warp).add(24), 72).toVar()
-  // Soft shoulders keep the travelling front from reading as a straight stripe; the crest holds a few metres.
-  return smoothstep(0, 10, front).mul(smoothstep(14, 30, front).oneMinus())
+  // Advected broad lobes break up the crosswind front without turning it into bright parallel ribbons.
+  const patch = texture(env.noise, vec2(along.div(65), across.div(42))).level(float(0)).g
+  const crest = sin(along.mul(0.087).add(sin(across.mul(0.055)).mul(1.5))).mul(0.5).add(0.5)
+  return smoothstep(0.28, 0.94, crest).mul(smoothstep(0.22, 0.7, patch).mul(0.72).add(0.28))
 }
 
 /** Wind at a ground position: the gust 0..1 and the downwind lean it causes, base sway included. */

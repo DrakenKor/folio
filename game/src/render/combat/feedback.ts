@@ -1,10 +1,12 @@
-import { BufferAttribute, BufferGeometry, CanvasTexture, DoubleSide, Group, Mesh, MeshBasicNodeMaterial, Sprite, SpriteNodeMaterial, type Object3D } from 'three/webgpu'
+import { BufferAttribute, BufferGeometry, CanvasTexture, DoubleSide, Group, Mesh, MeshBasicNodeMaterial, Sprite, SpriteNodeMaterial, Vector3, type Camera, type Object3D } from 'three/webgpu'
 import type { Entity, SimEvent, World } from '../../sim/core/types'
 import type { Heightfield } from '../terrain/heightfield'
 import type { Frame } from '../view'
 import { isCelMaterial } from '../materials/cel'
 
-interface Burst { key: string; tick: number; object: Group; number: Sprite; texture: CanvasTexture }
+const NUMBER_TICKS = 30
+
+interface Burst { key: string; targetId: number; tick: number; object: Group; number: Sprite; texture: CanvasTexture }
 
 /** Disposable contact history; persistent flashes and attack footprints come from state. */
 export class CombatFeedback {
@@ -14,6 +16,7 @@ export class CombatFeedback {
   private seen = new Map<string, number>()
   private footprints = new Map<number, Group>()
   private darts = new Map<number, Group>()
+  private trails = new Map<number, Group>()
   private readonly fragmentGeometry = new BufferGeometry().setAttribute('position', new BufferAttribute(new Float32Array([
     0, 0.1, 0, -0.04, 0, 0, 0, -0.06, 0.04, 0.04, 0, 0, 0, 0.1, 0, 0, -0.06, 0.04
   ]), 3))
@@ -25,24 +28,28 @@ export class CombatFeedback {
     if (this.world !== frame.world) { this.clear(); this.world = frame.world }
     const { world } = frame
     const time = world.tick + frame.alpha
-    for (const [key, tick] of this.seen) if (world.tick - tick >= 42) this.seen.delete(key)
-    for (const event of frame.events) if (event.type === 'damage' && world.tick - event.tick < 42) this.contact(event)
+    for (const [key, tick] of this.seen) if (world.tick - tick >= NUMBER_TICKS) this.seen.delete(key)
+    for (const event of frame.events) if (event.type === 'damage' && world.tick - event.tick < NUMBER_TICKS) this.contact(event)
     this.bursts = this.bursts.filter(burst => {
       const age = time - burst.tick
-      if (age < 0 || age >= 42) { this.removeBurst(burst); return false }
-      burst.number.position.y = 1.2 + age / 60
-      burst.number.material.opacity = Math.min(1, (42 - age) / 12)
+      if (age < 0 || age >= NUMBER_TICKS) { this.removeBurst(burst); return false }
+      burst.number.material.opacity = Math.min(1, (NUMBER_TICKS - age) / 8)
       burst.object.children.slice(1).forEach((piece, i) => {
         const a = i * Math.PI * 0.5 + 0.4
-        piece.visible = age < 10
-        piece.position.set(Math.cos(a) * age * 0.022, 0.5 + Math.sin(age / 10 * Math.PI) * 0.2, Math.sin(a) * age * 0.022)
+        piece.visible = age < 12
+        piece.position.set(Math.cos(a) * age * 0.035, 0.45 + Math.sin(age / 12 * Math.PI) * 0.28, Math.sin(a) * age * 0.035)
         piece.rotation.set(age * 0.1, a, age * 0.08)
       })
       return true
     })
     const live = new Set<number>()
+    const dodging = new Set<number>()
     for (const actor of world.entities) {
       const action = actor.action
+      if (!actor.death && action?.kind === 'dodge') {
+        dodging.add(actor.id)
+        this.dodge(actor, world.content.dodge.timing.activeTicks, world.content.dodge.distance)
+      }
       const skill = world.content.skills.find(skill => skill.id === action?.id)
       const age = action?.ageTicks ?? 0
       const warning = actor.ai && skill?.kind === 'melee' && age < skill.timing.windupTicks
@@ -53,23 +60,25 @@ export class CombatFeedback {
         if (!footprint) {
           footprint = new Group()
           const fill = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: 0xd6ae65,
-            transparent: true, opacity: 0.15, depthWrite: false, depthTest: false, side: DoubleSide }))
-          const rim = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: warning ? 0xe6b961 : 0xffe4ab,
-            transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, side: DoubleSide }))
-          fill.renderOrder = 1
-          rim.renderOrder = 2
+            transparent: true, opacity: 0.5, depthWrite: false, depthTest: !!warning, side: DoubleSide }))
+          const rim = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: warning ? 0x705033 : 0xffe4ab,
+            transparent: true, opacity: 0.95, depthWrite: false, depthTest: !!warning, side: DoubleSide }))
+          fill.renderOrder = warning ? -2 : 1
+          rim.renderOrder = warning ? -1 : 2
           footprint.add(fill, rim)
           this.footprints.set(actor.id, footprint)
           this.object.add(footprint)
         }
         const [fill, rim] = footprint.children as [Mesh<BufferGeometry, MeshBasicNodeMaterial>, Mesh<BufferGeometry, MeshBasicNodeMaterial>]
         fill.visible = !!warning
-        fill.material.opacity = 0.12 + 0.13 * age / Math.max(1, skill.timing.windupTicks)
-        this.sector(fill, actor, action.direction, skill.range, skill.arcRadians, 0)
-        this.sector(rim, actor, action.direction, skill.range, skill.arcRadians, skill.range - (warning ? 0.045 : 0.065), !!warning)
+        const progress = Math.min(1, (age + 1) / Math.max(1, skill.timing.windupTicks))
+        fill.material.opacity = 0.42 + progress * 0.18
+        this.sector(fill, actor, action.direction, skill.range * (0.15 + progress * 0.85), skill.arcRadians, 0)
+        this.sector(rim, actor, action.direction, skill.range, skill.arcRadians, skill.range - (warning ? 0.07 : 0.065), !!warning)
       }
     }
     for (const [id, footprint] of this.footprints) if (!live.has(id)) { this.removeMeshGroup(footprint); this.footprints.delete(id) }
+    for (const [id, trail] of this.trails) if (!dodging.has(id)) { this.removeMeshGroup(trail); this.trails.delete(id) }
     const flying = new Set<number>()
     for (const dart of world.projectiles) {
       flying.add(dart.id)
@@ -97,6 +106,63 @@ export class CombatFeedback {
     for (const [id, object] of this.darts) if (!flying.has(id)) { this.removeMeshGroup(object); this.darts.delete(id) }
   }
 
+  /** New hits stay closest to their target; older hits stack upward, resolving nearby screen collisions too. */
+  layout(camera: Camera): void {
+    const placed: Array<{ x: number; y: number; w: number; h: number }> = []
+    const ordered = [...this.bursts].sort((a, b) => b.tick - a.tick || a.targetId - b.targetId)
+    for (const burst of ordered) {
+      const age = (this.world?.tick ?? burst.tick) - burst.tick
+      const slot = ordered.filter(other => other.targetId === burst.targetId && other !== burst &&
+        (other.tick > burst.tick || (other.tick === burst.tick && ordered.indexOf(other) < ordered.indexOf(burst)))).length
+      const p = burst.object.position.clone().add(new Vector3(0, 1.05 + age / 100 + slot * 0.48, 0)).applyMatrix4(camera.matrixWorldInverse)
+      const depth = Math.max(0.1, -p.z)
+      const sx = camera.projectionMatrix.elements[0]! / depth
+      const sy = camera.projectionMatrix.elements[5]! / depth
+      const rect = { x: p.x * sx, y: p.y * sy, w: burst.number.scale.x * sx * 0.42, h: burst.number.scale.y * sy * 0.52 }
+      let overlap
+      do {
+        overlap = placed.find(other => Math.abs(other.x - rect.x) < other.w + rect.w && Math.abs(other.y - rect.y) < other.h + rect.h)
+        if (overlap) rect.y = overlap.y + overlap.h + rect.h + 0.006
+      } while (overlap)
+      placed.push(rect)
+      p.y = rect.y / sy
+      burst.number.position.copy(p.applyMatrix4(camera.matrixWorld).sub(burst.object.position))
+    }
+  }
+
+  /** Short layered streaks follow the actual dodge path and fade during recovery. */
+  private dodge(actor: Entity, activeTicks: number, distance: number): void {
+    const action = actor.action!
+    let trail = this.trails.get(actor.id)
+    if (!trail) {
+      trail = new Group()
+      trail.name = 'dodge-trail'
+      trail.add(new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: 0xe8d8ae,
+        transparent: true, opacity: 0.45, depthWrite: false, side: DoubleSide })))
+      this.object.add(trail)
+      this.trails.set(actor.id, trail)
+    }
+    const mesh = trail.children[0] as Mesh<BufferGeometry, MeshBasicNodeMaterial>
+    const d = { x: Math.cos(action.direction), z: Math.sin(action.direction) }
+    const length = Math.min(1.5, distance * (action.ageTicks + 1) / activeTicks)
+    const x = actor.pos.x + this.field.player.x
+    const z = actor.pos.z + this.field.player.z
+    const positions: number[] = []
+    for (const [side, height] of [[-0.22, 0.16], [0, 0.5], [0.22, 0.22]]) {
+      const point = (back: number, width: number) => {
+        const px = x - d.x * back - d.z * (side! + width)
+        const pz = z - d.z * back + d.x * (side! + width)
+        return [px, this.field.heightAt(px, pz) + height!, pz]
+      }
+      positions.push(...point(0.25, -0.035), ...point(length, 0), ...point(0.25, 0.035))
+    }
+    const position = mesh.geometry.getAttribute('position')
+    if (position) { position.array.set(positions); position.needsUpdate = true }
+    else mesh.geometry.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3))
+    mesh.geometry.computeBoundingSphere()
+    mesh.material.opacity = 0.5 * Math.min(1, Math.max(0, (activeTicks + 7 - action.ageTicks) / 7))
+  }
+
   /** Tint the existing posed surface; never add a second actor transform or impulse. */
   flash(object: Object3D, actor: Entity): void {
     object.traverse(node => {
@@ -112,9 +178,10 @@ export class CombatFeedback {
     this.bursts.forEach(burst => this.removeBurst(burst))
     this.bursts = []
     this.seen.clear()
-    for (const group of [...this.footprints.values(), ...this.darts.values()]) this.removeMeshGroup(group)
+    for (const group of [...this.footprints.values(), ...this.darts.values(), ...this.trails.values()]) this.removeMeshGroup(group)
     this.footprints.clear()
     this.darts.clear()
+    this.trails.clear()
   }
 
   dispose(): void {
@@ -152,7 +219,7 @@ export class CombatFeedback {
     const z = event.position.z + this.field.player.z
     object.position.set(x, this.field.heightAt(x, z), z)
     this.object.add(object)
-    this.bursts.push({ key, tick: event.tick, object, number, texture })
+    this.bursts.push({ key, targetId: event.targetId, tick: event.tick, object, number, texture })
   }
 
   /** Conform the committed sector to the rendered terrain, including the two radial edges. */
@@ -163,7 +230,7 @@ export class CombatFeedback {
     const point = (r: number, a: number) => {
       const px = x + Math.cos(a) * r
       const pz = z + Math.sin(a) * r
-      return [px, this.field.heightAt(px, pz) + 0.055, pz]
+      return [px, this.field.heightAt(px, pz) + 0.075, pz]
     }
     for (let i = 0; i < 28; i++) {
       const a = direction - arc / 2 + arc * i / 28
