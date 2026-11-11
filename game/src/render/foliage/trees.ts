@@ -22,7 +22,12 @@ const CONIFER = ['#52805a', '#60895c', '#4c7959']
 
 export function createTrees(env: Environment, field: Heightfield) {
   const random = rng(subSeed(field.seed, 'trees'))
-  const sites = placeTrees(field, random)
+  const sites = placeTrees(field, random).filter(site => {
+    if (!field.arena) return true
+    const { center, radius } = field.arena
+    // Keep crowns and their projected foreground silhouettes outside the fighting space.
+    return Math.hypot(site.x - center.x - 2, site.z - center.z - 4) > radius + site.radius * 2.4 + 3
+  })
   const trunks = new GeometryBuilder()
   const canopies = new GeometryBuilder()
   const matrix = new Matrix4()

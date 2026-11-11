@@ -6,7 +6,7 @@ import type { Environment } from '../materials/environment'
 
 /** A cool travelling sheen from foliage turning its paler side towards the light. */
 export function gustSheen(c: Node<'vec3'>, gust: Node<'float'>): Node<'vec3'> {
-  return c.mul(mix(vec3(1), vec3(1.3, 1.65, 1.8), gust.max(0)))
+  return c.mul(mix(vec3(1), vec3(1.08, 1.18, 1.22), gust.max(0)))
 }
 
 /** Wind sheen affects direct sunlight; cast shadows retain their own surface tone. */

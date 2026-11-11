@@ -34,6 +34,10 @@ export function createRocks(env: Environment, field: Heightfield, trees: TreeSit
     const rot = new Quaternion().setFromEuler(new Euler((random() - 0.5) * 0.3, random() * Math.PI * 2, (random() - 0.5) * 0.3))
     const y = field.heightAt(x, z) - scale.y * 0.16
     const m = new Matrix4().compose(new Vector3(x, y, z), rot, scale)
+    if (field.arena && Math.hypot(x - field.arena.center.x, z - field.arena.center.z) < field.arena.radius + size * 1.7) {
+      shape.dispose()
+      return
+    }
     const centre = new Vector3(x, y, z)
     builder.add(shape, m, {
       color: linearColor(STONE[Math.floor(random() * STONE.length)]!, 0.9 + random() * 0.2),

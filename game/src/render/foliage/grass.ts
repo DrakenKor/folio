@@ -101,7 +101,9 @@ export function createGrass(env: Environment, field: Heightfield) {
     const fade = nearFade(vec3(xz.x, groundY, xz.y))
       .mul(smoothstep(34, 42, edge.x.max(edge.y)).oneMinus()).toVar()
     const keep = step(clumpRand(0x4567), mask.mul(1.15)).mul(step(clumpRand(0x6d2b), uniforms.density))
-    const trample = trampleAt(env, xz).toVar()
+    const clearing = field.arena ? smoothstep(field.arena.radius - 0.5, field.arena.radius + 1.5,
+      xz.sub(vec2(field.arena.center.x, field.arena.center.z)).length()).oneMinus() : float(0)
+    const trample = trampleAt(env, xz).max(clearing).toVar()
     const height = mix(float(0.42), float(0.9), bladeRand(0x5678).pow(1.5))
       .mul(tuftHeight)
       .mul(r.mul(0.35).oneMinus())

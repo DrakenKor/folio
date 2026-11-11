@@ -127,5 +127,13 @@ function bannerSites(field: Heightfield): Point[] {
   sides.push(offset(nearMonolith(24), -1, 2.1))
   // The third stands in the player's view, across the path from them.
   sides.push({ x: player.x + 5.4, z: player.z + 1.2 })
-  return sides
+  return sides.map(site => {
+    if (!field.arena) return site
+    const { center, radius } = field.arena
+    const dx = site.x - center.x
+    const dz = site.z - center.z
+    const distance = Math.hypot(dx, dz) || 1
+    const scale = Math.max(1, (radius + 3) / distance)
+    return { x: center.x + dx * scale, z: center.z + dz * scale }
+  })
 }

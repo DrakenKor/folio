@@ -2,7 +2,7 @@
 // in a red cloak, a violet enemy and a glowing projectile between them. The
 // real characters come from render/characters (T0.6).
 import { ConeGeometry, CylinderGeometry, Group, Mesh, PlaneGeometry, SphereGeometry, DoubleSide, type BufferGeometry } from 'three/webgpu'
-import { color, faceDirection, float, mrt, positionLocal, sin, cos, transformNormalToView, vec3, vec4 } from 'three/tsl'
+import { color, faceDirection, mrt, positionLocal, sin, cos, transformNormalToView, vec3, vec4 } from 'three/tsl'
 import { CelMaterial } from '../render/materials/cel'
 import type { Environment } from '../render/materials/environment'
 import type { Heightfield } from '../render/terrain/heightfield'
@@ -98,26 +98,34 @@ function createHero(env: Environment): Group {
   return hero
 }
 
+/** Low folded shell, overlapping triangular scales and a forward ivory gaze. */
 export function createEnemy(env: Environment): Group {
   const enemy = new Group()
-  const body = new CelMaterial(env, { color: 0x5b3f86, readability: true })
-  const shell = new CelMaterial(env, { color: 0xb05ad8, flatShading: true, readability: true })
-  const dome = part(new SphereGeometry(0.55, 20, 14), body, 0.38)
-  dome.scale.set(1.15, 0.72, 1.3)
+  enemy.name = 'creaseback'
+  const body = new CelMaterial(env, { color: 0x654273, readability: true })
+  const shell = new CelMaterial(env, { color: 0x956a9e, flatShading: true, readability: true })
+  const foot = new CelMaterial(env, { color: 0x493952, readability: true })
+  const dome = part(new SphereGeometry(0.5, 16, 10), body, 0.36)
+  dome.scale.set(1, 0.62, 1.25)
   enemy.add(dome)
-  for (let i = 0; i < 5; i++) {
-    const spike = part(new ConeGeometry(0.12, 0.42, 5), shell, 0.78)
-    const a = (i / 5) * Math.PI * 2
-    spike.position.set(Math.cos(a) * 0.22, 0.72 + (i % 2) * 0.05, Math.sin(a) * 0.3 - 0.08)
-    spike.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5)
-    enemy.add(spike)
+  for (const side of [-1, 1]) for (const z of [-0.32, 0.25]) {
+    const leg = part(new ConeGeometry(0.13, 0.22, 3), foot, 0.12)
+    leg.position.set(side * 0.38, 0.12, z)
+    leg.rotation.z = side * -0.4
+    enemy.add(leg)
   }
-  const eyeGlow = color('#d650a8').mul(float(1.1))
-  const eyeMaterial = new CelMaterial(env, { color: 0xb84e92, emissiveNode: eyeGlow, outlineColor: null })
-  eyeMaterial.mrtNode = mrt({ glow: vec4(eyeGlow, 1) })
+  for (let row = 0; row < 3; row++) for (const side of [-1, 1]) {
+    const scale = part(new ConeGeometry(0.24, 0.32, 3), shell, 0.65)
+    scale.position.set(side * 0.2, 0.62 - row * 0.025, 0.22 - row * 0.27)
+    scale.rotation.set(-0.35, side * 0.3, side * -0.48)
+    scale.scale.set(1, 1, 0.65)
+    enemy.add(scale)
+  }
+  const eyeMaterial = new CelMaterial(env, { color: 0xe8d8ae, outlineColor: null, readability: true })
   for (const side of [-1, 1]) {
-    const eye = part(new SphereGeometry(0.045, 10, 8), eyeMaterial, 0.5)
-    eye.position.set(side * 0.2, 0.5, 0.62)
+    const eye = part(new SphereGeometry(0.045, 8, 6), eyeMaterial, 0.4)
+    eye.scale.set(1.3, 0.65, 0.7)
+    eye.position.set(side * 0.18, 0.4, 0.58)
     enemy.add(eye)
   }
   return enemy

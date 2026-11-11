@@ -2,6 +2,7 @@ import { Mesh, NeutralToneMapping, PCFShadowMap, type Group, type WebGPURenderer
 import { bookmark, type BookmarkName } from '../look/bookmarks'
 import { createEnemy } from '../look/standin'
 import { TICK_DT, type Entity, type World } from '../sim/core/types'
+import { CombatFeedback } from './combat/feedback'
 import { CameraRig } from './basic/camera'
 import { CharacterView, loadCharacter, type CharacterAsset } from './characters/character'
 import { actorPoseState } from './characters/pose'
@@ -21,6 +22,8 @@ export class MeadowView implements RenderView {
   private currentActor: Entity | undefined
   private previousActor: Entity | undefined
   private world: Readonly<World> | null = null
+  private feedback: CombatFeedback
+  private renderTime = 0
   private tick = -1
   private framing: string | null | undefined
 
@@ -40,7 +43,9 @@ export class MeadowView implements RenderView {
       target: { x: 0, y: 0.9, z: 0 }, fov: 40
     })
     this.camera.camera.far = 4000
-    this.meadow = createMeadow(world.seed)
+    this.meadow = createMeadow(world.seed, world.arena)
+    this.feedback = new CombatFeedback(this.meadow.field)
+    this.meadow.scene.add(this.feedback.object)
     this.knight = new CharacterView(asset, { env: this.meadow.env })
     this.meadow.scene.add(this.knight.object, this.aim.object)
     this.post = createPost(renderer, this.meadow.scene, this.camera.camera)
@@ -51,6 +56,7 @@ export class MeadowView implements RenderView {
   /** Retain adjacent actor samples; all continuation data belongs to simulation. */
   advance(world: Readonly<World>): void {
     if (world !== this.world || world.tick < this.tick) {
+      this.camera.resetFollow()
       this.currentActor = undefined
       this.previousActor = undefined
       this.world = world
@@ -64,14 +70,18 @@ export class MeadowView implements RenderView {
   }
 
   groundPoint(x: number, y: number) {
-    const point = this.camera.groundPoint(x, y)
+    const point = this.camera.groundPoint(x, y, this.meadow.field.heightAt)
     return point ? { x: point.x - this.meadow.field.player.x, z: point.z - this.meadow.field.player.z } : null
   }
 
   sync(frame: Frame): void {
-    if (frame.world.seed !== this.meadow.field.seed) {
+    if (frame.world.seed !== this.meadow.field.seed || (this.meadow.field.arena?.radius ?? null) !== (frame.world.arena?.radius ?? null) ||
+      Math.abs((this.meadow.field.arena?.center.x ?? 0) - (frame.world.arena ? frame.world.arena.center.x + this.meadow.field.player.x : 0)) > 1e-6 ||
+      Math.abs((this.meadow.field.arena?.center.z ?? 0) - (frame.world.arena ? frame.world.arena.center.z + this.meadow.field.player.z : 0)) > 1e-6) {
       this.disposeScene()
-      this.meadow = createMeadow(frame.world.seed)
+      this.meadow = createMeadow(frame.world.seed, frame.world.arena)
+      this.feedback = new CombatFeedback(this.meadow.field)
+      this.meadow.scene.add(this.feedback.object)
       this.knight.setEnvironment(this.meadow.env)
       this.meadow.scene.add(this.knight.object, this.aim.object)
       this.post = createPost(this.renderer, this.meadow.scene, this.camera.camera)
@@ -81,11 +91,14 @@ export class MeadowView implements RenderView {
     this.advance(frame.world)
     const present = new Set<number>()
     const time = (frame.world.tick + frame.alpha) * TICK_DT
+    const dt = Math.max(0, Math.min(0.1, time - this.renderTime))
+    this.renderTime = time
+    this.feedback.sync(frame)
     this.knight.object.visible = false
     this.aim.object.visible = false
     for (const entity of frame.world.entities) {
       present.add(entity.id)
-      const previous = frame.prev.get(entity.id) ?? { ...entity.pos, facing: entity.facing }
+      const previous = entity.impactPauseTicks > 0 ? { ...entity.pos, facing: entity.facing } : frame.prev.get(entity.id) ?? { ...entity.pos, facing: entity.facing }
       const x = previous.x + (entity.pos.x - previous.x) * frame.alpha + this.meadow.field.player.x
       const z = previous.z + (entity.pos.z - previous.z) * frame.alpha + this.meadow.field.player.z
       const y = this.meadow.field.heightAt(x, z)
@@ -96,6 +109,7 @@ export class MeadowView implements RenderView {
         this.knight.object.position.set(x, y, z)
         const characterPose = this.knight.poseActor({ ...actorPoseState(entity, frame.world, this.previousActor),
           actor: { ...entity, facing } }, frame.alpha)
+        this.feedback.flash(this.knight.object, entity)
         this.aim.object.visible = entity.death === null
         this.aim.object.position.set(x, y, z)
         this.aim.point(characterPose.aim)
@@ -107,7 +121,7 @@ export class MeadowView implements RenderView {
           target: { x, y: y + 0.9, z }, fov: pose.fov
         })
         if (this.camera.activeBookmark === 'meadow-player') this.camera.bookmark('meadow-player')
-        this.camera.update({ x, y, z })
+        this.camera.update({ x, y, z }, dt)
         this.meadow.setPlayer(x, z)
         if (this.camera.isFollowing || this.camera.activeBookmark === 'meadow-player') this.meadow.setFocus(x, z - 2, 28)
       } else {
@@ -119,7 +133,14 @@ export class MeadowView implements RenderView {
         }
         dummy.position.set(x, y, z)
         dummy.rotation.y = Math.PI / 2 - facing
-        dummy.scale.setScalar(entity.radius / 0.4)
+        const death = entity.death ? Math.min(1, entity.death.ageTicks / 24) : 0
+        const age = entity.action?.ageTicks ?? 0
+        const windup = entity.ai?.phase === 'telegraph' ? Math.min(1, age / 24) : 0
+        const gait = Math.sin(entity.gait.phase * Math.PI * 2)
+        const size = entity.radius / 0.4
+        dummy.scale.set(size * (1 + windup * 0.06), size * (1 - windup * 0.18) * (1 - death * 0.85), size * (1 + windup * 0.1))
+        dummy.rotation.z = entity.death ? death * 0.25 : entity.impactPauseTicks ? 0 : gait * Math.min(0.045, entity.gait.speed * 0.025)
+        this.feedback.flash(dummy, entity)
       }
     }
     for (const [id, dummy] of this.dummies) {
@@ -145,7 +166,7 @@ export class MeadowView implements RenderView {
     this.camera.camera.updateProjectionMatrix()
   }
 
-  dispose(): void { this.disposeScene(); this.knight.dispose(); this.aim.dispose() }
+  dispose(): void { this.disposeScene(); this.knight.dispose(); this.aim.dispose(); this.camera.dispose() }
 
   private registerBookmarks(): void {
     for (const name of ['wide', 'player', 'monolith'] as const) {
@@ -166,6 +187,7 @@ export class MeadowView implements RenderView {
   }
 
   private disposeScene(): void {
+    this.feedback.dispose()
     this.knight.object.removeFromParent()
     this.aim.object.removeFromParent()
     this.meadow.scene.traverse(node => {

@@ -1,0 +1,23 @@
+#help { display: none; }
+#encounter-hud { position: fixed; inset: 0; pointer-events: none; color: #f5ead1; font: 13px system-ui, sans-serif; }
+.hud-vital { position: absolute; left: 28px; top: 28px; width: 220px; padding: 16px 20px; background: #283430ed; border: 1px solid #b9aa7d66; }
+.hud-vital > span, .hud-outcome > div > span { font-size: 10px; letter-spacing: .18em; color: #d6c799; }
+.hud-vital strong { display: block; margin: 9px 0; font: 23px Georgia, serif; }
+.hud-health-track { height: 4px; background: #151e23; }
+.hud-health-track i { display: block; height: 100%; background: #cc8272; }
+.hud-actions { position: absolute; left: 50%; bottom: 48px; transform: translateX(-50%); display: flex; gap: 8px; }
+.hud-action { position: relative; box-sizing: border-box; width: 152px; padding: 12px 14px 15px; background: #283430ed; border: 1px solid #a5957566; }
+.hud-action kbd { display: block; margin-bottom: 6px; font: 9px system-ui, sans-serif; letter-spacing: .14em; color: #b2b9ae; }
+.hud-action b { display: block; font: 18px Georgia, serif; }
+.hud-action span { display: block; margin-top: 5px; font-size: 10px; color: #a6aaa2; }
+.hud-action[data-ready="true"] span { color: #e9d29b; }
+.hud-action i { position: absolute; left: 0; bottom: 0; width: var(--ready); height: 2px; background: #d6ae65; }
+.hud-help { position: absolute; bottom: 12px; width: 100%; margin: 0; text-align: center; font-size: 11px; text-shadow: 0 1px 3px #283430; }
+.hud-outcome { position: absolute; inset: 0; display: grid; place-items: center; background: #26312b55; }
+.hud-outcome[hidden], #encounter-hud[hidden] { display: none; }
+.hud-outcome > div { min-width: 300px; padding: 32px 42px; text-align: center; background: #283430f5; border: 1px solid #b9aa7d99; }
+.hud-outcome h1 { font: 32px Georgia, serif; font-weight: normal; margin: 16px 0 12px; }
+.hud-outcome p { color: #c1c7b6; font-size: 12px; margin-bottom: 24px; }
+.hud-outcome button { pointer-events: auto; background: #d8c69c; color: #283430; border: 0; padding: 10px 26px; }
+.hud-outcome button:focus-visible { outline: 2px solid #fff1cf; outline-offset: 4px; }
+@media (max-width: 600px) { .hud-vital { top: 12px; left: 12px; width: 160px; padding: 12px; } .hud-action { width: 104px; padding: 10px; } .hud-action b { font-size: 15px; } .hud-help { font-size: 9px; } }
