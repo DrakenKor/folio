@@ -66,7 +66,7 @@ export class CombatFeedback {
         fill.visible = !!warning
         fill.material.opacity = 0.12 + 0.13 * age / Math.max(1, skill.timing.windupTicks)
         this.sector(fill, actor, action.direction, skill.range, skill.arcRadians, 0)
-        this.sector(rim, actor, action.direction, skill.range, skill.arcRadians, skill.range - (warning ? 0.045 : 0.065))
+        this.sector(rim, actor, action.direction, skill.range, skill.arcRadians, skill.range - (warning ? 0.045 : 0.065), !!warning)
       }
     }
     for (const [id, footprint] of this.footprints) if (!live.has(id)) { this.removeMeshGroup(footprint); this.footprints.delete(id) }
@@ -156,7 +156,7 @@ export class CombatFeedback {
   }
 
   /** Conform the committed sector to the rendered terrain, including the two radial edges. */
-  private sector(mesh: Mesh, actor: Entity, direction: number, range: number, arc: number, inner: number): void {
+  private sector(mesh: Mesh, actor: Entity, direction: number, range: number, arc: number, inner: number, edges = false): void {
     const positions: number[] = []
     const x = actor.pos.x + this.field.player.x
     const z = actor.pos.z + this.field.player.z
@@ -171,7 +171,7 @@ export class CombatFeedback {
       positions.push(...point(inner, a), ...point(range, b), ...point(range, a),
         ...point(inner, a), ...point(inner, b), ...point(range, b))
     }
-    if (inner > 0) for (const side of [-1, 1]) {
+    if (inner > 0 && edges) for (const side of [-1, 1]) {
       const a = direction + side * arc / 2
       positions.push(...point(0.15, a - 0.018), ...point(range, a + 0.018), ...point(range, a - 0.018),
         ...point(0.15, a - 0.018), ...point(0.15, a + 0.018), ...point(range, a + 0.018))
