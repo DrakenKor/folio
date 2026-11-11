@@ -35,7 +35,7 @@ import { trampleAt, type Environment } from '../materials/environment'
 import { windAt } from '../materials/wind'
 import { MeadowMaterial } from '../terrain/meadow-material'
 import { GRID, type Heightfield, TERRAIN_HALF } from '../terrain/heightfield'
-import { bladeTone, dryGrass, meadowPatch, meadowTones } from '../terrain/meadow-tones'
+import { bladeTone, dryGrass, meadowTones } from '../terrain/meadow-tones'
 import { fieldFocus, nearFade } from './bands'
 import { CLUMP_CELL, tuftAt } from './tufts'
 /** Clump cells per side of the field: 176 × 0.5 m covers 88 m. */
@@ -120,7 +120,7 @@ export function createGrass(env: Environment, field: Heightfield) {
     const bendRadius = uniforms.bendRadius.max(1e-4)
     const push = smoothstep(bendRadius.mul(0.15), bendRadius, playerDist).oneMinus().mul(step(1e-4, uniforms.bendRadius)).mul(1.1)
     const bend = out
-      .mul(r.mul(0.45).add(0.1))
+      .mul(r.mul(0.45).add(0.1)).mul(tuft.lean)
       .add(env.windDirection.mul(wind.lean.add(flutter)))
       .add(toPlayer.div(playerDist).mul(push))
     const amount = bend.length().max(1e-4)
@@ -141,7 +141,7 @@ export function createGrass(env: Environment, field: Heightfield) {
     vT.assign(t)
     vFade.assign(fade)
     vGust.assign(wind.gust)
-    vPatch.assign(meadowPatch(env, xz, true).add(tuftHue.mul(fade)))
+    vPatch.assign(tuft.patch.add(tuftHue.mul(fade)))
     vVariety.assign(clumpRand(0x1f3d))
     vTrample.assign(trample)
 

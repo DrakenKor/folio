@@ -2,7 +2,7 @@
 // with ground grass that shows the travelling gusts, the worn path and rock on
 // steep slopes.
 import { Mesh, PlaneGeometry } from 'three/webgpu'
-import { cameraViewMatrix, color, dot, Fn, mix, normalWorldGeometry, positionWorld, smoothstep, texture, vec3, vec4 } from 'three/tsl'
+import { cameraPosition, cameraViewMatrix, color, dot, Fn, mix, normalWorldGeometry, positionWorld, smoothstep, texture, vec3, vec4 } from 'three/tsl'
 import { trampleAt, triplanarNoise, type Environment } from '../materials/environment'
 import { gustAt } from '../materials/wind'
 import { createGrassPaint } from '../foliage/paint'
@@ -56,7 +56,8 @@ export function createTerrain(env: Environment, field: Heightfield) {
     return ground
   })()
 
-  const sheen = gustAt(env, xz).mul(smoothstep(0.05, 0.7, sample.b))
+  const farSheen = smoothstep(76, 135, positionWorld.distance(cameraPosition)).mul(1.8).add(1)
+  const sheen = gustAt(env, xz).mul(farSheen).mul(smoothstep(0.05, 0.7, sample.b))
     .mul(pathAmount.oneMinus()).mul(rockAmount.oneMinus())
     .mul(trampleAt(env, xz).mul(0.75).oneMinus())
   const material = new MeadowMaterial(env, {

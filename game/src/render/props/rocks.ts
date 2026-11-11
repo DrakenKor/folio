@@ -11,7 +11,7 @@ import { stoneGeometry } from './stone-geometry'
 import { stoneMoss } from './stone-moss'
 
 /** Warm greys at mid value, clearly below the knight's armour. */
-const STONE = ['#817c74', '#7b766f', '#878178', '#77736c']
+const STONE = ['#8a8880', '#807e78', '#918d82', '#7f817a']
 
 export function createRocks(env: Environment, field: Heightfield, trees: TreeSite[]) {
   const random = rng(subSeed(field.seed, 'rocks'))
@@ -68,9 +68,9 @@ export function createRocks(env: Environment, field: Heightfield, trees: TreeSit
   const vertexColor = attribute('color', 'vec3')
   const moss = stoneMoss(float(0)).mul(0.72)
   const material = new CelMaterial(env, {
-    colorNode: mix(vertexColor, color('#5f7a3c'), moss),
+    colorNode: mix(vertexColor, color('#506d43'), moss),
     outlineNormal: attribute('hull', 'vec3'),
-    outlineWidth: 0.7,
+    outlineWidth: 0.8,
     bandOffset: null
   })
   material.name = 'rock'

@@ -15,8 +15,8 @@ export function createMonolith(env: Environment, field: Heightfield) {
   group.position.set(x, y - 0.25, z)
   env.landmark.position.value.set(x, y + 1.5, z)
   env.landmark.color.value.set(CYAN)
-  env.landmark.radius.value = 16
-  env.landmark.strength.value = 8
+  env.landmark.radius.value = 14
+  env.landmark.strength.value = 16
   group.add(createMonolithSite(env, field), createCarvedShaft(env), createMonolithMotes(env))
 
   const gem = createCrystal(env)
@@ -29,7 +29,7 @@ export function createMonolith(env: Environment, field: Heightfield) {
       const time = env.time.value
       gem.rotation.y = time * 0.19
       gem.position.y = crystalHeight + Math.sin(time * 0.65) * 0.12
-      env.landmark.strength.value = 8 + Math.sin(time * 0.65) * 0.2
+      env.landmark.strength.value = 16 + Math.sin(time * 0.65) * 0.2
     }
   }
 }
