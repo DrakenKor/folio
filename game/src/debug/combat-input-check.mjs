@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-// Neutral fixtures exercise the public debug boundary; all tick intent uses commands.
+// Isolate the M1 player through restore; all tick intent uses DOM input or commands.
 const root = fileURLToPath(new URL('../../../..', import.meta.url))
 const tool = fileURLToPath(new URL('../../tools/play.mjs', import.meta.url))
 const origin = process.env.PLAY_ORIGIN ?? 'http://127.0.0.1:5196'
@@ -29,17 +29,14 @@ const check = (backend, name, fn) => {
 
 try {
   for (const backend of ['webgpu', 'webgl']) {
-    cli('boot', `${origin}/play/?view=basic&backend=${backend}&paused=1`)
+    cli('boot', `${origin}/play/?view=basic&backend=${backend}&scenario=m1-arena&seed=7&paused=1`)
     const snapshot = JSON.parse(evaluate('__game.snapshot()'))
     const world = snapshot.world
     world.entities = world.entities.filter(actor => actor.id === world.playerId)
     const actor = world.entities[0]
-    actor.health = actor.maxHealth = 100
-    actor.skills = { primary: 'fixture-melee', secondary: 'fixture-projectile' }
-    const common = { cooldownTicks: 0, damage: 10, knockback: { speed: 0, ticks: 0 }, impactPauseTicks: 2, hitFlashTicks: 6 }
-    world.content.skills = [
-      { ...common, id: 'fixture-melee', kind: 'melee', timing: { windupTicks: 6, activeTicks: 3, recoveryTicks: 12, moveCancelTicks: 2 }, range: 2, arcRadians: Math.PI },
-      { ...common, id: 'fixture-projectile', kind: 'projectile', timing: { windupTicks: 8, activeTicks: 1, recoveryTicks: 15, moveCancelTicks: 2 }, speed: 12, radius: 0.1, lifetimeTicks: 60 }
+    const attacks = [
+      [1, world.content.skills.find(skill => skill.id === actor.skills.primary)],
+      [2, world.content.skills.find(skill => skill.id === actor.skills.secondary)]
     ]
     const reset = (fixture = snapshot) => evaluate(`__game.pause(); __game.restore(${JSON.stringify(JSON.stringify(fixture))})`)
     const step = ticks => run([{ op: 'wait', ticks }])
@@ -82,6 +79,7 @@ try {
         reset(); press(bit); step(1)
         const action = player(observe()).action
         assert(action, 'T1.3: action did not start')
+        assert.equal(action.id, bit === 1 ? 'span-cut' : bit === 2 ? 'fold-dart' : 'dodge')
         assert.equal(action.kind, kind)
         assert.equal(action.startTick, world.tick + 1)
         assert.equal(action.ageTicks, 0)
@@ -96,7 +94,9 @@ try {
       run([{ op: 'keyUp', code: 'Space' }]); step(1); press(4); step(1)
       assert.equal(player(observe()).action?.kind, 'dodge')
     })
-    for (const [bit, duration] of [[1, 21], [2, 24]]) check(backend, `2: held attack ${bit} repeats at completion`, () => {
+    for (const [bit, skill] of attacks) check(backend, `2: held attack ${bit} repeats at completion`, () => {
+      const { windupTicks, activeTicks, recoveryTicks } = skill.timing
+      const duration = windupTicks + activeTicks + recoveryTicks
       reset(); press(bit, true); step(1)
       assert.equal(player(observe()).action?.ageTicks, 0, 'T1.3: initial attack missing')
       step(duration - 1)
@@ -105,12 +105,17 @@ try {
       assert.equal(player(observe()).action.startTick, world.tick + 1 + duration)
     })
     check(backend, '2: dodge interrupts windup/recovery, never active; blocked edge consumed', () => {
-      for (const age of [0, 6, 9]) {
-        reset(); command({ ...idle, buttons: 1 }); step(1); step(age)
+      const { windupTicks, activeTicks } = attacks[0][1].timing
+      const recoveryAge = windupTicks + activeTicks
+      for (const age of [windupTicks - 1, windupTicks, recoveryAge - 1, recoveryAge]) {
+        reset(); command({ ...idle, buttons: 1 }); step(1); step(age - 1)
         assert.equal(player(observe()).action?.kind, 'melee', 'T1.3: melee missing')
         press(4, true); step(1)
-        assert.equal(player(observe()).action.kind, age === 6 ? 'melee' : 'dodge')
-        if (age === 6) { step(5); assert.notEqual(player(observe()).action?.kind, 'dodge') }
+        const action = player(observe()).action
+        const active = age >= windupTicks && age < recoveryAge
+        assert.equal(action.kind, active ? 'melee' : 'dodge', `Dodge arbitration at skill age ${age}`)
+        assert.equal(action.ageTicks, active ? age : 0)
+        if (active) { step(recoveryAge - age); assert.notEqual(player(observe()).action?.kind, 'dodge') }
       }
     })
     check(backend, '3: cmd overrides live input for one tick; simulate records same stream', () => {
