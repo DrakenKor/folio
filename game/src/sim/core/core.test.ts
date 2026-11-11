@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildScenario } from '../scenarios'
+import { buildScenario, SCENARIO_NAMES } from '../scenarios'
 import { Recorder } from './commands'
 import { hashWorld } from './hash'
 import { step } from './loop'
@@ -109,7 +109,7 @@ describe('simulation acceptance', () => {
 describe('public simulation contracts', () => {
   it('creates empty worlds and assigns stable increasing ids in entity order', () => {
     const world = createWorld(9, 'test-build')
-    expect(world).toMatchObject({ seed: 9, build: 'test-build', tick: 0, entities: [], playerId: null })
+    expect(world).toMatchObject({ seed: 9, build: 'test-build', scenario: 'empty', tick: 0, entities: [], playerId: null })
     const a = spawnEntity(world, { kind: 'dummy', pos: { x: 0, z: 0 }, radius: 0.5 })
     const b = spawnEntity(world, { kind: 'player', pos: { x: 3, z: 0 }, radius: 0.5 })
     expect(b.id).toBe(a.id + 1)
@@ -163,6 +163,11 @@ describe('public simulation contracts', () => {
 
   it('builds fresh named scenarios with the specified entity counts', () => {
     expect(buildScenario('empty', 7).entities).toHaveLength(0)
+    for (const name of SCENARIO_NAMES) {
+      const world = buildScenario(name, 7)
+      expect(world.scenario).toBe(name)
+      expect(restore(serialize(world)).scenario).toBe(name)
+    }
     const meadow = buildScenario('meadow-start', 7)
     expect(meadow.entities.filter(entity => entity.kind === 'dummy')).toHaveLength(12)
     expect(meadow.entities.find(entity => entity.id === meadow.playerId)?.pos).toEqual({ x: 0, z: 0 })

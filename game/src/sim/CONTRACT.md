@@ -1,8 +1,7 @@
 # M1 simulation contract
 
-Schema **2**, simulation build **`m1-sim-v3`**, fixed **60 Hz**. Shared types live in `core/types.ts`.
-T1.1 defines state, defaults, validation and timing arithmetic; T1.3–T1.6 implement the systems and presentation below.
-The existing M0 movement/wandering loop remains in place until T1.3; T1.1 does not activate combat or gait integration.
+Schema **3**, simulation build **`m1-sim-v4`**, fixed **60 Hz**. Shared types live in `core/types.ts`.
+The core loop drives movement, combat, AI and scheduled fight waves for headless, replay and browser callers.
 
 ## State and ownership
 
@@ -11,7 +10,7 @@ Presentation reads state and transient events; listeners, mixer callbacks and re
 
 | Owner | Fields written |
 | --- | --- |
-| Scenario/content construction (T1.5) | `world.content` skills, enemy definitions and dodge; `arena`; initial actor stats, factions, skill slots and AI definitions. |
+| Scenario/content construction (T1.5) | `world.scenario`, `world.content` skills, enemy definitions and dodge; `arena`; initial actor stats, factions, skill slots and AI definitions. |
 | Store/core | `schema`, `build`, `seed`, `nextId`, sorted actor/projectile tables, `playerId`; removal clears AI targets and owned projectiles. |
 | Step/input arbitration (T1.3) | `world.tick`, actor `previousButtons`; reads one validated command per tick, even during impact pause. |
 | RNG subsystem | Named `world.rng` streams; every draw is persisted. |
@@ -35,6 +34,9 @@ The player defaults to faction `player`; explicit scenario factions determine ho
 Bounds include actor centres at `distance(pos, center) <= radius`, without subtracting actor radius; null is unbounded.
 
 ## Minimal content and runtime records
+
+`world.scenario` is a required `SCENARIO_NAMES` member, set by `buildScenario` and preserved on restore.
+Direct `createWorld` construction defaults to `empty`; only `m1-fight` schedules additional fight waves.
 
 `world.content` is immutable after scenario construction, ordered by content id and carried in every snapshot/replay checkpoint.
 It contains only `SkillDefinition[]`, `EnemyDefinition[]` and `DodgeDefinition`; there is no modifier, support, loot or asset schema.
@@ -155,7 +157,7 @@ Snapshot restore itself preserves recorded button history for deterministic cont
 ## Fixed system and hit resolution order
 
 1. Validate command; set working tick N+1, sample entry pause/positions, advance existing world timers and consume button edges/aim.
-2. Process dead-actor expiry; advance unpaused action ages; run live AI in actor id order, producing intent through shared primitives.
+2. Process dead-actor expiry; advance unpaused action ages; wander dummies, then drive live AI in actor id order through shared primitives.
 3. Select/cancel actions in actor id order; capture directions/cooldowns and enqueue action/dodge notifications.
 4. Turn bodies; integrate ordinary locomotion, dodge or knockback; apply arena bounds and deterministic actor circle separation.
 5. Finalize gait using ordinary resolved travel; launch projectiles at the first active age, allocating ids in actor order.
@@ -163,7 +165,8 @@ Snapshot restore itself preserves recorded button history for deterministic cont
 7. Sort contacts by `(travelFraction, targetId, actorId, projectileId)`; melee fraction is zero and absent projectile id is zero.
 8. Resolve each contact serially, rechecking source/target life, faction, immunity and melee deduplication before damage.
 9. Commit health, deduplication, interruption, knockback, pause and death immediately; invalidate later contacts from killed/interrupted actions.
-10. Publish ordered events and completed world tick; snapshot/hash reads only this fully committed state.
+10. For `world.scenario === m1-fight`, append scheduled wave spawn events after all contacts resolve.
+11. Publish ordered events and completed world tick; snapshot/hash reads only this fully committed state.
 
 Sweeps use segment-versus-expanded-target-circle on the ground plane, with radius equal to target plus projectile radius.
 Use resolved actor positions for the current tick and the projectile's old/new endpoints; sort by earliest fraction in `[0,1]`.
@@ -199,18 +202,15 @@ Any additional shared render/clock fields go through the orchestrator; renderer 
 
 ## Compatibility and verification
 
-Restore rejects missing/invalid health, phases, timers, ids, AI references, content, circular arenas and projectile payloads without defaulting.
+Restore rejects missing/invalid scenario identity, health, phases, timers, ids, AI references, content, circular arenas and projectile payloads without defaulting.
 Death despawn duration must match its AI-referenced definition, or be null for an AI-free actor.
-Schema-one M0 snapshots/replays fail with `Unsupported snapshot format or schema`; mismatched builds fail explicitly.
-The hash still uses canonical-envelope FNV-1a; new state and build/schema values deliberately change old fixture hashes.
-Only `game/scenarios/m0-smoke.json` has a live expected hash; historical M0 reports retain their recorded values.
-Existing test worlds that exercise restore/replay use the current simulation build instead of a free-form `test` label.
-The smoke fixture's initial hash changes from `2a5c16ec` to `77a71cc0` for build `m1-sim-v3`.
-Meadow seed 7 at 3,600 idle ticks changes from `0e577070` to `ceb71dac` for the same build bump.
-Both worlds have null arenas and unchanged M0 behavior; changing only the build back to `m1-sim-v2` reproduces both prior hashes.
-At the contract run speed, headless smoke reaches the target at tick 476 and stops at tick 477.
-The CLI adds `--help` to list its existing options, as required by the task acceptance check.
+Schema-one and schema-two snapshots/replays fail with `Unsupported snapshot format or schema`; mismatched builds fail explicitly.
+The hash uses canonical-envelope FNV-1a; schema/build and persisted scenario identity change all previous fixture hashes.
+Core `step` and `verifyReplay` handle M0 and M1; the CLI uses the same loop without a separate encounter adapter.
 
-Run `fnm exec --using=24 npm run game:test`, `npm run game:build` and `npx eslint game` with the same Node prefix.
-Contract verification: 107 existing/contract tests pass; the existing opt-in browser test is skipped; build/typecheck and game lint pass.
-T1.2's amended harness records 140 expected assertion failures before T1.3 in `acceptance/EXPECTED-FAILURE.md`.
+Current golden hashes: M0 smoke `622e8f5e`; full 7,200-tick M1 fight `bec54592` (121 checkpoints).
+The animation combat snapshot also carries schema 3 and `scenario: empty`.
+See `ai/README.md` for the fixture hash ledger and behavior comparison against the adapter baseline.
+Historical reports retain their recorded values; acceptance replays derive current hashes at runtime.
+
+Run `fnm exec --using=24 npm run game:test`, `npm run game:build` and `npx --no-install eslint game` with the same Node prefix.

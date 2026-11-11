@@ -1,6 +1,8 @@
+import { driveEnemies } from '../ai/creaseback'
 import { selectAction } from '../combat/actions'
 import { gatherContacts, launchProjectiles } from '../combat/contacts'
 import { resolveContacts } from '../combat/damage'
+import { spawnFightWave } from '../scenarios'
 import { advanceActors, beginActors } from '../systems/actors'
 import { finalizeGait, moveEntities } from '../systems/movement'
 import { wanderDummies } from '../systems/wandering-dummy'
@@ -15,11 +17,13 @@ export function step(world: World, command: Command): SimEvent[] {
   const states = beginActors(world, command)
   advanceActors(world, states, events)
   wanderDummies(world, states)
+  driveEnemies(world, states)
   for (const actor of world.entities) selectAction(world, actor, states.get(actor.id)!, events)
   moveEntities(world, states)
   finalizeGait(world, states)
   const launched = launchProjectiles(world, states)
   const contacts = gatherContacts(world, states, launched)
   resolveContacts(world, contacts, launched, events)
+  if (world.scenario === 'm1-fight') events.push(...spawnFightWave(world))
   return events
 }

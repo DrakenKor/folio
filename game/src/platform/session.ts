@@ -30,5 +30,5 @@ export async function initialWorld(url: URL): Promise<{ world: World; paused: bo
     } catch (error) { console.warn('Could not restore the reload snapshot', error) }
   }
   const seed = Number(url.searchParams.get('seed') ?? 1)
-  return { world: buildScenario(url.searchParams.get('scenario') ?? 'meadow-start', seed), paused: url.searchParams.get('paused') === '1' }
+  return { world: buildScenario(url.searchParams.get('scenario') ?? 'm1-arena', seed), paused: url.searchParams.get('paused') === '1' }
 }

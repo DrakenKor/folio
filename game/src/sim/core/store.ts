@@ -5,7 +5,7 @@ import type { Entity, EntityId, World } from './types'
 export function createWorld(seed: number, build = SIM_BUILD): World {
   if (!Number.isSafeInteger(seed)) throw new RangeError('Seed must be a safe integer')
   return {
-    schema: SCHEMA_VERSION, build, seed, tick: 0, nextId: 1, rng: {}, entities: [], projectiles: [], playerId: null,
+    schema: SCHEMA_VERSION, build, scenario: 'empty', seed, tick: 0, nextId: 1, rng: {}, entities: [], projectiles: [], playerId: null,
     arena: null,
     content: { skills: [], enemies: [], dodge: {
       timing: { windupTicks: 0, activeTicks: 10, recoveryTicks: 8, moveCancelTicks: 8 },
