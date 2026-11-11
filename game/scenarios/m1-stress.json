@@ -1,0 +1,10 @@
+{
+  "scenario": "m1-stress",
+  "seed": 7,
+  "ticks": 600,
+  "actors": 13,
+  "enemyArchetype": "creaseback",
+  "initialProjectiles": 16,
+  "input": "idle",
+  "note": "Synthetic initial Fold Dart burst; normal payloads and expiry. Refresh between measurement batches for sustained peak load."
+}

@@ -1,0 +1,7 @@
+{
+  "scenario": "m1-arena",
+  "seed": 7,
+  "ticks": 900,
+  "input": "idle",
+  "expect": "Player dead, terminal pose retained; reconstruction restores the fixed encounter"
+}
