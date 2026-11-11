@@ -6,8 +6,11 @@ export const TICK_HZ = 60
 export const TICK_DT = 1 / TICK_HZ
 
 /** Bumped whenever the shape of `World` changes. */
-export const SCHEMA_VERSION = 2
-export const SIM_BUILD = 'm1-sim-v3'
+export const SCHEMA_VERSION = 3
+export const SIM_BUILD = 'm1-sim-v4'
+
+export const SCENARIO_NAMES = ['empty', 'meadow-start', 'dummies-1000', 'm1-arena', 'm1-fight', 'm1-stress'] as const
+export type ScenarioName = typeof SCENARIO_NAMES[number]
 
 /** Fixed clip measurements at 1.8 m height; see game/ASSETS.md. */
 export const GAIT = Object.freeze({ walkSpeed: 0.561, runSpeed: 2.521, walkStride: 0.599, runStride: 2.017 })
@@ -166,6 +169,8 @@ export interface Entity {
 export interface World {
   schema: number
   build: string
+  /** Persisted encounter identity; selects scenario-specific continuation such as fight waves. */
+  scenario: ScenarioName
   seed: number
   tick: number
   nextId: EntityId

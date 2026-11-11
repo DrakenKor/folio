@@ -5,24 +5,18 @@ Approved content lives in `../../content/m1.ts`; scenarios receive independent, 
 
 ## Integration boundary
 
-The worker owns content, AI, scenario construction and new fixtures. `core/loop.ts` and shared schemas remain untouched.
-`stepEncounter(world, command, scenario)` is an executable adapter over the existing combat primitives, with two insertion points:
+Core `step` drives every encounter, including CLI runs, browser ticks and `verifyReplay`.
+`World.scenario` persists the scenario name through snapshots and recorder checkpoints.
+`buildScenario` sets it; direct `createWorld` construction defaults to `empty`.
+Restore accepts only names in `SCENARIO_NAMES`; missing or unknown identity fails validation.
 
-1. Call `driveEnemies(world, states)` after `advanceActors`/dummy wandering and before shared `selectAction` arbitration.
-2. After `resolveContacts`, append `spawnFightWave(world)` events only for `m1-fight`, before publishing the completed tick.
+1. `driveEnemies(world, states)` runs after actor advancement and dummy wandering, before `selectAction`.
+2. After `resolveContacts`, `m1-fight` appends `spawnFightWave(world)` events before publishing the completed tick.
 
-The adapter includes the ordinary core pipeline only to make these insertions reviewable and runnable inside the owned paths.
-Its M0 regression check compares events and canonical state against the unchanged core loop.
-
-Proposed orchestrator changes: persist the scenario id on `World`, validate it, and set it in `buildScenario`.
-Apply the two insertions to `core/loop.ts` and remove the adapter; fixture calls can then use core `step` and `verifyReplay`.
-Persisted identity lets both the CLI and restored replays schedule waves without hidden module state or inferred content markers.
-Update the snapshot schema/build and affected historical fixtures if required by that state change.
-No shared type, validator, combat system, acceptance test, CLI or presentation file is changed here.
-
-Until integrated, the standard `game:sim` CLI constructs M1 worlds but does not drive their AI or scheduled waves.
-The existing `verifyReplay` also uses that unchanged loop. The fixture verifier explicitly uses `stepEncounter` instead.
-This is a pending integration requirement, not a claim that standard core replay or CLI acceptance passes for M1 content.
+There is one simulation pipeline and replay verifier. Wave scheduling reads persisted identity,
+so restored fights continue without external scenario arguments or inferred content markers.
+The browser defaults to `m1-arena`; `?scenario=meadow-start` selects the M0 encounter.
+Rendering and input retain their existing behavior.
 
 ## Enemy behavior
 
@@ -74,15 +68,31 @@ fnm exec --using=24 npx --no-install eslint game
 fnm exec --using=24 node --import tsx game/scenarios/m1-fight.ts
 ```
 
-The last command consumes the committed command script, checks all 121 committed hashes, and replays the entire adapter run.
+The last command consumes the committed command script, checks all 121 committed hashes, and verifies the full core replay.
 `--record` regenerates inputs from the observation-only authoring policy plus the expected report/checkpoints.
 The script records one intentional incoming strike, then a telegraph evasion; all 36 enemies use normal 72 health.
 The owned content test proves exact equality with the approved data already exercised by the unchanged T1.2 harness.
 Tests cover pursuit, active-only damage, aim commitment, both skill kills, player death, target loss, snapshot continuation and restart.
 
 Seed 7: 7,200 ticks; 154 damage events; 2,592 outgoing / 20 incoming damage; 36 enemy deaths; zero player deaths; one dodge.
-Span Cut hits 52 times, Fold Dart 101 times; player finishes with 100 health; `nextId` 139; final hash `6519cd05`.
-All 121 full-run hashes and the rotated recorder window verify through the adapter.
-Full `game:test`: 316 passed (26 new), one existing browser test skipped; all 165 T1.2 acceptance cases remain green.
+Span Cut hits 52 times, Fold Dart 101 times; player finishes with 100 health; `nextId` 139; final hash `bec54592`.
+All 121 full-run hashes and the rotated recorder window verify through core `verifyReplay`.
+Full `game:test`: 325 passed, one existing opt-in browser test skipped; all 165 T1.2 acceptance cases remain green.
 `game:build` (including typecheck) and game ESLint pass; the build retains its existing large-chunk warning.
-Browser/performance evaluation is deferred to integration; no browser is needed for this worker.
+### Schema 3 fixture changes
+
+Schema 3 / `m1-sim-v4` adds `world.scenario` to every canonical snapshot and hash.
+The committed command script is unchanged. Comparing against the pre-integration adapter run
+produced identical events and final gameplay state. Restoring only the old schema/build values
+and removing scenario identity reproduced all 121 old fight checkpoints and both M0 hashes.
+
+| Fixture | Previous hash | Current hash | Cause |
+| --- | --- | --- | --- |
+| M1 fight, tick 0 | `fe978795` | `138c8ac6` | Schema/build and `scenario: m1-fight`. |
+| M1 fight, tick 7200 | `6519cd05` | `bec54592` | Same metadata change; all 121 checkpoints re-recorded. |
+| M0 smoke, tick 0 | `77a71cc0` | `622e8f5e` | Schema/build and `scenario: meadow-start`. |
+| M0 seed 7, idle tick 3600 | `37d0215e` | `a5e35af2` | Same metadata change; measured CLI baseline. |
+| Animation combat snapshot | `cc27a64a` | `155c2847` | Schema/build and direct-world `scenario: empty`. |
+
+The animation fixture retains identical content and actor data. Acceptance replays compute their
+hashes at runtime and need no golden updates. Historical reports retain their recorded values.

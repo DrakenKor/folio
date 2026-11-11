@@ -2,11 +2,10 @@ import { m1Content, WINDSTEP_CLEARING } from '../content/m1'
 import { fmath } from './core/fmath'
 import { rngFloat } from './core/rng'
 import { createWorld, spawnEntity } from './core/store'
-import { SIM_BUILD } from './core/types'
+import { SCENARIO_NAMES, SIM_BUILD } from './core/types'
 import type { Entity, SimEvent, Vec2, World } from './core/types'
 
-export { SIM_BUILD } from './core/types'
-export const SCENARIO_NAMES = ['empty', 'meadow-start', 'dummies-1000', 'm1-arena', 'm1-fight', 'm1-stress'] as const
+export { SCENARIO_NAMES, SIM_BUILD } from './core/types'
 
 /** Derive encounter outcome without storing presentation or intermediate wave victory. */
 export function encounterOutcome(world: World, scenario: string): 'ongoing' | 'victory' | 'defeat' {
@@ -67,8 +66,10 @@ function buildM1(world: World, name: string): World {
 
 /** Build a fresh deterministic fixture without ambient state or presentation data. */
 export function buildScenario(name: string, seed: number): World {
-  if (!SCENARIO_NAMES.some(candidate => candidate === name)) throw new RangeError(`Unknown scenario: ${name}`)
+  const scenario = SCENARIO_NAMES.find(candidate => candidate === name)
+  if (!scenario) throw new RangeError(`Unknown scenario: ${name}`)
   const world = createWorld(seed, SIM_BUILD)
+  world.scenario = scenario
   if (name.startsWith('m1-')) return buildM1(world, name)
   if (name === 'empty') return world
   spawnEntity(world, { kind: 'player', pos: { x: 0, z: 0 }, radius: 0.4 })

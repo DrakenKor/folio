@@ -86,6 +86,9 @@ describe('M1 snapshot contracts', () => {
   })
 
   const malformed: Array<[string, (world: World) => void]> = [
+    ['missing scenario', w => { Reflect.deleteProperty(w, 'scenario') }],
+    ['unknown scenario', w => { Reflect.set(w, 'scenario', 'unknown') }],
+    ['invalid scenario type', w => { Reflect.set(w, 'scenario', 1) }],
     ['negative health', w => { w.entities[0]!.health = -1 }],
     ['excess health', w => { w.entities[0]!.health = 21 }],
     ['missing health', w => { Reflect.deleteProperty(w.entities[0]!, 'health') }],
@@ -155,7 +158,10 @@ describe('M1 snapshot contracts', () => {
     expect(() => restore(JSON.stringify(envelope))).toThrow(/Unsupported simulation build/)
     envelope.build = envelope.world.build = 'm1-sim-v2'
     expect(() => restore(JSON.stringify(envelope))).toThrow(/Unsupported simulation build/)
-    expect(SIM_BUILD).toBe('m1-sim-v3')
+    envelope.schema = envelope.world.schema = 2
+    envelope.build = envelope.world.build = 'm1-sim-v3'
+    expect(() => restore(JSON.stringify(envelope))).toThrow(/Unsupported snapshot format or schema/)
+    expect(SIM_BUILD).toBe('m1-sim-v4')
   })
 
   it('hashes mutable combat, gait, AI, projectile and input continuation data', () => {
@@ -165,7 +171,8 @@ describe('M1 snapshot contracts', () => {
       w => { w.entities[0]!.previousButtons = Button.Dodge }, w => { w.entities[0]!.impactPauseTicks++ },
       w => { w.entities[1]!.ai!.ageTicks++ }, w => { w.entities[2]!.death!.ageTicks++ },
       w => { w.projectiles[0]!.ageTicks++ }, w => { w.content.skills[0]!.damage++ },
-      w => { w.arena!.center.x++ }, w => { w.arena!.radius++ }
+      w => { w.arena!.center.x++ }, w => { w.arena!.radius++ },
+      w => { w.scenario = 'm1-fight' }
     ]
     const initial = hashWorld(fixture())
     for (const mutate of mutations) {

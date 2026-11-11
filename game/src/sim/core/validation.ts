@@ -1,4 +1,4 @@
-import { BUTTON_MASK } from './types'
+import { BUTTON_MASK, SCENARIO_NAMES } from './types'
 import type { ActionTiming, KnockbackSpec, World } from './types'
 
 function check(condition: unknown, field: string): asserts condition {
@@ -28,6 +28,7 @@ function knockback(value: KnockbackSpec): boolean {
 export function validateWorld(world: World): void {
   check(record(world) && Number.isSafeInteger(world.seed) && integer(world.tick) && positiveInteger(world.nextId) &&
     Array.isArray(world.entities) && Array.isArray(world.projectiles) && record(world.rng), 'world')
+  check(SCENARIO_NAMES.includes(world.scenario), 'scenario')
   const content = world.content
   check(record(content) && Array.isArray(content.skills) && Array.isArray(content.enemies), 'content')
   let previousContentId = ''

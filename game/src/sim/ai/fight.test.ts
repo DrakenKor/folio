@@ -1,13 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { runFight, verifyFight } from '../../../scenarios/m1-fight'
+import { runFight } from '../../../scenarios/m1-fight'
 import type { ScriptEntry } from '../../../scenarios/m1-fight'
 import { Recorder } from '../core/commands'
 import { hashWorld } from '../core/hash'
+import { step } from '../core/loop'
+import { verifyReplay } from '../core/replay'
 import { restore, serialize } from '../core/snapshot'
 import { IDLE_COMMAND } from '../core/types'
 import { buildScenario, encounterOutcome } from '../scenarios'
-import { stepEncounter } from './step'
 
 const script: ScriptEntry[] = JSON.parse(readFileSync(new URL('../../../scenarios/m1-fight-commands.json', import.meta.url), 'utf8'))
 const expected = JSON.parse(readFileSync(new URL('../../../scenarios/m1-fight.json', import.meta.url), 'utf8'))
@@ -42,10 +43,10 @@ describe('M1 authored fight fixtures', () => {
     expect(fight.replay.hashes).toEqual(expected.checkpoints)
     expect(fight.replay.hashes.map(([tick]) => tick)).toEqual(Array.from({ length: 121 }, (_, i) => i * 60))
     expect(fight.replay.hashes.at(-1)).toEqual([7200, expected.finalHash])
-    expect(verifyFight(fight.replay)).toEqual({ ok: true })
+    expect(verifyReplay(fight.replay)).toEqual({ ok: true })
     expect(fight.retained.start.world.tick).toBe(3600)
     expect(fight.retained.commands).toHaveLength(3600)
-    expect(verifyFight(fight.retained)).toEqual({ ok: true })
+    expect(verifyReplay(fight.retained)).toEqual({ ok: true })
   })
 
   it('reports the first affected periodic hash when the first attack is removed', () => {
@@ -53,7 +54,7 @@ describe('M1 authored fight fixtures', () => {
     const first = changed.commands.findIndex(command => command.buttons !== 0)
     const checkpoint = Math.ceil((first + 1) / 60) * 60
     for (let i = first; i < checkpoint; i++) changed.commands[i]!.buttons = 0
-    expect(verifyFight(changed)).toEqual({ ok: false, divergedAt: checkpoint })
+    expect(verifyReplay(changed)).toEqual({ ok: false, divergedAt: checkpoint })
   })
 
   it('repeats seed/script runs with identical damage, deaths, ids, canonical state and hashes', () => {
@@ -68,7 +69,7 @@ describe('M1 authored fight fixtures', () => {
     const world = buildScenario('m1-fight', 7)
     // Isolate scheduling from combat in fixture setup; all actors retain normal health.
     for (const actor of world.entities.slice(1)) actor.faction = 'player'
-    for (let tick = 0; tick < 601; tick++) stepEncounter(world, IDLE_COMMAND, 'm1-fight')
+    for (let tick = 0; tick < 601; tick++) step(world, IDLE_COMMAND)
     expect(world.entities).toHaveLength(4)
     expect(world.nextId).toBe(5)
   })
@@ -79,7 +80,7 @@ describe('M1 authored fight fixtures', () => {
     let entry = 0
     while (world.tick < 600) {
       if (script[entry]?.tick === world.tick) command = script[entry++]!.command
-      stepEncounter(world, command, 'm1-fight')
+      step(world, command)
       if (world.entities.slice(1).every(actor => actor.death)) {
         expect(encounterOutcome(world, 'm1-arena')).toBe('victory')
         expect(encounterOutcome(world, 'm1-fight')).toBe('ongoing')
@@ -95,7 +96,7 @@ describe('M1 authored fight fixtures', () => {
     const world = buildScenario(fixture.scenario, fixture.seed)
     const recorder = new Recorder(world)
     for (let tick = 0; tick < fixture.ticks; tick++) {
-      stepEncounter(world, IDLE_COMMAND, fixture.scenario)
+      step(world, IDLE_COMMAND)
       recorder.record(IDLE_COMMAND)
     }
     expect(world.entities[0]!.health).toBe(0)
@@ -112,7 +113,7 @@ describe('M1 authored fight fixtures', () => {
     const world = buildScenario('m1-stress', 7)
     let peak = world.projectiles.length
     for (let tick = 0; tick < 600; tick++) {
-      stepEncounter(world, IDLE_COMMAND, 'm1-stress')
+      step(world, IDLE_COMMAND)
       peak = Math.max(peak, world.projectiles.length)
     }
     expect(peak).toBe(16)
