@@ -49,8 +49,12 @@
   <body>
     <canvas id="stage" aria-label="Character view"></canvas>
     <div id="panel" hidden>
-      <label>Speed <input id="speed" type="range" min="0" max="7" step="0.05" value="0" /></label>
-      <span id="readout"></span>
+      <div><button id="previous">Previous state</button> <select id="state" aria-label="Animation state"></select>
+        <button id="next">Next state</button></div>
+      <div><button id="play">Play</button> <button id="step">Step one tick</button>
+        <label>Age <input id="age" type="range" min="0" max="64" step="1" value="0" /></label></div>
+      <div><label>Gait speed <input id="speed" type="range" min="0" max="2.521" step="0.01" value="2.521" /></label></div>
+      <div id="readout"></div>
     </div>
     <script type="module" src="./src/anim/main.ts"></script>
   </body>

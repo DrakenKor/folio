@@ -13,21 +13,26 @@ import {
   WebGPURenderer
 } from 'three/webgpu'
 import { CharacterView, loadCharacter } from '../render/characters/character'
+import { CLIP_NAMES, type ClipName } from '../render/characters/markers'
+import { AimIndicator } from '../render/characters/aim'
+import { renderCharacterSheet } from '../render/characters/sheet'
+import { previewLength, previewState } from './preview'
+import { combatSnapshot } from './fixture'
 
-// Dev-only character viewer.
-//   ?clip=<name>&t=<seconds>  freeze one clip at a time
-//   ?sheet=<clip>             render 12 frames of one loop into window.__anim.sheet
-//   ?cam=side|game            side view, or three-quarter top-down at 15 m
-//   ?speed= ?facing= ?character= ?backend=webgl
+// Dev-only, tick-stepped state-machine preview; ?clip=, ?age= and ?sheet= are reproducible.
 const params = new URLSearchParams(location.search)
 const clipParam = params.get('clip')
 const sheetParam = params.get('sheet')
 const camMode = params.get('cam') ?? (sheetParam ? 'side' : 'game')
-const SHEET = { cols: 4, rows: 3, cellHeight: 320 }
 const GAME_PITCH = (55 * Math.PI) / 180
 const GAME_DISTANCE = 15
-
-const anim = { ready: false, clips: [] as readonly string[], sheet: null as string | null, backend: '', gaits: {}, view: null as CharacterView | null }
+let selected = (clipParam ?? 'idle') as ClipName
+if (!CLIP_NAMES.includes(selected)) throw new Error(`unknown clip ${selected}`)
+let age = Number(params.get('age') ?? Number(params.get('t') ?? 0) * 60)
+let playing = !clipParam && !params.has('age')
+const anim = { ready: false, clips: CLIP_NAMES, sheet: null as string | null, backend: '', gaits: {},
+  view: null as CharacterView | null, setState, step, fixture: combatSnapshot,
+  get state() { return { clip: selected, age, pose: view.poseActor(previewState(selected, age, facing)) } } }
 Object.assign(window, { __anim: anim })
 
 const canvas = document.getElementById('stage') as HTMLCanvasElement
@@ -66,7 +71,6 @@ const camera = new PerspectiveCamera(40, 1, 0.1, 200)
 const characterId = params.get('character') ?? 'knight'
 const view = new CharacterView(await loadCharacter(`${import.meta.env.BASE_URL}pack/characters/${characterId}.glb`))
 scene.add(view.object)
-anim.clips = view.clips
 anim.gaits = { walk: view.walk, run: view.run }
 anim.view = view
 
@@ -92,97 +96,74 @@ function fitScreen() {
   aim(0, 0, window.innerWidth / window.innerHeight, camMode === 'side' ? 30 : 40)
 }
 
-/**
- * 12 evenly spaced frames of one loop, moving at the clip's own ground speed past a
- * fixed camera. Skinning refreshes bone matrices once per animation frame, so each
- * frame is rendered and copied in its own frame.
- */
-async function renderSheet(clip: string): Promise<string> {
-  const gait = clip === 'walk' ? view.walk : clip === 'run' ? view.run : null
-  const speed = gait?.speed ?? 0
-  const duration = view.duration(clip)
-  const travel = speed * duration
-  const frames = SHEET.cols * SHEET.rows
-  const height = 2.4
-  const width = travel + 2.4
-  const cellHeight = SHEET.cellHeight
-  const cellWidth = Math.round((cellHeight * width) / height)
-  const sheet = document.createElement('canvas')
-  sheet.width = cellWidth * SHEET.cols
-  sheet.height = cellHeight * SHEET.rows
-  const ctx = sheet.getContext('2d')!
-  ctx.font = '14px system-ui, sans-serif'
-  renderer.setPixelRatio(1)
-  renderer.setSize(cellWidth, cellHeight, false)
-  const fov = camMode === 'side' ? (2 * Math.atan(height / 2 / 8) * 180) / Math.PI : 18
-  // Leave space ahead for the idle sword as well as the moving silhouette.
-  const centreX = (travel / 2 + 0.3) * Math.cos(facing)
-  const centreZ = (travel / 2 + 0.3) * Math.sin(facing)
-  aim(centreX, centreZ, cellWidth / cellHeight, fov)
-  sun.position.set(centreX - 5, 10, centreZ + 7)
-  sun.target.position.set(centreX, 0, centreZ)
-  for (let i = 0; i < frames; i++) {
-    await new Promise(requestAnimationFrame)
-    const time = (i / frames) * duration
-    view.object.position.set(speed * time * Math.cos(facing), 0, speed * time * Math.sin(facing))
-    if (gait || clip === 'idle') view.pose({ speed, facing, time })
-    else view.poseClip(clip, time, facing)
-    renderer.render(scene, camera)
-    const x = (i % SHEET.cols) * cellWidth
-    const y = Math.floor(i / SHEET.cols) * cellHeight
-    ctx.drawImage(canvas, x, y)
-    ctx.fillStyle = '#1a1c33'
-    ctx.fillText(`${clip} #${i}  t=${time.toFixed(3)}s`, x + 8, y + 18)
-    ctx.strokeStyle = 'rgb(26 28 51 / 0.35)'
-    ctx.strokeRect(x + 0.5, y + 0.5, cellWidth - 1, cellHeight - 1)
+const indicator = new AimIndicator()
+scene.add(indicator.object)
+const select = document.getElementById('state') as HTMLSelectElement
+const timeline = document.getElementById('age') as HTMLInputElement
+const slider = document.getElementById('speed') as HTMLInputElement
+const readout = document.getElementById('readout')!
+const play = document.getElementById('play') as HTMLButtonElement
+for (const clip of CLIP_NAMES) select.add(new Option(clip, clip))
+slider.value = params.get('speed') ?? '2.521'
+
+function setState(clip: ClipName, tick = 0): void {
+  if (!CLIP_NAMES.includes(clip)) throw new Error(`unknown clip ${clip}`)
+  selected = clip
+  age = Math.max(0, tick)
+  playing = false
+  select.value = clip
+  timeline.max = String(previewLength(clip))
+  timeline.value = String(age)
+}
+
+function step(ticks = 1): void { setState(selected, age + ticks) }
+
+function draw(): void {
+  const state = previewState(selected, age, facing)
+  if (selected === 'walk' || selected === 'run') {
+    state.actor = { ...state.actor, gait: { speed: Number(slider.value),
+      phase: age / 60 * view.cycleRate(Number(slider.value)) } }
   }
-  return sheet.toDataURL('image/png')
+  const pose = view.poseActor(state)
+  indicator.point(pose.aim)
+  indicator.object.visible = !state.actor.death
+  // A deterministic treadmill keeps the contact grid readable at any stepped age.
+  const distance = state.actor.gait.speed * age / 60
+  ground.position.x = -(distance * Math.cos(facing)) % 1
+  ground.position.z = -(distance * Math.sin(facing)) % 1
+  timeline.value = String(age)
+  play.textContent = playing ? 'Pause' : 'Play'
+  readout.textContent = `${selected} · age ${age.toFixed(1)} / ${previewLength(selected)} ticks`
+  renderer.render(scene, camera)
 }
 
 if (sheetParam) {
-  anim.sheet = await renderSheet(sheetParam)
+  anim.sheet = await renderCharacterSheet(undefined, sheetParam, params.get('backend') === 'webgl')
   const img = document.createElement('img')
   img.id = 'sheet'
   img.alt = `${sheetParam} contact sheet`
   img.src = anim.sheet
   await img.decode()
   document.body.append(img)
-} else if (clipParam) {
-  const t = Number(params.get('t') ?? 0)
-  fitScreen()
-  window.addEventListener('resize', fitScreen)
-  const draw = () => {
-    view.poseClip(clipParam, t, facing)
-    renderer.render(scene, camera)
-  }
-  draw()
-  renderer.setAnimationLoop(draw)
 } else {
-  const slider = document.getElementById('speed') as HTMLInputElement
-  const readout = document.getElementById('readout')!
   document.getElementById('panel')!.hidden = false
-  slider.value = params.get('speed') ?? '0'
+  setState(selected, age)
+  playing = !clipParam && !params.has('age')
+  select.onchange = () => setState(select.value as ClipName)
+  timeline.oninput = () => setState(selected, Number(timeline.value))
+  document.getElementById('step')!.onclick = () => step()
+  document.getElementById('previous')!.onclick = () => setState(CLIP_NAMES[(CLIP_NAMES.indexOf(selected) + 11) % 12]!)
+  document.getElementById('next')!.onclick = () => setState(CLIP_NAMES[(CLIP_NAMES.indexOf(selected) + 1) % 12]!)
+  play.onclick = () => { playing = !playing }
   fitScreen()
   window.addEventListener('resize', fitScreen)
-  // Wall-clock time is fine here: the viewer integrates it, and the pose is a pure function of what it passes.
-  let last: number | null = null
-  let time = 0
-  let phase = 0
-  let distance = 0
+  let last: number | undefined
   renderer.setAnimationLoop((now: number) => {
-    const dt = last === null ? 0 : Math.min((now - last) / 1000, 0.1)
+    if (playing && last !== undefined) {
+      age = (age + Math.min(0.1, (now - last) / 1000) * 60) % (previewLength(selected) + 12)
+    }
     last = now
-    const speed = Number(slider.value)
-    time += dt
-    phase += view.cycleRate(speed) * dt
-    distance += speed * dt
-    // Treadmill: the ground slides under a character that stays at the origin.
-    ground.position.x = -(distance * Math.cos(facing)) % 1
-    ground.position.z = -(distance * Math.sin(facing)) % 1
-    view.pose({ speed, facing, time, phase })
-    readout.textContent = `${speed.toFixed(2)} m/s  (walk ${view.walk.speed.toFixed(2)}, run ${view.run.speed.toFixed(2)})`
-    renderer.render(scene, camera)
+    draw()
   })
 }
-
 anim.ready = true
