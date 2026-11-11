@@ -208,7 +208,7 @@ Existing test worlds that exercise restore/replay use the current simulation bui
 The smoke fixture's initial hash changes from `2a5c16ec` to `77a71cc0` for build `m1-sim-v3`.
 Meadow seed 7 at 3,600 idle ticks changes from `0e577070` to `ceb71dac` for the same build bump.
 Both worlds have null arenas and unchanged M0 behavior; changing only the build back to `m1-sim-v2` reproduces both prior hashes.
-Headless smoke reaches the target at tick 195 and stops at tick 196, matching M0; no combat or movement behavior changes here.
+At the contract run speed, headless smoke reaches the target at tick 476 and stops at tick 477.
 The CLI adds `--help` to list its existing options, as required by the task acceptance check.
 
 Run `fnm exec --using=24 npm run game:test`, `npm run game:build` and `npx eslint game` with the same Node prefix.
