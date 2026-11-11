@@ -1,29 +1,76 @@
+import { actionTiming, movementInput } from '../combat/actions'
 import { fmath } from '../core/fmath'
-import { TICK_DT } from '../core/types'
-import type { Command, Entity, World } from '../core/types'
+import { actionPhase } from '../core/timing'
+import { BODY_TURN_PER_TICK, GAIT, TICK_DT, TICK_HZ } from '../core/types'
+import type { Entity, EntityId, World } from '../core/types'
+import type { ActorTick } from './actors'
 
-/** Integrate velocity, separate circles, and turn the player towards its aim point. */
-export function moveEntities(world: World, command: Command): void {
-  const player = world.entities.find(entity => entity.id === world.playerId)
-  if (player) {
-    const length = Math.sqrt(command.move.x * command.move.x + command.move.z * command.move.z)
-    const scale = 6 / Math.max(1, length)
-    player.vel.x = command.move.x * scale
-    player.vel.z = command.move.z * scale
+function turnToward(facing: number, target: number): number {
+  const tau = 2 * Math.PI
+  let delta = ((target - facing) % tau + tau) % tau
+  if (delta > Math.PI) delta -= tau
+  const turned = facing + Math.max(-BODY_TURN_PER_TICK, Math.min(BODY_TURN_PER_TICK, delta))
+  return ((turned + Math.PI) % tau + tau) % tau - Math.PI
+}
+
+function applyBounds(world: World, actor: Entity): void {
+  if (!world.arena) return
+  const { center, radius } = world.arena
+  const x = actor.pos.x - center.x
+  const z = actor.pos.z - center.z
+  const distance = Math.sqrt(x * x + z * z)
+  if (distance <= radius) return
+  actor.pos.x = center.x + x / distance * radius
+  actor.pos.z = center.z + z / distance * radius
+}
+
+/** Turn, integrate the selected motion, then resolve living actor circles and bounds. */
+export function moveEntities(world: World, states: Map<EntityId, ActorTick>): void {
+  for (const actor of world.entities) {
+    const state = states.get(actor.id)!
+    if (actor.death || state.paused) continue
+    const { direction, magnitude } = movementInput(state.command.move)
+    const target = actor.action?.direction ?? (magnitude > 0 ? fmath.atan2(direction.z, direction.x) : actor.aim)
+    actor.facing = turnToward(actor.facing, target)
+    actor.vel = { x: 0, z: 0 }
+    if (actor.knockback) {
+      actor.vel = { ...actor.knockback.vel }
+      if (--actor.knockback.remainingTicks === 0) actor.knockback = null
+    } else if (actor.action) {
+      if (actor.action.kind === 'dodge' && actionPhase(actionTiming(world, actor)!, actor.action.ageTicks) === 'active') {
+        const speed = world.content.dodge.distance * TICK_HZ / world.content.dodge.timing.activeTicks
+        actor.vel = { x: fmath.cos(actor.action.direction) * speed, z: fmath.sin(actor.action.direction) * speed }
+      }
+    } else if (magnitude > 0) {
+      const speed = actor.id === world.playerId ? GAIT.runSpeed : actor.ai ?
+        world.content.enemies.find(enemy => enemy.id === actor.ai!.enemyId)!.moveSpeed : 1
+      actor.vel = { x: fmath.cos(actor.facing) * speed * magnitude, z: fmath.sin(actor.facing) * speed * magnitude }
+      state.ordinary = { x: actor.vel.x * TICK_DT, z: actor.vel.z * TICK_DT }
+    }
+    actor.pos.x += actor.vel.x * TICK_DT
+    actor.pos.z += actor.vel.z * TICK_DT
+    applyBounds(world, actor)
   }
-  for (const entity of world.entities) {
-    entity.pos.x += entity.vel.x * TICK_DT
-    entity.pos.z += entity.vel.z * TICK_DT
-  }
-  resolveCircles(world.entities)
-  if (player && command.aim) {
-    const dx = command.aim.x - player.pos.x
-    const dz = command.aim.z - player.pos.z
-    if (dx !== 0 || dz !== 0) player.facing = fmath.atan2(dz, dx)
+  resolveCircles(world.entities.filter(actor => !actor.death), actor => applyBounds(world, actor))
+}
+
+/** Derive stride travel from the resolved projection, excluding external displacement. */
+export function finalizeGait(world: World, states: Map<EntityId, ActorTick>): void {
+  for (const actor of world.entities) {
+    const state = states.get(actor.id)!
+    if (state.paused || actor.death) continue
+    const { x, z } = state.ordinary
+    const intended = Math.sqrt(x * x + z * z)
+    const projection = intended === 0 ? 0 :
+      ((actor.pos.x - state.entryPosition.x) * x + (actor.pos.z - state.entryPosition.z) * z) / intended
+    const distance = Math.max(0, Math.min(intended, projection))
+    actor.gait.speed = distance * TICK_HZ
+    const blend = Math.max(0, Math.min(1, (actor.gait.speed - GAIT.walkSpeed) / (GAIT.runSpeed - GAIT.walkSpeed)))
+    actor.gait.phase += distance / (GAIT.walkStride + (GAIT.runStride - GAIT.walkStride) * blend)
   }
 }
 
-function resolveCircles(entities: Entity[]): void {
+function resolveCircles(entities: Entity[], bound: (actor: Entity) => void): void {
   let diameter = 0
   for (const entity of entities) diameter = Math.max(diameter, 2 * entity.radius)
   if (diameter === 0) return
@@ -75,6 +122,7 @@ function resolveCircles(entities: Entity[]): void {
         }
       }
     }
+    for (const actor of entities) bound(actor)
     if (!separated) break
   }
 }
