@@ -52,7 +52,7 @@ export function actorPoseState(actor: Readonly<Entity>, world: Readonly<World>, 
 /** Reconstruct weights and absolute seconds from one completed simulation state. */
 export function characterPose(state: Readonly<PoseState>, alpha = 0): CharacterPose {
   const { actor, timing, tick, clip: override } = state
-  const previous = alpha > 0 && actor.impactPauseTicks === 0 ? state.previous : undefined
+  const previous = alpha > 0 && actor.impactPauseTicks === 0 && state.previous?.id === actor.id ? state.previous : undefined
   const fraction = clamp(alpha)
   const phase = previous ? mix(previous.gait.phase, actor.gait.phase, fraction) : actor.gait.phase
   const speed = actor.gait.speed

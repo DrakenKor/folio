@@ -64,6 +64,8 @@ describe('snapshot-driven character pose', () => {
     state.actor = { ...state.actor, impactPauseTicks: 0 }
     previous.action!.startTick++
     expect(characterPose(state, 0.5).clips.attack![1]).toBe(CLIP_MARKERS.attack.contact)
+    state.previous = { ...previous, id: previous.id + 1 }
+    expect(characterPose(state, 0.5)).toEqual(characterPose({ ...state, previous: undefined }, 0.5))
   })
 
   it('holds death at the terminal frame and keeps weights normalized', () => {

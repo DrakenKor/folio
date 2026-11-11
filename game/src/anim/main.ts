@@ -32,7 +32,7 @@ let age = Number(params.get('age') ?? Number(params.get('t') ?? 0) * 60)
 let playing = !clipParam && !params.has('age')
 const anim = { ready: false, clips: CLIP_NAMES, sheet: null as string | null, backend: '', gaits: {},
   view: null as CharacterView | null, setState, step, fixture: combatSnapshot,
-  get state() { return { clip: selected, age, pose: view.poseActor(previewState(selected, age, facing)) } } }
+  get state() { return { clip: selected, age, pose: view.poseActor(currentState()) } } }
 Object.assign(window, { __anim: anim })
 
 const canvas = document.getElementById('stage') as HTMLCanvasElement
@@ -104,10 +104,11 @@ const slider = document.getElementById('speed') as HTMLInputElement
 const readout = document.getElementById('readout')!
 const play = document.getElementById('play') as HTMLButtonElement
 for (const clip of CLIP_NAMES) select.add(new Option(clip, clip))
-slider.value = params.get('speed') ?? '2.521'
+slider.value = params.get('speed') ?? (selected === 'walk' ? '0.561' : '2.521')
 
 function setState(clip: ClipName, tick = 0): void {
   if (!CLIP_NAMES.includes(clip)) throw new Error(`unknown clip ${clip}`)
+  if (clip !== selected) slider.value = clip === 'walk' ? '0.561' : '2.521'
   selected = clip
   age = Math.max(0, tick)
   playing = false
@@ -118,12 +119,17 @@ function setState(clip: ClipName, tick = 0): void {
 
 function step(ticks = 1): void { setState(selected, age + ticks) }
 
-function draw(): void {
+function currentState() {
   const state = previewState(selected, age, facing)
   if (selected === 'walk' || selected === 'run') {
     state.actor = { ...state.actor, gait: { speed: Number(slider.value),
       phase: age / 60 * view.cycleRate(Number(slider.value)) } }
   }
+  return state
+}
+
+function draw(): void {
+  const state = currentState()
   const pose = view.poseActor(state)
   indicator.point(pose.aim)
   indicator.object.visible = !state.actor.death
