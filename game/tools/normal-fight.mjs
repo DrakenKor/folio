@@ -71,7 +71,7 @@ export async function normalFight(script, expected, frames, warmupTicks) {
   await run(warmupTicks, false)
   game.scenario('m1-fight', 7)
   const result = await run(expected.ticks, true)
-  return { ...result, seed: 7, scenario: 'm1-fight', backend: game.backend,
+  return { ...result, snapshot: game.snapshot(), seed: 7, scenario: 'm1-fight', backend: game.backend,
     driver: 'normal Clock; cmd queued by view.advance before each input sample', warmupTicks,
     viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio },
     userAgent: navigator.userAgent, build: game.build }

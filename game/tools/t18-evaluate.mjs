@@ -139,7 +139,20 @@ try {
       assert(perf.frameMs.median <= 16.7 && perf.frameMs.p95 <= 20, 'Fight interval budget missed')
       return { ...perf.frameMs, durationMs: perf.durationMs, tick: perf.tick, hash: perf.hash }
     })
-    if (mode === 'perf') for (const name of ['meadow-player', 'meadow-monolith', 'meadow-wide']) await cli('shot', name, `${name}.png`)
+    if (mode === 'artifacts') {
+      const perf = JSON.parse(readFileSync(join(out, 'fight-perf.json'), 'utf8'))
+      if (perf.snapshot) await evaluate(`__game.restore(${JSON.stringify(perf.snapshot)})`)
+      else {
+        const commands = JSON.parse(readFileSync('game/scenarios/m1-fight-commands.json', 'utf8'))
+        await evaluate(`__game.pause();__game.scenario('m1-fight',7);__game.simulate(${JSON.stringify(commands)},7200)`)
+      }
+      assert.equal(await evaluate('__game.hash()'), perf.hash)
+    }
+    for (const name of ['meadow-player', 'meadow-monolith', 'meadow-wide']) {
+      await evaluate(`__game.camera.bookmark(${JSON.stringify(name)})`)
+      await paint()
+      await run([{ op: 'image', out: `${name}.png`, expression: '(__game.debug.view.render(),document.querySelector("#stage").toDataURL("image/png"))' }])
+    }
     await montage([...Object.keys(frames).map(name => `${name}.png`), 'meadow-player.png'], 4, 2, 'fight-sheet.png')
     await montage(['meadow-player.png', 'meadow-monolith.png', 'meadow-wide.png', 'approach.png'], 2, 2, 'cams-sheet.png')
     await cli('net')

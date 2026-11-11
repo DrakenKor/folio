@@ -303,7 +303,7 @@ async function imageArtifact(expression, filename) {
   const file = resolve(out, filename)
   try {
     const length = await callOn(sheetObject, `function() {
-      if (!this.data?.startsWith('data:image/png;base64,')) throw new Error('Character sheet did not return a PNG');
+      if (!this.data?.startsWith('data:image/png;base64,')) throw new Error('Image artifact did not return a PNG');
       this.data = this.data.slice('data:image/png;base64,'.length); return this.data.length;
     }`)
     const chunks = []
