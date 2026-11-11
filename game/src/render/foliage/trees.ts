@@ -1,13 +1,14 @@
 // Lobed broadleaf crowns and scalloped fir boughs share the travelling meadow gust.
 import { CylinderGeometry, LatheGeometry, Matrix4, Mesh, Quaternion, Vector2, Vector3 } from 'three/webgpu'
-import { attribute, Fn, positionLocal, sin, vec2, vec3 } from 'three/tsl'
+import { attribute, Fn, positionLocal, sin, varyingProperty, vec3 } from 'three/tsl'
 import { GeometryBuilder, linearColor } from '../geometry'
 import { CelMaterial } from '../materials/cel'
 import type { Environment } from '../materials/environment'
 import { gustAt } from '../materials/wind'
 import { rng, subSeed } from '../rng'
 import { distanceToLine, type Heightfield } from '../terrain/heightfield'
-import { crownGeometry } from './tree-geometry'
+import { MeadowMaterial } from '../terrain/meadow-material'
+import { crownGeometry, pineBoughGeometry } from './tree-geometry'
 
 export interface TreeSite {
   x: number
@@ -16,8 +17,8 @@ export interface TreeSite {
   radius: number
 }
 
-const BROADLEAF = ['#659444', '#789c48', '#568d50', '#889e4b']
-const CONIFER = ['#52805a', '#60895c', '#4c7959']
+const BROADLEAF = ['#8bab66', '#9caf69', '#80a579', '#aaa86d']
+const CONIFER = ['#7c9b7b', '#88a279', '#779983']
 
 export function createTrees(env: Environment, field: Heightfield) {
   const random = rng(subSeed(field.seed, 'trees'))
@@ -41,6 +42,13 @@ export function createTrees(env: Environment, field: Heightfield) {
       sway: [site.x, site.z, Math.max(0, p.y - ground) / treeHeight, phase + offset]
     })
     const radius = conifer ? 0.25 : 0.28 + site.radius * 0.045
+    const branch = (start: Vector3, end: Vector3, width: number) => {
+      const wood = new CylinderGeometry(width * 0.32, width, start.distanceTo(end), 10)
+      rotation.setFromUnitVectors(up, end.clone().sub(start).normalize())
+      matrix.compose(start.clone().add(end).multiplyScalar(0.5), rotation, new Vector3(1, 1, 1))
+      trunks.add(wood, matrix, { color: linearColor('#856348'), vertex: p => sway(p) })
+      wood.dispose()
+    }
     const trunk = new LatheGeometry([
       new Vector2(radius * 1.85, -0.25),
       new Vector2(radius * 1.55, 0.12),
@@ -54,69 +62,87 @@ export function createTrees(env: Environment, field: Heightfield) {
 
     const tint = conifer ? CONIFER[i % CONIFER.length]! : BROADLEAF[i % BROADLEAF.length]!
     if (conifer) {
-      for (let tier = 0; tier < 4; tier++) {
-        const f = tier / 4
-        const r = site.radius * 1.45 * (1 - f * 0.78)
-        const height = crownHeight * (0.46 - f * 0.05)
-        const bough = crownGeometry(true, phase + tier * 1.1)
-        rotation.setFromAxisAngle(up, phase + tier * 0.4)
-        matrix.compose(new Vector3(site.x + lean.x * tier, ground + trunkHeight - 0.65 + f * crownHeight * 0.84, site.z + lean.z * tier), rotation, new Vector3(r, height, r))
-        canopies.add(bough, matrix, {
-          color: linearColor(tint, 0.96 + tier * 0.045),
-          vertex: p => sway(p, tier * 0.25)
-        })
+      const tip = new Vector3(site.x, ground + trunkHeight + crownHeight * 0.96, site.z).addScaledVector(lean, 4)
+      branch(new Vector3(site.x, ground + trunkHeight, site.z), tip, radius * 0.5)
+      for (let tier = 0; tier < 7; tier++) {
+        const f = tier / 7
+        const r = site.radius * 1.45 * (1 - f * 0.93)
+        const start = new Vector3(site.x, ground + trunkHeight + f * crownHeight * 0.98, site.z).addScaledVector(lean, tier * 0.6)
+        const bough = pineBoughGeometry(phase + tier * 1.1)
+        for (let b = 0; b < 7; b++) {
+          const a = phase + tier * 1.7 + b / 7 * Math.PI * 2
+          const reach = r * (0.85 + random() * 0.28)
+          const end = start.clone().add(new Vector3(Math.cos(a) * reach * 0.84, -reach * 0.2, -Math.sin(a) * reach * 0.84))
+          branch(start, end, radius * (0.35 - f * 0.22))
+          rotation.setFromAxisAngle(up, a)
+          matrix.compose(start, rotation, new Vector3(reach, reach, reach))
+          canopies.add(bough, matrix, {
+            color: linearColor(tint, 0.97 + tier * 0.025 + b % 3 * 0.035),
+            vertex: p => sway(p, b * 0.3)
+          })
+        }
         bough.dispose()
       }
+      const leader = pineBoughGeometry(phase)
+      rotation.setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 2)
+      matrix.compose(tip.clone().add(new Vector3(0, -0.65, 0)), rotation, new Vector3(0.8, 0.65, 0.65))
+      canopies.add(leader, matrix, { color: linearColor(tint, 1.12), vertex: p => sway(p) })
+      leader.dispose()
     } else {
       const tall = variant === 1
       const spread = variant === 2
       const swept = variant === 3
       const centre = new Vector3(site.x, ground + trunkHeight + site.radius * 0.65, site.z)
         .addScaledVector(lean, trunkHeight)
-      const count = [4, 3, 5, 3][variant]!
+      const count = [5, 5, 6, 5][variant]!
       const angle = random() * Math.PI * 2
       const clumps: Array<{ centre: Vector3; radius: number; stretch: Vector3 }> = []
-      if (tall) clumps.push({ centre: centre.clone().add(new Vector3(0, site.radius * 0.65, 0)), radius: site.radius * 0.72, stretch: new Vector3(0.95, 1.5, 0.95) })
+      if (tall) branch(new Vector3(site.x, ground + trunkHeight, site.z), centre.clone().add(new Vector3(0, site.radius * 1.4, 0)), radius * 0.55)
       for (let b = 0; b < count; b++) {
-        const a = angle + b / count * Math.PI * 2
-        const reach = site.radius * (spread ? 0.72 : tall ? 0.30 : 0.50)
+        const a = angle + b * 2.4
+        const reach = site.radius * (spread ? 1.05 : tall ? 0.52 : 0.85)
         const c = centre.clone().add(new Vector3(
-          Math.cos(a) * reach + (swept ? b * site.radius * 0.25 : 0),
-          tall ? b * site.radius * 0.62 : site.radius * (b === 0 ? 0.55 : -0.12 + random() * 0.28),
+          Math.cos(a) * reach + (swept ? b * site.radius * 0.17 : 0),
+          tall ? b * site.radius * 0.34 : site.radius * (b === 0 ? 0.72 : -0.12 + b * 0.16),
           Math.sin(a) * reach
         ))
-        const r = site.radius * (tall ? 0.58 : spread ? 0.65 : 0.75) * (0.88 + random() * 0.22)
-        clumps.push({ centre: c, radius: r, stretch: new Vector3(spread ? 1.2 : 1, tall ? 1.2 : swept ? 0.72 : 0.94, 0.88 + random() * 0.18) })
-        if (b < 3) {
-          const start = new Vector3(site.x, ground + trunkHeight * 0.65, site.z).addScaledVector(lean, trunkHeight * 0.65)
-          const end = c.clone().add(new Vector3(0, -r * 0.4, 0))
-          const branch = new CylinderGeometry(radius * 0.20, radius * 0.55, start.distanceTo(end), 12)
-          rotation.setFromUnitVectors(up, end.clone().sub(start).normalize())
-          matrix.compose(start.add(end).multiplyScalar(0.5), rotation, new Vector3(1, 1, 1))
-          trunks.add(branch, matrix, { color: linearColor('#78543b'), vertex: p => sway(p) })
-          branch.dispose()
-        }
+        const r = site.radius * (tall ? 0.65 : spread ? 0.64 : 0.66) * (0.88 + random() * 0.22)
+        clumps.push({ centre: c, radius: r, stretch: new Vector3(spread ? 1.2 : 1.08, tall ? 1.2 : swept ? 0.85 : 1, 0.88 + random() * 0.18) })
+        const start = new Vector3(site.x, ground + trunkHeight * 0.72 + (tall ? b * site.radius * 0.34 : 0), site.z).addScaledVector(lean, trunkHeight * 0.72)
+        const elbow = start.clone().lerp(c, 0.58).add(new Vector3(Math.cos(a) * r * 0.18, r * 0.1, Math.sin(a) * r * 0.18))
+        branch(start, elbow, radius * 0.63)
+        branch(elbow, c, radius * 0.26)
+        branch(elbow, c.clone().add(new Vector3(Math.sin(a) * r * 0.5, r * 0.08, -Math.cos(a) * r * 0.5)), radius * 0.18)
       }
       clumps.forEach((clump, b) => {
-        const crown = crownGeometry(false, phase + b * 1.7)
+        const crown = crownGeometry(phase + b * 1.7)
         rotation.setFromAxisAngle(up, angle + b * 0.8)
-        matrix.compose(clump.centre, rotation, clump.stretch.multiplyScalar(clump.radius))
+        matrix.compose(clump.centre, rotation, clump.stretch.clone().multiplyScalar(clump.radius))
         canopies.add(crown, matrix, {
           color: linearColor(tint, 0.97 + random() * 0.06),
           vertex: p => sway(p, b * 0.3)
         })
+        for (let leaf = 0; leaf < 2; leaf++) {
+          const a = angle + b * 2.4 + leaf * 2.2
+          const shoulder = clump.centre.clone().add(new Vector3(Math.cos(a) * clump.radius * 0.7, -clump.radius * 0.1, Math.sin(a) * clump.radius * 0.7))
+          rotation.setFromAxisAngle(up, a)
+          matrix.compose(shoulder, rotation, clump.stretch.clone().multiplyScalar(clump.radius * 0.52))
+          canopies.add(crown, matrix, { color: linearColor(tint, 0.96 + leaf * 0.06), vertex: p => sway(p, b * 0.3) })
+        }
         crown.dispose()
       })
     }
   })
 
   const data = attribute('sway', 'vec4')
+  const vGust = varyingProperty('float', 'vTreeGust')
   const swayNode = (canopy: boolean) => Fn(() => {
-    const anchor = vec2(data.x, data.y)
-    const gust = gustAt(env, anchor.add(env.windDirection.mul(1.8))).toVar()
+    const anchor = positionLocal.xz
+    const gust = gustAt(env, anchor).toVar()
+    if (canopy) vGust.assign(gust)
     const h = data.z.mul(data.z)
     const phase = env.time.mul(1.2).sub(anchor.dot(env.windDirection).mul(0.20))
-    const along = gust.mul(0.88).add(0.08).add(sin(phase).mul(0.08))
+    const along = gust.mul(1.65).add(0.08).add(sin(phase).mul(0.08))
       .mul(h).mul(env.windStrength)
     const side = sin(phase.mul(0.8)).mul(0.035)
       .add(sin(env.time.mul(2).add(data.w)).mul(canopy ? 0.018 : 0))
@@ -130,14 +156,14 @@ export function createTrees(env: Environment, field: Heightfield) {
   })()
 
   const vertexColor = attribute('color', 'vec3')
-  const trunkMaterial = new CelMaterial(env, { colorNode: vertexColor, positionNode: swayNode(false) })
+  const trunkMaterial = new CelMaterial(env, { colorNode: vertexColor, positionNode: swayNode(false), outlineWidth: 0.8 })
   trunkMaterial.name = 'trunk'
-  const canopyMaterial = new CelMaterial(env, {
+  const canopyMaterial = new MeadowMaterial(env, {
     colorNode: vertexColor,
     positionNode: swayNode(true),
     bandOffset: null,
     outlineWidth: 0.8
-  })
+  }, vGust.mul(0.9))
   canopyMaterial.name = 'canopy'
   const trunkMesh = new Mesh(trunks.build(), trunkMaterial)
   const canopyMesh = new Mesh(canopies.build(), canopyMaterial)

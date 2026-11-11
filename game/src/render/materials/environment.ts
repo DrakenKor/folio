@@ -57,7 +57,7 @@ export function createEnvironment(seed: number, palette: Palette = MEADOW_PALETT
     /** Where the player stands: grass bends away and the ground is trampled around it. */
     player: uniform(new Vector3()),
     /** Radius of trampled, shortened grass, as where fights happen. */
-    trampleRadius: uniform(2.3),
+    trampleRadius: uniform(1.5),
     /** Cloud density threshold: higher means clearer sky. */
     cloudCover: uniform(0.56),
     /** How much a passing cloud darkens the ground, 0..1. */

@@ -13,8 +13,9 @@ export function tuftAt(env: Environment, cell: Node<'vec2'>) {
   const rand = (salt: number) => hash(seed.add(salt))
   const centre = cell.add(vec2(rand(0x9e37), rand(0x51ed)).mul(0.9).add(0.05)).mul(CLUMP_CELL).toVar()
   const patch = meadowPatch(env, centre, true).toVar()
-  const growth = smoothstep(0.45, 0.75, patch).toVar()
-  const radius = mix(float(0.18), float(0.32), rand(0x2c1b)).mul(growth.mul(0.3).add(0.75))
-  const height = mix(float(0.8), float(1.2), rand(0x7f4a)).mul(mix(float(0.45), float(1.25), growth))
-  return { seed, rand, centre, radius, height, growth, patch }
+  const growth = smoothstep(0.43, 0.58, patch).toVar()
+  const radius = mix(float(0.22), float(0.34), rand(0x2c1b))
+  const height = mix(float(0.9), float(1.15), rand(0x7f4a)).mul(mix(float(0.98), float(1.28), growth))
+  const lean = mix(float(0.6), float(1.25), rand(0x2a79))
+  return { seed, rand, centre, radius, height, lean, patch }
 }

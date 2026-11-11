@@ -40,7 +40,7 @@ export function createMonolithSite(env: Environment, field: Heightfield): Group 
   const material = new CelMaterial(env, {
     colorNode: mix(attribute('color', 'vec3'), color('#526d34'), moss.mul(0.95)),
     outlineNormal: attribute('hull', 'vec3'),
-    outlineWidth: 0.7,
+    outlineWidth: 0.8,
     landmarkSpill: 0.32
   })
   material.name = 'monolith-plinth'

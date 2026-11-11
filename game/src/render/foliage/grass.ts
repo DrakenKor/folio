@@ -100,8 +100,7 @@ export function createGrass(env: Environment, field: Heightfield) {
     const edge = xz.sub(focus).abs()
     const fade = nearFade(vec3(xz.x, groundY, xz.y))
       .mul(smoothstep(34, 42, edge.x.max(edge.y)).oneMinus()).toVar()
-    const growthDensity = tuft.growth.mul(0.35).add(0.65).mul(uniforms.density)
-    const keep = step(clumpRand(0x4567), mask.mul(1.15)).mul(step(clumpRand(0x6d2b), growthDensity))
+    const keep = step(clumpRand(0x4567), mask.mul(1.15)).mul(step(clumpRand(0x6d2b), uniforms.density))
     const trample = trampleAt(env, xz).toVar()
     const height = mix(float(0.42), float(0.9), bladeRand(0x5678).pow(1.5))
       .mul(tuftHeight)
@@ -121,7 +120,7 @@ export function createGrass(env: Environment, field: Heightfield) {
     const bendRadius = uniforms.bendRadius.max(1e-4)
     const push = smoothstep(bendRadius.mul(0.15), bendRadius, playerDist).oneMinus().mul(step(1e-4, uniforms.bendRadius)).mul(1.1)
     const bend = out
-      .mul(r.mul(0.45).add(0.1))
+      .mul(r.mul(0.45).add(0.1)).mul(tuft.lean)
       .add(env.windDirection.mul(wind.lean.add(flutter)))
       .add(toPlayer.div(playerDist).mul(push))
     const amount = bend.length().max(1e-4)
