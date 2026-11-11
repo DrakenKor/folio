@@ -51,8 +51,7 @@ export function validateWorld(world: World): void {
   check(record(dodge) && timing(dodge.timing) && dodge.timing.windupTicks === 0 && positive(dodge.distance) &&
     positiveInteger(dodge.cooldownTicks) && integer(dodge.invulnerableFrom) && integer(dodge.invulnerableUntil) &&
     dodge.invulnerableFrom < dodge.invulnerableUntil && dodge.invulnerableUntil <= dodge.timing.activeTicks, 'dodge definition')
-  check(world.arena === null || (record(world.arena) && vector(world.arena.min) && vector(world.arena.max) &&
-    world.arena.min.x < world.arena.max.x && world.arena.min.z < world.arena.max.z), 'arena')
+  check(world.arena === null || (record(world.arena) && vector(world.arena.center) && positive(world.arena.radius)), 'arena')
 
   let previousId = 0
   const actorIds = new Set(world.entities.map(entity => entity?.id))
@@ -96,6 +95,8 @@ export function validateWorld(world: World): void {
       ['idle', 'acquire', 'chase', 'telegraph', 'strike', 'recover', 'die'].includes(ai.phase) && integer(ai.ageTicks) &&
       (ai.targetId === null || (ai.targetId !== entity.id && actorIds.has(ai.targetId))) &&
       (ai.phase === 'die') === (death !== null)), 'AI state')
+    check(death === null || death.despawnAfterTicks === (ai === null ? null :
+      content.enemies.find(enemy => enemy.id === ai.enemyId)!.deathTicks), 'death duration source')
     check(death === null || (entity.action === null && entity.knockback === null && entity.vel.x === 0 && entity.vel.z === 0 &&
       entity.gait.speed === 0 && entity.impactPauseTicks === 0), 'dead actor state')
     previousId = entity.id

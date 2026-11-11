@@ -1,6 +1,6 @@
 # M1 simulation contract
 
-Schema **2**, simulation build **`m1-sim-v2`**, fixed **60 Hz**. Shared types live in `core/types.ts`.
+Schema **2**, simulation build **`m1-sim-v3`**, fixed **60 Hz**. Shared types live in `core/types.ts`.
 T1.1 defines state, defaults, validation and timing arithmetic; T1.3–T1.6 implement the systems and presentation below.
 The existing M0 movement/wandering loop remains in place until T1.3; T1.1 does not activate combat or gait integration.
 
@@ -31,6 +31,8 @@ Projectiles are separate from actors and never enter actor separation, AI acquis
 Health is finite, `0 <= health <= maxHealth`, with positive maximum; exactly zero health requires a death record.
 M0 defaults are living one-health neutral actors, no skills/AI/actions, zero gait/timers and an unbounded arena.
 The player defaults to faction `player`; explicit scenario factions determine hostility by unequal faction ids.
+`world.arena` is `{ center: Vec2; radius: number } | null`, with a finite centre and positive finite radius.
+Bounds include actor centres at `distance(pos, center) <= radius`, without subtracting actor radius; null is unbounded.
 
 ## Minimal content and runtime records
 
@@ -49,12 +51,13 @@ Tests can construct neutral definitions directly through this public boundary wi
 | Action | Content id/kind, start tick, processed age, locked angle, sorted unique melee hit ids and projectile launch latch. |
 | AI | Enemy definition id, phase, phase age and nullable target id; committed strike direction lives in `action.direction`. |
 | Knockback | Remaining non-paused actor ticks and velocity in metres/second; no extra transform or renderer displacement. |
-| Death | Start tick, world-tick age and optional despawn age; null despawn age holds the player's terminal pose. |
+| Death | Start tick, world-tick age and optional despawn age; null holds the terminal pose indefinitely. |
 | Projectile | Stable owner/skill/faction/action-start tick, position/velocity, age/lifetime, radius and captured damage/impact payload. |
 
 Projectile age zero is its launch tick; it sweeps immediately, once per world tick, including that launch tick.
 At each later tick increment age first; remove at `age >= lifetimeTicks` before another sweep.
 Thus lifetime L permits exactly L sweeps, at ages `[0, L)`; first hostile contact consumes the projectile, including immunity.
+Fold Dart's nominal 10 m travel is 43 sweeps at 14 m/s (10.033 m); there is no separate travel budget.
 Expiry and hits remove it immediately; no hit latch, piercing list or projectile collision body remains afterward.
 Owner death/removal removes owned projectiles; a pending or flying attack cannot damage after its owner's death.
 Melee hit ids survive target despawn; AI targets must refer to an existing actor or null.
@@ -116,8 +119,9 @@ Knockback uses locked attack/projectile travel direction and is clipped by arena
 An immune dodge takes no damage, flash, pause, knockback or interruption; it emits no hit/damage event.
 Death takes precedence immediately: health zero, action null, velocity/gait speed zero, knockback null, pause zero and AI `die`.
 Dead actors neither act nor collide; remove pending contacts/projectiles from a dead source before they can deal damage.
-Death age starts at zero on the lethal tick, advances on later world ticks and removes enemies at the configured duration.
-The player remains at the final death pose until scenario restart; death emits once at the live-to-dead transition.
+Death age starts at zero on the lethal tick; set `death.despawnAfterTicks` to the definition's `deathTicks` via `ai.enemyId`, or null without AI.
+Age advances on later world ticks; remove an actor at its non-null despawn age, while null holds its terminal pose indefinitely.
+The AI-free player remains until scenario restart; death emits once at the live-to-dead transition.
 
 ## Aim, facing and command precedence
 
@@ -126,6 +130,8 @@ Sample aim from the tick-entry actor position; null/coincident aim retains the s
 With no action, moving targets body facing toward normalized movement; idle targets body facing toward stored aim.
 Turn along the shortest angular difference, at most `BODY_TURN_PER_TICK` (15 degrees); an exact half-turn chooses positive rotation.
 Ordinary locomotion travels along that updated body facing, with command magnitude clamped to one; diagonal speed gains are excluded.
+Full-length player input uses `GAIT.runSpeed` (2.521 m/s); shorter input scales that speed by its magnitude, with no new state field.
+Enemies use the `moveSpeed` of the definition referenced by `ai.enemyId`.
 An action captures aim at start; its body turns toward that locked angle at the same maximum rate throughout the action.
 Dodge captures movement direction, falling back to body facing; travel uses that direction, regardless of ongoing pointer movement.
 Windup and active phases root ordinary locomotion; recovery roots it until movement cancels at the defined offset.
@@ -193,16 +199,18 @@ Any additional shared render/clock fields go through the orchestrator; renderer 
 
 ## Compatibility and verification
 
-Restore rejects missing/invalid health, phases, timers, ids, AI references, content and projectile payloads without defaulting.
+Restore rejects missing/invalid health, phases, timers, ids, AI references, content, circular arenas and projectile payloads without defaulting.
+Death despawn duration must match its AI-referenced definition, or be null for an AI-free actor.
 Schema-one M0 snapshots/replays fail with `Unsupported snapshot format or schema`; mismatched builds fail explicitly.
 The hash still uses canonical-envelope FNV-1a; new state and build/schema values deliberately change old fixture hashes.
 Only `game/scenarios/m0-smoke.json` has a live expected hash; historical M0 reports retain their recorded values.
 Existing test worlds that exercise restore/replay use the current simulation build instead of a free-form `test` label.
-The smoke fixture's initial hash changes from `7de31c7b` to `2a5c16ec`; its movement checks are unchanged.
-Meadow seed 7 at 3,600 idle ticks changes from `761cec71` to `0e577070`; projecting to the M0 shape reproduces the old hashes.
-Headless smoke reaches the target at tick 195 and stops at tick 196, matching M0; no combat or movement behavior changes here.
+The smoke fixture's initial hash changes from `2a5c16ec` to `77a71cc0` for build `m1-sim-v3`.
+Meadow seed 7 at 3,600 idle ticks changes from `0e577070` to `ceb71dac` for the same build bump.
+Both worlds have null arenas and unchanged M0 behavior; changing only the build back to `m1-sim-v2` reproduces both prior hashes.
+At the contract run speed, headless smoke reaches the target at tick 476 and stops at tick 477.
 The CLI adds `--help` to list its existing options, as required by the task acceptance check.
 
 Run `fnm exec --using=24 npm run game:test`, `npm run game:build` and `npx eslint game` with the same Node prefix.
-T1.1 verification: 97 tests pass; the existing opt-in browser test is skipped; build/typecheck and game lint pass.
-No combat behavior harness is implemented here; T1.2 records its expected failure before T1.3 implementation.
+Contract verification: 107 existing/contract tests pass; the existing opt-in browser test is skipped; build/typecheck and game lint pass.
+T1.2's amended harness records 140 expected assertion failures before T1.3 in `acceptance/EXPECTED-FAILURE.md`.

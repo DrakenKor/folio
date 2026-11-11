@@ -20,7 +20,7 @@ function fixture(): World {
     { ...structuredClone(shared), id: 'fixture-projectile', kind: 'projectile', speed: 10, radius: 0.1, lifetimeTicks: 30 }
   ]
   world.content.enemies = [{ id: 'fixture-enemy', maxHealth: 10, radius: 0.4, moveSpeed: 1, acquireRange: 8, attackRange: 2, skillId: 'fixture-melee', deathTicks: 20 }]
-  world.arena = { min: { x: -10, z: -10 }, max: { x: 10, z: 10 } }
+  world.arena = { center: { x: 2, z: -3 }, radius: 10 }
   const player = spawnEntity(world, {
     kind: 'player', pos: { x: 0, z: 0 }, radius: 0.4, maxHealth: 20, health: 17, aim: 1, facing: 0.5,
     skills: { primary: 'fixture-melee', secondary: 'fixture-projectile' },
@@ -54,6 +54,8 @@ describe('M1 snapshot contracts', () => {
     expect(resumed).toEqual(world)
     expect(serialize(resumed)).toBe(bytes)
     expect(hashWorld(resumed)).toBe(hashWorld(world))
+    resumed.arena!.center.x++
+    expect(world.arena!.center).toEqual({ x: 2, z: -3 })
     resumed.entities[0]!.action!.hitTargetIds.push(3)
     resumed.content.skills[0]!.timing.activeTicks++
     expect(world.entities[0]!.action!.hitTargetIds).toEqual([2])
@@ -100,6 +102,9 @@ describe('M1 snapshot contracts', () => {
     ['unknown target', w => { w.entities[1]!.ai!.targetId = 100 }],
     ['negative AI age', w => { w.entities[1]!.ai!.ageTicks = -1 }],
     ['expired death', w => { w.entities[2]!.death!.despawnAfterTicks = 4 }],
+    ['AI-free timed death', w => { w.entities[2]!.ai = null }],
+    ['mismatched enemy death duration', w => { w.entities[2]!.death!.despawnAfterTicks = 21 }],
+    ['permanent enemy death', w => { w.entities[2]!.death!.despawnAfterTicks = null }],
     ['dead action', w => { w.entities[2]!.action = structuredClone(w.entities[0]!.action) }],
     ['negative projectile radius', w => { w.projectiles[0]!.radius = -0.1 }],
     ['fractional projectile lifetime', w => { w.projectiles[0]!.lifetimeTicks = 0.5 }],
@@ -116,12 +121,27 @@ describe('M1 snapshot contracts', () => {
     ['late movement cancel', w => { w.content.skills[0]!.timing.moveCancelTicks = 4 }],
     ['invalid immunity bounds', w => { w.content.dodge.invulnerableUntil = 11 }],
     ['missing skills', w => { Reflect.deleteProperty(w, 'content') }],
+    ['zero arena radius', w => { w.arena!.radius = 0 }],
+    ['negative arena radius', w => { w.arena!.radius = -1 }],
+    ['missing arena radius', w => { Reflect.deleteProperty(w.arena!, 'radius') }],
+    ['missing arena centre', w => { Reflect.deleteProperty(w.arena!, 'center') }],
+    ['invalid arena centre', w => { Reflect.deleteProperty(w.arena!.center, 'x') }],
+    ['rectangular arena', w => { Reflect.set(w, 'arena', { min: { x: -10, z: -10 }, max: { x: 10, z: 10 } }) }],
     ['unknown button', w => { w.entities[0]!.previousButtons = 256 }]
   ]
   it.each(malformed)('rejects %s', (_name, mutate) => {
     const world = fixture()
     mutate(world)
     expect(() => restore(serialize(world))).toThrow(/Invalid snapshot/)
+  })
+
+  it('restores an unbounded arena and AI-free terminal pose without defaults', () => {
+    const world = fixture()
+    world.arena = null
+    world.entities[2]!.ai = null
+    world.entities[2]!.death!.despawnAfterTicks = null
+    expect(restore(serialize(world))).toEqual(world)
+    expect(createWorld(7).arena).toBeNull()
   })
 
   it('rejects M0 snapshots/replays and unsupported simulation builds clearly', () => {
@@ -133,7 +153,9 @@ describe('M1 snapshot contracts', () => {
     expect(() => verifyReplay(replay)).toThrow(/Unsupported snapshot format or schema/)
     envelope.schema = envelope.world.schema = SCHEMA_VERSION
     expect(() => restore(JSON.stringify(envelope))).toThrow(/Unsupported simulation build/)
-    expect(SIM_BUILD).toBe('m1-sim-v2')
+    envelope.build = envelope.world.build = 'm1-sim-v2'
+    expect(() => restore(JSON.stringify(envelope))).toThrow(/Unsupported simulation build/)
+    expect(SIM_BUILD).toBe('m1-sim-v3')
   })
 
   it('hashes mutable combat, gait, AI, projectile and input continuation data', () => {
@@ -142,7 +164,8 @@ describe('M1 snapshot contracts', () => {
       w => { w.entities[0]!.action!.ageTicks++ }, w => { w.entities[0]!.gait.phase += 0.1 },
       w => { w.entities[0]!.previousButtons = Button.Dodge }, w => { w.entities[0]!.impactPauseTicks++ },
       w => { w.entities[1]!.ai!.ageTicks++ }, w => { w.entities[2]!.death!.ageTicks++ },
-      w => { w.projectiles[0]!.ageTicks++ }, w => { w.content.skills[0]!.damage++ }
+      w => { w.projectiles[0]!.ageTicks++ }, w => { w.content.skills[0]!.damage++ },
+      w => { w.arena!.center.x++ }, w => { w.arena!.radius++ }
     ]
     const initial = hashWorld(fixture())
     for (const mutate of mutations) {

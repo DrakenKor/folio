@@ -7,7 +7,7 @@ import { verifyReplay } from './replay'
 import { rngFloat, rngInt } from './rng'
 import { restore, serialize } from './snapshot'
 import { createWorld, spawnEntity, removeEntity } from './store'
-import { IDLE_COMMAND } from './types'
+import { BODY_TURN_PER_TICK, GAIT, IDLE_COMMAND } from './types'
 import type { Command, World } from './types'
 
 function commandAt(tick: number): Command {
@@ -142,18 +142,18 @@ describe('public simulation contracts', () => {
     expect(() => rngInt(a, 'bad', 0)).toThrow()
   })
 
-  it('moves at 6 m/s, aims in world space, and resolves even coincident circles', () => {
+  it('runs along its body facing, aims in world space, and resolves even coincident circles', () => {
     const world = createWorld(1)
     const player = spawnEntity(world, { kind: 'player', pos: { x: 0, z: 0 }, radius: 0.5 })
     for (let i = 0; i < 60; i++) step(world, { move: { x: 1, z: 0 }, aim: { x: 0, z: 10 }, buttons: 0 })
     expect(world.tick).toBe(60)
-    expect(player.pos.x).toBeCloseTo(6, 10)
+    expect(player.pos.x).toBeCloseTo(GAIT.runSpeed, 10)
     expect(player.pos.z).toBe(0)
-    expect(player.facing).toBeGreaterThan(Math.PI / 2)
-    const facing = player.facing
+    expect(player.facing).toBe(0)
+    expect(player.aim).toBeGreaterThan(Math.PI / 2)
     step(world, IDLE_COMMAND)
     expect(player.vel).toEqual({ x: 0, z: 0 })
-    expect(player.facing).toBe(facing)
+    expect(player.facing).toBeCloseTo(BODY_TURN_PER_TICK, 10)
     const other = spawnEntity(world, { kind: 'obstacle', pos: { ...player.pos }, radius: 0.5 })
     expect(step(world, IDLE_COMMAND)).toEqual([])
     const dx = player.pos.x - other.pos.x
