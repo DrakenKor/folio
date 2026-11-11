@@ -57,6 +57,8 @@ export class CelOutlinePassNode extends PassNode {
     material.name = `${source.name || 'cel'}_outline`
     material.side = BackSide
     material.positionNode = source.positionNode
+    material.opacityNode = source.opacityNode
+    material.transparent = source.transparent
     const mvp = cameraProjectionMatrix.mul(modelViewMatrix)
     const clip = mvp.mul(vec4(positionLocal, 1)).toVar()
     const clipAlong = mvp.mul(vec4(positionLocal.add(normalLocal.mul(0.05)), 1))

@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
+import { normalFight } from './normal-fight.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const defaultOut = join(root, 'game/.play-out')
@@ -227,6 +228,7 @@ async function boot(url, scenario = options.scenario, snap = options.snap) {
   await page.send('Log.clear')
   consoleEntries = []
   requests = new Map()
+  const navigationStart = performance.now()
   const previousLoader = (await page.send('Page.getFrameTree')).frameTree.frame.loaderId
   const navigation = await page.send('Page.navigate', { url: target.href })
   if (navigation.errorText) throw new Error(navigation.errorText)
@@ -236,11 +238,12 @@ async function boot(url, scenario = options.scenario, snap = options.snap) {
   await evaluate('__game.ready.then(() => true)')
   const build = await evaluate('__game.build')
   assert(typeof build === 'string' && build, 'Game has no build id')
-  const network = { build, bytes: [...requests.values()].reduce((total, request) => total + request.bytes, 0), requests: [...requests.values()] }
+  const network = { build, readyMs: performance.now() - navigationStart,
+    bytes: [...requests.values()].reduce((total, request) => total + request.bytes, 0), requests: [...requests.values()] }
   await page.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: icon.identifier })
   session = { ...session, url: target.href, network, console: consoleEntries }
   save(sessionFile, session)
-  report('boot', { url: target.href, ...await observe() })
+  report('boot', { url: target.href, readyMs: network.readyMs, ...await observe() })
 }
 
 async function shot(bookmark, filename = `${bookmark}.png`) {
@@ -288,14 +291,19 @@ async function shot(bookmark, filename = `${bookmark}.png`) {
 
 async function sheet(entity, clip, filename) {
   assert(entity && clip && filename, 'Usage: sheet <entity> <clip> <out.png>')
+  await imageArtifact(`__game.sheet(${JSON.stringify(entity)}, ${JSON.stringify(clip)})`, filename)
+  report('sheet', { entity, clip, file: resolve(out, filename) })
+}
+
+async function imageArtifact(expression, filename) {
   const sheetObject = remoteResult(await page.send('Runtime.evaluate', {
-    expression: `(async () => ({data:await __game.sheet(${JSON.stringify(entity)}, ${JSON.stringify(clip)})}))()`,
+    expression: `(async () => ({data:await (${expression})}))()`,
     awaitPromise: true
   }, 60000)).objectId
   const file = resolve(out, filename)
   try {
     const length = await callOn(sheetObject, `function() {
-      if (!this.data?.startsWith('data:image/png;base64,')) throw new Error('Character sheet did not return a PNG');
+      if (!this.data?.startsWith('data:image/png;base64,')) throw new Error('Image artifact did not return a PNG');
       this.data = this.data.slice('data:image/png;base64,'.length); return this.data.length;
     }`)
     const chunks = []
@@ -305,7 +313,6 @@ async function sheet(entity, clip, filename) {
     mkdirSync(dirname(file), { recursive: true })
     writeFileSync(file, Buffer.from(chunks.join(''), 'base64'))
   } finally { await page.send('Runtime.releaseObject', { objectId: sheetObject }) }
-  report('sheet', { entity, clip, file })
 }
 
 async function consoleSample(ms = 0, expectEmpty = false) {
@@ -325,10 +332,10 @@ async function perf(seconds = 2) {
       if (last !== undefined) frames.push(now - last); last = now;
       if (now < end) requestAnimationFrame(frame);
       else {
-        frames.sort((a,b) => a-b);
-        const at = p => frames[Math.max(0, Math.ceil(frames.length*p)-1)] ?? 0;
+        const sorted = [...frames].sort((a,b) => a-b);
+        const at = p => sorted[Math.max(0, Math.ceil(sorted.length*p)-1)] ?? 0;
         const canvas = document.querySelector('#stage');
-        resolve({frameMs:{median:at(0.5),p95:at(0.95),samples:frames.length},game:__game.perf(),
+        resolve({frameMs:{median:at(0.5),p95:at(0.95),samples:frames.length},intervals:frames,game:__game.perf(),
           viewport:{width:innerWidth,height:innerHeight,pixelRatio:devicePixelRatio,bufferWidth:canvas.width,bufferHeight:canvas.height}});
       }
     }
@@ -336,7 +343,8 @@ async function perf(seconds = 2) {
   })`, ms + 10000)
   assert(result.frameMs.samples > 0, 'No animation frames sampled')
   save(join(out, 'perf.json'), result)
-  report('perf', result)
+  const { intervals: _intervals, ...summary } = result
+  report('perf', summary)
 }
 
 function net() {
@@ -402,6 +410,7 @@ async function background(seconds) {
     const end = await observe()
     assert(end.tick - before.tick <= 4, 'More than four ticks advanced during backgrounding')
     assert.equal(end.tick, hidden.tick, 'Simulation advanced while hidden')
+    assert.equal(end.hash, hidden.hash, 'State changed while hidden')
     report('background', { seconds, beforeTick: before.tick, hiddenTick: hidden.tick, endTick: end.tick })
   } finally {
     if (other) await browser.send('Target.closeTarget', { targetId: other.targetId })
@@ -439,7 +448,7 @@ async function blur(ms = 250) {
     ${expression}
   }`)
   const state = () => child(`const world = game.state();
-    return {tick:world.tick,player:world.entities.find(e=>e.id===world.playerId),
+    return {tick:world.tick,hash:game.hash(),player:world.entities.find(e=>e.id===world.playerId),
       hidden:document.hidden,focused:document.hasFocus(),description:game.describe()};`)
   try {
     await callOn(focus, `async function() {
@@ -468,7 +477,9 @@ async function blur(ms = 250) {
     assert.equal(before.focused, false, 'Game did not lose focus inside the page')
     assert(before.description.includes('paused'), 'Game did not pause on blur')
     await sleep(ms)
-    assert.equal((await state()).tick, before.tick, 'Simulation advanced while blurred')
+    const blurred = await state()
+    assert.equal(blurred.tick, before.tick, 'Simulation advanced while blurred')
+    assert.equal(blurred.hash, before.hash, 'State changed while blurred')
     await child('game.step(10)')
     const after = await state()
     assert.deepEqual(after.player.pos, before.player.pos, 'Held input survived blur')
@@ -513,6 +524,24 @@ async function run(file) {
           const value = await evaluate(step.expression)
           if (Object.hasOwn(step, 'expect')) assert.deepEqual(value, step.expect)
           report('eval', { value })
+          break
+        }
+        case 'artifact': {
+          assert.equal(typeof step.out, 'string', 'artifact needs an output path')
+          const value = await evaluate(step.expression)
+          save(resolve(out, step.out), value)
+          report('artifact', { file: resolve(out, step.out) })
+          break
+        }
+        case 'image': await imageArtifact(step.expression, step.out); break
+        case 'fight': {
+          const script = json(resolve(step.script))
+          const expected = json(resolve(step.expected))
+          const result = await evaluate(`(${normalFight.toString()})(${JSON.stringify(script)},${JSON.stringify(expected)},${JSON.stringify(step.frames ?? {})},${step.warmupTicks ?? 600})`, 180000)
+          save(join(out, 'fight-perf.json'), result)
+          assert.deepEqual(result.hashes, expected.checkpoints, 'Normal-clock fight hashes differ')
+          assert.equal(result.hash, expected.finalHash)
+          report('fight', { tick: result.tick, hash: result.hash, frameMs: result.frameMs, durationMs: result.durationMs })
           break
         }
         case 'expectHash': {

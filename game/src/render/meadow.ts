@@ -1,6 +1,7 @@
 // Assembles the meadow from its modules. A RenderView can own one of these:
 // it takes a seed, builds everything deterministically, and exposes the few
 // knobs a view needs (time, focus, player position, light).
+import type { World } from '../sim/core/types'
 import { Color, DirectionalLight, HemisphereLight, Scene, Vector3, type Camera } from 'three/webgpu'
 import { createEnvironment, type Environment } from './materials/environment'
 import { hazeFog } from './materials/haze'
@@ -24,9 +25,9 @@ export interface SunSettings {
   fill: number
 }
 
-export function createMeadow(seed: number) {
+export function createMeadow(seed: number, arena: World['arena'] = null) {
   const env: Environment = createEnvironment(seed)
-  const field = createHeightfield(seed)
+  const field = createHeightfield(seed, arena)
   const scene = new Scene()
   scene.name = 'meadow'
   scene.fogNode = hazeFog(env)

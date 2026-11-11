@@ -28,12 +28,23 @@ export function createRocks(env: Environment, field: Heightfield, trees: TreeSit
 
   const add = (x: number, z: number, size: number, flat: number) => {
     if (!clear(x, z, size)) return
-    placed.push({ x, z, r: size })
     const shape = stoneGeometry(random)
     const scale = new Vector3(size * (1 + random() * 0.5), size * flat, size * (0.8 + random() * 0.4))
     const rot = new Quaternion().setFromEuler(new Euler((random() - 0.5) * 0.3, random() * Math.PI * 2, (random() - 0.5) * 0.3))
+    if (field.arena) {
+      const { center, radius } = field.arena
+      const dx = x - center.x
+      const dz = z - center.z
+      const distance = Math.hypot(dx, dz)
+      const clearance = radius + size * 1.7 + 0.4
+      if (distance < clearance) {
+        x = center.x + dx / distance * clearance
+        z = center.z + dz / distance * clearance
+      }
+    }
     const y = field.heightAt(x, z) - scale.y * 0.16
     const m = new Matrix4().compose(new Vector3(x, y, z), rot, scale)
+    placed.push({ x, z, r: size })
     const centre = new Vector3(x, y, z)
     builder.add(shape, m, {
       color: linearColor(STONE[Math.floor(random() * STONE.length)]!, 0.9 + random() * 0.2),

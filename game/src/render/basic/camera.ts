@@ -20,10 +20,21 @@ export class CameraRig {
     ['overview', { position: { x: 10, y: 38, z: 26 }, target: { x: 8, y: 0, z: 0 } }],
     ['player', { position: { x: 0, y: 14, z: 10 }, target: { x: 0, y: 0, z: 0 } }]
   ])
+  private distance = 14
+  private yaw = 20
+  private snap = true
+  private readonly controls = new AbortController()
 
   constructor(private canvas: HTMLCanvasElement, private followPose: CameraPose = {
     position: { x: 0, y: 20, z: 14 }, target: { x: 0, y: 0, z: 0 }
-  }) { this.update({ x: 0, z: 0 }) }
+  }) {
+    this.update({ x: 0, z: 0 })
+    canvas.addEventListener('wheel', event => {
+      event.preventDefault()
+      this.setOrbit(this.distance + (event.shiftKey ? 0 : event.deltaY * 0.012),
+        this.yaw + (event.shiftKey ? event.deltaY * 0.08 : 0))
+    }, { passive: false, signal: this.controls.signal })
+  }
 
   get isFollowing(): boolean { return this.following }
 
@@ -49,16 +60,34 @@ export class CameraRig {
     this.look()
   }
 
-  follow(): void { this.following = true; this.activeBookmark = null }
+  follow(): void { this.following = true; this.activeBookmark = null; this.snap = true }
 
-  update(player: Vec2 & { y?: number }): void {
+  /** Bounded distance and yaw preserve the 55° gameplay pitch. */
+  setOrbit(distance: number, yaw: number): void {
+    if (!Number.isFinite(distance) || !Number.isFinite(yaw)) return
+    this.distance = Math.max(14, Math.min(19, distance))
+    this.yaw = Math.max(-5, Math.min(25, yaw))
+    const pitch = 55 * Math.PI / 180
+    const angle = this.yaw * Math.PI / 180
+    this.followPose.position = { x: Math.sin(angle) * Math.cos(pitch) * this.distance,
+      y: 0.9 + Math.sin(pitch) * this.distance, z: Math.cos(angle) * Math.cos(pitch) * this.distance }
+    this.follow()
+  }
+
+  resetFollow(): void { this.snap = true }
+
+  dispose(): void { this.controls.abort() }
+
+  update(player: Vec2 & { y?: number }, dt = 1 / 60): void {
     this.player = { ...player }
     this.ground.constant = -(player.y ?? 0)
     if (!this.following) return
     const { position, target, fov } = this.followPose
     const height = player.y ?? 0
-    this.target.set(player.x + target.x, height + target.y, player.z + target.z)
-    this.camera.position.set(player.x + position.x, height + position.y, player.z + position.z)
+    const blend = this.snap ? 1 : 1 - Math.exp(-14 * Math.max(0, dt))
+    this.target.lerp(new Vector3(player.x + target.x, height + target.y, player.z + target.z), blend)
+    this.camera.position.lerp(new Vector3(player.x + position.x, height + position.y, player.z + position.z), blend)
+    this.snap = false
     if (fov !== undefined && this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix() }
     this.look()
   }
@@ -70,11 +99,16 @@ export class CameraRig {
     return { forward, right: { x: -forward.z, z: forward.x } }
   }
 
-  groundPoint(x: number, y: number): Vec2 | null {
+  groundPoint(x: number, y: number, heightAt?: (x: number, z: number) => number): Vec2 | null {
     const rect = this.canvas.getBoundingClientRect()
     this.ray.setFromCamera(new Vector2((x - rect.left) / rect.width * 2 - 1,
       1 - (y - rect.top) / rect.height * 2), this.camera)
-    const hit = this.ray.ray.intersectPlane(this.ground, new Vector3())
+    const plane = this.ground.clone()
+    const hit = this.ray.ray.intersectPlane(plane, new Vector3())
+    if (hit && heightAt) for (let i = 0; i < 8; i++) {
+      plane.constant = -heightAt(hit.x, hit.z)
+      if (!this.ray.ray.intersectPlane(plane, hit)) return null
+    }
     return hit ? { x: hit.x, z: hit.z } : null
   }
 

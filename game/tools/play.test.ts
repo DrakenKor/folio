@@ -20,6 +20,7 @@ describe('play CLI disconnected CDP transport', () => {
     mkdirSync(join(root, 'game/.play-out'), { recursive: true })
     const tool = join(root, 'game/tools/play.mjs')
     copyFileSync(fileURLToPath(new URL('./play.mjs', import.meta.url)), tool)
+    copyFileSync(fileURLToPath(new URL('./normal-fight.mjs', import.meta.url)), join(root, 'game/tools/normal-fight.mjs'))
     writeFileSync(join(root, 'game/.play-out/session.json'), JSON.stringify({ browserUrl: 'ws://browser', targetId: 'game' }))
     // A CDP peer closes during the first command or immediately after its reply.
     const preload = `
@@ -61,6 +62,7 @@ describe('play command and observation hooks', () => {
     const tool = join(root, 'game/tools/play.mjs')
     const expressions = join(root, 'expressions.jsonl')
     copyFileSync(fileURLToPath(new URL('./play.mjs', import.meta.url)), tool)
+    copyFileSync(fileURLToPath(new URL('./normal-fight.mjs', import.meta.url)), join(root, 'game/tools/normal-fight.mjs'))
     writeFileSync(join(root, 'game/.play-out/session.json'), JSON.stringify({ browserUrl: 'ws://browser', targetId: 'game' }))
     const preload = `
       import {appendFileSync} from 'node:fs';

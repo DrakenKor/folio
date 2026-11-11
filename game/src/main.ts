@@ -1,11 +1,12 @@
 import { WebGPURenderer } from 'three/webgpu'
+import { createHUD } from './ui/hud'
 import { Clock } from './platform/clock'
 import { Input } from './platform/input'
 import { initialWorld, storeSession } from './platform/session'
 import { BasicView } from './render/basic/view'
 import { MeadowView } from './render/meadow-view'
 import { createAPI } from './debug/api'
-import { deathControls, graphicsStopped, toast } from './debug/overlay'
+import { graphicsStopped, toast } from './debug/overlay'
 
 const canvas = document.getElementById('stage') as HTMLCanvasElement
 const url = new URL(location.href)
@@ -76,6 +77,7 @@ Object.assign(api, {
     return renderCharacterSheet(view instanceof MeadowView ? view.asset : undefined, clip, url.searchParams.get('backend') === 'webgl')
   }
 })
+const hud = createHUD(() => api.restart())
 if (import.meta.env.DEV || url.searchParams.get('debug') === '1') window.__game = api
 
 window.addEventListener('keydown', async event => {
@@ -98,7 +100,7 @@ resize()
 function draw(now: number): void {
   if (lost) return
   view.sync(clock.frame(now))
-  deathControls(!!clock.world.entities.find(entity => entity.id === clock.world.playerId)?.death, () => api.restart())
+  hud.sync(clock.world)
   view.render()
   firstFrame()
   animation = requestAnimationFrame(draw)
@@ -114,6 +116,7 @@ if (import.meta.hot) import.meta.hot.dispose(() => {
   storeSession(clock.world, clock.userPaused)
   listeners.abort()
   input.dispose()
+  hud.dispose()
   view.dispose()
   void renderer.dispose()
 })

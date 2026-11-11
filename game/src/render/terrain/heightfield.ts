@@ -2,6 +2,7 @@
 // winding through it, a flattened site for the monolith and a spot for the
 // player. Pure data, computed once on the CPU; meshes and shaders read it.
 import { DataTexture, DataUtils, HalfFloatType, LinearFilter, RGBAFormat, ClampToEdgeWrapping } from 'three/webgpu'
+import type { World } from '../../sim/core/types'
 import { Noise2D, lerp, rng, smoothstep, subSeed } from '../rng'
 
 export const TERRAIN_SIZE = 256
@@ -16,6 +17,7 @@ export interface Point {
 
 export interface Heightfield {
   seed: number
+  arena: World['arena']
   heights: Float32Array
   /** 1 on the path's centre line, fading to 0 at its worn edges. */
   path: Float32Array
@@ -34,13 +36,15 @@ export interface Heightfield {
 
 const PATH_HALF_WIDTH = 1.25
 
-export function createHeightfield(seed: number): Heightfield {
+export function createHeightfield(seed: number, arena: World['arena'] = null): Heightfield {
   const random = rng(subSeed(seed, 'layout'))
   const noise = new Noise2D(subSeed(seed, 'height'))
   const jitter = (r: number) => (random() * 2 - 1) * r
 
   const monolith = { x: 26 + jitter(5), z: -30 + jitter(5), y: 0 }
   const player = { x: -6 + jitter(2), z: 18 + jitter(2) }
+
+  const clearing = arena ? { center: { x: player.x + arena.center.x, z: player.z + arena.center.z }, radius: arena.radius } : null
 
   // Path from the southern hills, past the player, to the monolith, then away north-west.
   const controls: Point[] = [
@@ -124,6 +128,7 @@ export function createHeightfield(seed: number): Heightfield {
 
   return {
     seed,
+    arena: clearing,
     heights,
     path,
     grass,

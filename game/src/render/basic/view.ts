@@ -70,6 +70,7 @@ export class BasicView implements RenderView {
   }
 
   dispose(): void {
+    this.camera.dispose()
     this.capsule.dispose(); this.tick.dispose(); this.groundGeometry.dispose()
     this.playerMaterial.dispose(); this.dummyMaterial.dispose(); this.facingMaterial.dispose(); this.groundMaterial.dispose()
     this.grid.dispose()

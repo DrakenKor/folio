@@ -57,7 +57,9 @@ export function createFlowers(env: Environment, field: Heightfield) {
     const fade = nearFade(vec3(xz.x, site.r, xz.y)).mul(smoothstep(22, 30, edge.x.max(edge.y)).oneMinus())
     const threshold = rand(0x789a).mul(0.85)
     const exists = mix(step(clusterRand(0x89ab), float(CLUSTER_CHANCE)).mul(step(0.9, centreSite.b)), float(1), scattered).mul(step(0.9, site.b))
-    const keep = exists.mul(smoothstep(threshold, threshold.add(0.15), fade)).mul(trampleAt(env, xz).oneMinus())
+    const clearing = field.arena ? smoothstep(field.arena.radius, field.arena.radius + 1.5,
+      xz.sub(vec2(field.arena.center.x, field.arena.center.z)).length()) : float(1)
+    const keep = exists.mul(clearing).mul(smoothstep(threshold, threshold.add(0.15), fade)).mul(trampleAt(env, xz).oneMinus())
     const size = mix(float(0.032), float(0.05), rand(0x9abc)).mul(keep)
     const height = mix(float(0.43), float(0.67), rand(0xabcd))
     const lean = windAt(env, xz).lean.add(sin(env.time.mul(2.3).add(turn)).mul(0.05)).mul(height).mul(0.6)

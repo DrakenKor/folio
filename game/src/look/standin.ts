@@ -1,11 +1,14 @@
 // Placeholder figures for judging readability on the look page only: a hero
 // in a red cloak, a violet enemy and a glowing projectile between them. The
 // real characters come from render/characters (T0.6).
-import { ConeGeometry, CylinderGeometry, Group, Mesh, PlaneGeometry, SphereGeometry, DoubleSide, type BufferGeometry } from 'three/webgpu'
-import { color, faceDirection, float, mrt, positionLocal, sin, cos, transformNormalToView, vec3, vec4 } from 'three/tsl'
+import { CylinderGeometry, Group, Mesh, PlaneGeometry, SphereGeometry, DoubleSide, type BufferGeometry } from 'three/webgpu'
+import { color, faceDirection, mrt, positionLocal, sin, cos, transformNormalToView, vec3, vec4 } from 'three/tsl'
 import { CelMaterial } from '../render/materials/cel'
 import type { Environment } from '../render/materials/environment'
 import type { Heightfield } from '../render/terrain/heightfield'
+import { createEnemy } from '../render/combat/creaseback'
+
+export { createEnemy } from '../render/combat/creaseback'
 
 export function createStandIns(env: Environment, field: Heightfield, enemyAt: { x: number; z: number }) {
   const group = new Group()
@@ -96,29 +99,4 @@ function createHero(env: Environment): Group {
   scarfMesh.rotation.y = Math.PI / 2 + 0.4
   hero.add(scarfMesh)
   return hero
-}
-
-export function createEnemy(env: Environment): Group {
-  const enemy = new Group()
-  const body = new CelMaterial(env, { color: 0x5b3f86, readability: true })
-  const shell = new CelMaterial(env, { color: 0xb05ad8, flatShading: true, readability: true })
-  const dome = part(new SphereGeometry(0.55, 20, 14), body, 0.38)
-  dome.scale.set(1.15, 0.72, 1.3)
-  enemy.add(dome)
-  for (let i = 0; i < 5; i++) {
-    const spike = part(new ConeGeometry(0.12, 0.42, 5), shell, 0.78)
-    const a = (i / 5) * Math.PI * 2
-    spike.position.set(Math.cos(a) * 0.22, 0.72 + (i % 2) * 0.05, Math.sin(a) * 0.3 - 0.08)
-    spike.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5)
-    enemy.add(spike)
-  }
-  const eyeGlow = color('#d650a8').mul(float(1.1))
-  const eyeMaterial = new CelMaterial(env, { color: 0xb84e92, emissiveNode: eyeGlow, outlineColor: null })
-  eyeMaterial.mrtNode = mrt({ glow: vec4(eyeGlow, 1) })
-  for (const side of [-1, 1]) {
-    const eye = part(new SphereGeometry(0.045, 10, 8), eyeMaterial, 0.5)
-    eye.position.set(side * 0.2, 0.5, 0.62)
-    enemy.add(eye)
-  }
-  return enemy
 }
