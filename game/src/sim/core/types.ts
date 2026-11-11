@@ -7,7 +7,7 @@ export const TICK_DT = 1 / TICK_HZ
 
 /** Bumped whenever the shape of `World` changes. */
 export const SCHEMA_VERSION = 2
-export const SIM_BUILD = 'm1-sim-v2'
+export const SIM_BUILD = 'm1-sim-v3'
 
 /** Fixed clip measurements at 1.8 m height; see game/ASSETS.md. */
 export const GAIT = Object.freeze({ walkSpeed: 0.561, runSpeed: 2.521, walkStride: 0.599, runStride: 2.017 })
@@ -68,6 +68,7 @@ export interface EnemyDefinition {
   id: string
   maxHealth: number
   radius: number
+  /** Ordinary locomotion speed in metres/second. */
   moveSpeed: number
   acquireRange: number
   attackRange: number
@@ -106,7 +107,7 @@ export interface GaitState {
 export interface DeathState {
   startTick: number
   ageTicks: number
-  /** Null holds the terminal pose indefinitely. */
+  /** Enemy definition's deathTicks via ai.enemyId; null without AI holds the terminal pose. */
   despawnAfterTicks: number | null
 }
 
@@ -175,8 +176,8 @@ export interface World {
   /** Sorted by id, sharing the actors' nextId allocator. */
   projectiles: Projectile[]
   content: CombatContent
-  /** Inclusive actor-centre bounds; null leaves the M0 world unbounded. */
-  arena: { min: Vec2; max: Vec2 } | null
+  /** Inclusive circular actor-centre bound; null leaves the world unbounded. */
+  arena: { center: Vec2; radius: number } | null
   playerId: EntityId | null
 }
 
@@ -195,7 +196,7 @@ export const BUTTON_MASK = 0xff
 
 /** The player's input for one tick. */
 export interface Command {
-  /** Desired movement direction, length at most 1. */
+  /** Desired movement direction; full length uses GAIT.runSpeed for the player. */
   move: Vec2
   /** Aim point in world space, or null when there is no pointer. */
   aim: Vec2 | null
