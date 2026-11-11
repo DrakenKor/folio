@@ -127,6 +127,8 @@ async function attach() {
   await page.send('Page.bringToFront')
   await page.send('Emulation.setFocusEmulationEnabled', { enabled: true })
   await page.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1.5, mobile: false })
+  // Let resize listeners update projection matrices before pointer coordinates are sampled.
+  await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
   consoleEntries.push(...session.console ?? [])
 }
 
@@ -191,10 +193,17 @@ async function callOn(objectId, functionDeclaration, values = []) {
 }
 
 const observe = () => evaluate(`(() => {
-  const world = __game.state();
-  return {tick:world.tick, hash:__game.hash(), player:world.entities.find(e => e.id === world.playerId),
+  const state = __game.observe();
+  return {...state, player:state.actors.find(e => e.id === state.playerId),
     hidden:document.hidden, focused:document.hasFocus(), description:__game.describe()};
 })()`)
+
+async function cmd(value) {
+  assert(value, 'Usage: cmd <json>')
+  const command = typeof value === 'string' ? JSON.parse(value) : value
+  await evaluate(`__game.cmd(${JSON.stringify(command)})`)
+  report('cmd', { queued: true })
+}
 
 async function boot(url, scenario = options.scenario, snap = options.snap) {
   assert(url, 'Usage: boot <url> [--scenario name] [--snap file]')
@@ -340,6 +349,31 @@ async function key(type, code) {
   else heldKeys.delete(code)
 }
 
+async function pointer(op, { x, y, button }) {
+  assert(Number.isFinite(x) && Number.isFinite(y), 'Pointer needs finite x and y')
+  const type = { pointerMove: 'mouseMoved', pointerDown: 'mousePressed', pointerUp: 'mouseReleased' }[op]
+  if (op !== 'pointerMove') assert(['left', 'right'].includes(button), 'Pointer button must be left or right')
+  await page.send('Input.dispatchMouseEvent', { type, x, y, button: button ?? 'none',
+    buttons: op === 'pointerDown' ? button === 'left' ? 1 : 2 : 0, clickCount: op === 'pointerMove' ? 0 : 1 })
+  report(op, { x, y, button })
+}
+
+async function replay() {
+  const before = await observe()
+  const origin = await evaluate('location.origin')
+  await browser.send('Browser.grantPermissions', { origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] })
+  await evaluate('document.querySelector("#toast")?.remove()')
+  await key('keyDown', 'F8'); await key('keyUp', 'F8')
+  await until(() => evaluate('document.querySelector("#toast")?.textContent === "Replay copied"'), 'F8 replay clipboard')
+  const text = await evaluate('navigator.clipboard.readText()')
+  const result = await evaluate(`__game.loadReplay(${JSON.stringify(text)})`)
+  assert.deepEqual(result, { ok: true }, 'F8 replay did not verify')
+  const after = await observe()
+  assert.equal(after.hash, before.hash, 'F8 replay final hash differs')
+  assert.equal(after.tick, before.tick)
+  report('replay', { ...result, tick: after.tick, hash: after.hash, bytes: text.length })
+}
+
 async function background(seconds) {
   const ms = duration(seconds, 'background seconds') * 1000
   await evaluate('__game.resume()')
@@ -476,6 +510,10 @@ async function run(file) {
           break
         }
         case 'keyDown': case 'keyUp': await key(step.op, step.code); report(step.op, { code: step.code }); break
+        case 'pointerMove': case 'pointerDown': case 'pointerUp': await pointer(step.op, step); break
+        case 'cmd': await cmd(step.command); break
+        case 'observe': report('observe', await observe()); break
+        case 'replay': await replay(); break
         case 'background': await background(step.seconds); break
         case 'blur': await blur(step.ms); break
         case 'console': await consoleSample(step.ms ?? 0, step.expectEmpty ?? false); break
@@ -513,13 +551,15 @@ try {
   else if (command === 'run') await run(positional[0])
   else if (command === 'stop') await stop()
   else if (command === 'sheet') { await attach(); await sheet(...positional) }
-  else if (['shot', 'console', 'perf', 'net'].includes(command)) {
+  else if (['shot', 'console', 'perf', 'net', 'cmd', 'observe'].includes(command)) {
     await attach()
     if (command === 'shot') await shot(...positional)
     if (command === 'console') await consoleSample(positional[0] ?? 0)
     if (command === 'perf') await perf(positional[0] ?? 2)
     if (command === 'net') net()
-  } else throw new Error('Usage: play.mjs boot|run|shot|sheet|console|perf|net|stop [args] [--out-dir directory]')
+    if (command === 'cmd') await cmd(positional[0])
+    if (command === 'observe') report('observe', await observe())
+  } else throw new Error('Usage: play.mjs boot|run|cmd <json>|observe|shot|sheet|console|perf|net|stop [args] [--out-dir directory]')
 } catch (error) {
   console.error(error.message)
   process.exitCode = 1

@@ -1,4 +1,4 @@
-import { Button } from '../sim/core/index'
+import { Button, copyCommand, IDLE_COMMAND } from '../sim/core/index'
 import type { Command, Vec2, World } from '../sim/core/index'
 
 interface Basis { forward: Vec2; right: Vec2 }
@@ -13,15 +13,27 @@ export class HeldInput {
   keys = new Set<string>()
   mouseButtons = 0
   pointer: Vec2 | null = null
+  private pendingKeys = new Set<string>()
+  private pendingButtons = 0
 
-  release(): void { this.keys.clear(); this.mouseButtons = 0; this.pointer = null }
+  keyDown(code: string): void { if (!this.keys.has(code)) this.pendingKeys.add(code); this.keys.add(code) }
+  keyUp(code: string): void { this.keys.delete(code) }
+  pointerDown(button: number): void { this.mouseButtons |= button; this.pendingButtons |= button }
+  pointerUp(button: number): void { this.mouseButtons &= ~button }
+
+  release(): void {
+    this.keys.clear(); this.pendingKeys.clear()
+    this.mouseButtons = 0; this.pendingButtons = 0; this.pointer = null
+  }
 
   command(basis: Basis): Command {
-    const forward = Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS'))
-    const right = Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA'))
+    const keys = new Set([...this.keys, ...this.pendingKeys])
+    const forward = Number(keys.has('KeyW')) - Number(keys.has('KeyS'))
+    const right = Number(keys.has('KeyD')) - Number(keys.has('KeyA'))
     const length = Math.max(1, Math.hypot(forward, right))
-    let buttons = this.mouseButtons
-    for (const key of this.keys) buttons |= KEY_BUTTONS[key] ?? 0
+    let buttons = this.mouseButtons | this.pendingButtons
+    for (const key of keys) buttons |= KEY_BUTTONS[key] ?? 0
+    this.pendingKeys.clear(); this.pendingButtons = 0
     return {
       move: { x: (forward * basis.forward.x + right * basis.right.x) / length,
         z: (forward * basis.forward.z + right * basis.right.z) / length },
@@ -35,6 +47,7 @@ export class Input {
   readonly held = new HeldInput()
   private listeners = new AbortController()
   private pointer: { x: number; y: number } | null = null
+  private queued: Command | null = null
   private target: { x: number; z: number; ticks: number; resolve: (arrived: boolean) => void } | null = null
 
   constructor(canvas: HTMLCanvasElement, private basis: () => Basis,
@@ -44,29 +57,40 @@ export class Input {
       if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, button')) return
       if (MOVEMENT_KEYS.includes(event.code) || event.code in KEY_BUTTONS) {
         event.preventDefault()
-        this.held.keys.add(event.code)
+        this.held.keyDown(event.code)
       }
     }, options)
-    window.addEventListener('keyup', event => this.held.keys.delete(event.code), options)
+    window.addEventListener('keyup', event => this.held.keyUp(event.code), options)
     canvas.addEventListener('pointermove', event => { this.pointer = { x: event.clientX, y: event.clientY } }, options)
     canvas.addEventListener('pointerleave', () => { this.pointer = null; this.held.pointer = null }, options)
     canvas.addEventListener('pointerdown', event => {
       canvas.focus()
       this.pointer = { x: event.clientX, y: event.clientY }
-      this.held.mouseButtons |= event.button === 0 ? Button.Primary : event.button === 2 ? Button.Secondary : 0
+      this.held.pointerDown(event.button === 0 ? Button.Primary : event.button === 2 ? Button.Secondary : 0)
     }, options)
     window.addEventListener('pointerup', event => {
-      this.held.mouseButtons &= ~(event.button === 0 ? Button.Primary : event.button === 2 ? Button.Secondary : 0)
+      this.held.pointerUp(event.button === 0 ? Button.Primary : event.button === 2 ? Button.Secondary : 0)
     }, options)
     canvas.addEventListener('contextmenu', event => event.preventDefault(), options)
     window.addEventListener('blur', () => this.release(), options)
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.release() }, options)
   }
 
-  command(world: World): Command {
+  /** The latest queued command replaces live/script input for exactly one tick. */
+  queue(command: Command): void { this.queued = copyCommand(command) }
+
+  command(world: World, fallback?: Command): Command {
+    if (world.entities.find(entity => entity.id === world.playerId)?.death) {
+      const command = this.queued ?? fallback ?? IDLE_COMMAND
+      this.release()
+      return copyCommand(command)
+    }
     this.held.pointer = this.pointer ? this.groundPoint(this.pointer.x, this.pointer.y) : null
-    const command = this.held.command(this.basis())
-    if (this.target) {
+    const live = this.held.command(this.basis())
+    const command = this.queued ?? (fallback ? copyCommand(fallback) : live)
+    const overridden = this.queued !== null || fallback !== undefined
+    this.queued = null
+    if (this.target && !overridden) {
       const player = world.entities.find(entity => entity.id === world.playerId)
       if (!player) this.finish(false)
       else {
@@ -96,7 +120,7 @@ export class Input {
     return new Promise(resolve => { this.target = { x, z, ticks: 0, resolve } })
   }
 
-  release(): void { this.held.release(); this.pointer = null; this.finish(false) }
+  release(): void { this.held.release(); this.pointer = null; this.queued = null; this.finish(false) }
   dispose(): void { this.release(); this.listeners.abort() }
 
   private finish(arrived: boolean): void {

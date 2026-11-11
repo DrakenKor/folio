@@ -1,4 +1,4 @@
-import { canonical, copyCommand, hashWorld, IDLE_COMMAND, restore, serialize, verifyReplay } from '../sim/core/index'
+import { actionPhase, canonical, copyCommand, hashWorld, IDLE_COMMAND, restore, serialize, verifyReplay } from '../sim/core/index'
 import type { Command, Replay } from '../sim/core/index'
 import { buildScenario } from '../sim/scenarios'
 import type { CameraRig } from '../render/basic/camera'
@@ -9,6 +9,7 @@ import { decode, encode } from '../platform/encoding'
 export interface ScriptEntry { tick: number; command: Command }
 
 export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: Promise<void>, loseDevice: () => void) {
+  let restartSnapshot = serialize(clock.world)
   const replace = (text: string) => {
     const world = restore(text)
     input.release()
@@ -39,6 +40,19 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
       }
       return value
     },
+    observe() {
+      const world = clock.world
+      const command = clock.recorder.exportReplay().commands.at(-1) ?? null
+      return structuredClone({ tick: world.tick, hash: hashWorld(world), paused: clock.paused,
+        playerId: world.playerId, commandTick: command ? world.tick : null, command,
+        actors: world.entities.map(actor => {
+          const action = actor.action
+          const timing = action?.kind === 'dodge' ? world.content.dodge.timing :
+            world.content.skills.find(skill => skill.id === action?.id)?.timing
+          return { ...actor, action: action ? { ...action, phase: actionPhase(timing!, action.ageTicks) } : null }
+        }), projectiles: world.projectiles })
+    },
+    cmd: (command: Command) => input.queue(command),
     hash: () => hashWorld(clock.world),
     perf: () => clock.perf(),
     pause: () => clock.pause(),
@@ -51,7 +65,12 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
       return url.href
     },
     restore: replace,
-    scenario(name: string, seed = 1): void { replace(serialize(buildScenario(name, seed))) },
+    scenario(name: string, seed = 1): void {
+      const snapshot = serialize(buildScenario(name, seed))
+      replace(snapshot)
+      restartSnapshot = snapshot
+    },
+    restart(): void { replace(restartSnapshot) },
     simulate(script: ScriptEntry[], ticks: number): string {
       if (!Array.isArray(script)) throw new TypeError('Script must be an array')
       if (!Number.isSafeInteger(ticks) || ticks < 0) throw new RangeError('Ticks must be a nonnegative safe integer')
@@ -65,7 +84,7 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
       let command: Command = IDLE_COMMAND
       for (let i = 0; i < ticks; i++) {
         while (entries[index] && entries[index]!.tick <= clock.world.tick) command = entries[index++]!.command
-        clock.advance(1, command)
+        clock.advance(1, input.command(clock.world, command))
       }
       return hashWorld(clock.world)
     },
@@ -87,6 +106,8 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
       if (!player) throw new Error('No player to teleport')
       player.pos = { x, z }
       player.vel = { x: 0, z: 0 }
+      player.knockback = null
+      player.gait.speed = 0
       replace(serialize(world))
     },
     camera: { bookmark: (name: string) => camera.bookmark(name), set: camera.set.bind(camera),

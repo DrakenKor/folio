@@ -51,6 +51,51 @@ describe('play CLI disconnected CDP transport', () => {
   })
 })
 
+describe('play command and observation hooks', () => {
+  it.each(['cmd', 'observe'])('routes %s through the public debug hook', command => {
+    mkdirSync(scratch, { recursive: true })
+    const root = mkdtempSync(join(scratch, 'play-hooks-'))
+    fixtures.push(root)
+    mkdirSync(join(root, 'game/tools'), { recursive: true })
+    mkdirSync(join(root, 'game/.play-out'), { recursive: true })
+    const tool = join(root, 'game/tools/play.mjs')
+    const expressions = join(root, 'expressions.jsonl')
+    copyFileSync(fileURLToPath(new URL('./play.mjs', import.meta.url)), tool)
+    writeFileSync(join(root, 'game/.play-out/session.json'), JSON.stringify({ browserUrl: 'ws://browser', targetId: 'game' }))
+    const preload = `
+      import {appendFileSync} from 'node:fs';
+      globalThis.fetch = async url => ({json:async()=>url.endsWith('/json/version')
+        ? {webSocketDebuggerUrl:'ws://browser'} : [{id:'game',webSocketDebuggerUrl:'ws://page'}]});
+      globalThis.WebSocket = class {
+        static OPEN = 1;
+        readyState = 1;
+        constructor() { setTimeout(()=>this.onopen?.(),0) }
+        send(data) {
+          const {id,method,params} = JSON.parse(data);
+          let result = {};
+          if (method === 'Runtime.evaluate') {
+            appendFileSync(${JSON.stringify(expressions)},JSON.stringify(params.expression)+'\\n');
+            result = {result:{value:{tick:77,actors:[],projectiles:[]}}};
+          }
+          queueMicrotask(()=>this.onmessage?.({data:JSON.stringify({id,result})}));
+        }
+        close() { this.readyState = 3 }
+      };
+    `
+    const input = { move: { x: 1, z: 0 }, aim: { x: 4, z: 2 }, buttons: 4 }
+    const args = command === 'cmd' ? ['cmd', JSON.stringify(input)] : ['observe']
+    const result = spawnSync(process.execPath, ['--import', `data:text/javascript;base64,${Buffer.from(preload).toString('base64')}`, tool, ...args], {
+      cwd: root, encoding: 'utf8', timeout: 2000, env: { ...process.env, PLAY_CDP_PORT: '9570' }
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status, result.stderr).toBe(0)
+    expect(JSON.parse(result.stdout)).toMatchObject(command === 'cmd' ? { command, queued: true } : { command, tick: 77, actors: [], projectiles: [] })
+    const evaluated = readFileSync(expressions, 'utf8').trim().split('\n').map(line => JSON.parse(line))
+    expect(evaluated.at(-1)).toContain(command === 'cmd' ? `__game.cmd(${JSON.stringify(input)})` : '__game.observe()')
+    expect(evaluated.at(-1)).not.toMatch(/__game\.(restore|teleport|state)\(/)
+  })
+})
+
 // Run with PLAY_ACCEPTANCE=1 and public/ served on loopback port 8790.
 it.runIf(process.env.PLAY_ACCEPTANCE === '1')('captures both backends and measures a fresh headless load', () => {
   const root = fileURLToPath(new URL('../../', import.meta.url))

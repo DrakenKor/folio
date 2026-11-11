@@ -14,7 +14,59 @@ function browserInput() {
   return input
 }
 
+const pointer = (type: string, button: number) => {
+  const target = type === 'pointerdown' ? document.querySelector('canvas')! : window
+  target.dispatchEvent(new MouseEvent(type, { button, clientX: 20, clientY: 30 }))
+}
+
 describe('input', () => {
+  it.each([
+    ['primary', Button.Primary, 0], ['secondary', Button.Secondary, 2], ['Space', Button.Dodge, 'Space'],
+    ['Q', Button.Skill1, 'KeyQ'], ['1', Button.Skill1, 'Digit1'], ['2', Button.Skill2, 'Digit2'],
+    ['3', Button.Skill3, 'Digit3'], ['4', Button.Skill4, 'Digit4'], ['E', Button.Interact, 'KeyE']
+  ])('maps %s and consumes a brief press exactly once', (_name, bit, code) => {
+    const controls = browserInput()
+    const world = createWorld(7)
+    if (typeof code === 'number') { pointer('pointerdown', code); pointer('pointerup', code) }
+    else {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code }))
+      window.dispatchEvent(new KeyboardEvent('keyup', { code }))
+    }
+    expect(controls.command(world).buttons).toBe(bit)
+    expect(controls.command(world).buttons).toBe(0)
+  })
+
+  it('preserves a brief movement press, held buttons and world-space pointer aim', () => {
+    const controls = browserInput()
+    const world = createWorld(7)
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }))
+    pointer('pointerdown', 0)
+    expect(controls.command(world)).toEqual({ move: { x: 0, z: -1 }, aim: { x: 2, z: 3 }, buttons: Button.Primary })
+    expect(controls.command(world)).toEqual({ move: { x: 0, z: 0 }, aim: { x: 2, z: 3 }, buttons: Button.Primary })
+    pointer('pointerup', 0)
+    expect(controls.command(world).buttons).toBe(0)
+    const menu = new MouseEvent('contextmenu', { cancelable: true })
+    document.querySelector('canvas')!.dispatchEvent(menu)
+    expect(menu.defaultPrevented).toBe(true)
+  })
+
+  it('copies and validates a queued command, overrides one tick and consumes pending live input', () => {
+    const controls = browserInput()
+    const world = createWorld(7)
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))
+    pointer('pointerdown', 0); pointer('pointerup', 0)
+    const command = { move: { x: 1, z: 0 }, aim: { x: 10, z: 5 }, buttons: Button.Secondary }
+    controls.queue(command)
+    command.move.x = 99
+    expect(() => controls.queue({ ...command, buttons: 256 })).toThrow('Invalid command')
+    expect(controls.command(world)).toEqual({ ...command, move: { x: 1, z: 0 } })
+    expect(controls.command(world)).toEqual({ move: { x: 0, z: -1 }, aim: { x: 2, z: 3 }, buttons: 0 })
+    controls.queue(command)
+    controls.queue({ move: { x: 0, z: 0 }, aim: null, buttons: 0 })
+    expect(controls.command(world).buttons).toBe(0)
+  })
+
   it('normalizes camera-relative diagonals and combines buttons', () => {
     const held = new HeldInput()
     held.keys = new Set(['KeyW', 'KeyD', 'Space', 'Digit3'])
@@ -29,7 +81,10 @@ describe('input', () => {
     const controls = browserInput()
     const world = createWorld(7, 'test')
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))
-    controls.held.mouseButtons = Button.Primary
+    pointer('pointerdown', 0)
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }))
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }))
+    controls.queue({ move: { x: 1, z: 0 }, aim: null, buttons: Button.Secondary })
     controls.held.pointer = { x: 2, z: 3 }
     const arrival = controls.moveTo(4, 5)
     if (reason === 'blur') window.dispatchEvent(new Event('blur'))
@@ -39,6 +94,19 @@ describe('input', () => {
     }
     expect(controls.command(world)).toEqual({ move: { x: 0, z: 0 }, aim: null, buttons: 0 })
     await expect(arrival).resolves.toBe(false)
+  })
+
+  it('disables live gameplay for a dead player while consuming explicit commands', () => {
+    const controls = browserInput()
+    const world = createWorld(7)
+    spawnEntity(world, { kind: 'player', pos: { x: 0, z: 0 }, radius: 0.4,
+      health: 0, death: { startTick: 0, ageTicks: 0, despawnAfterTicks: null } })
+    pointer('pointerdown', 0)
+    expect(controls.command(world)).toEqual({ move: { x: 0, z: 0 }, aim: null, buttons: 0 })
+    expect(controls.held.mouseButtons).toBe(0)
+    const command = { move: { x: 1, z: 0 }, aim: null, buttons: Button.Dodge }
+    controls.queue(command)
+    expect(controls.command(world)).toEqual(command)
   })
 
   it('lets the agent override held movement, arrive, and time out after 600 ticks', async () => {

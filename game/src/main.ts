@@ -5,7 +5,7 @@ import { initialWorld, storeSession } from './platform/session'
 import { BasicView } from './render/basic/view'
 import { MeadowView } from './render/meadow-view'
 import { createAPI } from './debug/api'
-import { graphicsStopped, toast } from './debug/overlay'
+import { deathControls, graphicsStopped, toast } from './debug/overlay'
 
 const canvas = document.getElementById('stage') as HTMLCanvasElement
 const url = new URL(location.href)
@@ -98,6 +98,7 @@ resize()
 function draw(now: number): void {
   if (lost) return
   view.sync(clock.frame(now))
+  deathControls(!!clock.world.entities.find(entity => entity.id === clock.world.playerId)?.death, () => api.restart())
   view.render()
   firstFrame()
   animation = requestAnimationFrame(draw)
