@@ -7,7 +7,7 @@ import { float, sin, smoothstep, texture, vec2 } from 'three/tsl'
 import type { Environment } from './environment'
 
 /** Metres per second the gust bands travel downwind. */
-export const GUST_SPEED = 6
+export const GUST_SPEED = 8
 
 /** Gust strength 0..1 at a ground position: soft bands, long across the wind, travelling downwind. */
 export function gustAt(env: Environment, xz: Node<'vec2'>): Node<'float'> {
@@ -15,9 +15,9 @@ export function gustAt(env: Environment, xz: Node<'vec2'>): Node<'float'> {
   const along = xz.dot(dir).sub(env.time.mul(GUST_SPEED))
   const across = xz.dot(vec2(dir.y.negate(), dir.x))
   // Advected broad lobes break up the crosswind front without turning it into bright parallel ribbons.
-  const patch = texture(env.noise, vec2(along.div(65), across.div(42))).level(float(0)).g
-  const crest = sin(along.mul(0.087).add(sin(across.mul(0.055)).mul(1.5))).mul(0.5).add(0.5)
-  return smoothstep(0.28, 0.94, crest).mul(smoothstep(0.22, 0.7, patch).mul(0.72).add(0.28))
+  const patch = texture(env.noise, vec2(along.div(100), across.div(80))).level(float(0)).r
+  const crest = sin(along.mul(0.16).add(sin(across.mul(0.085)).mul(1.5))).mul(0.5).add(0.5)
+  return smoothstep(0.2, 0.85, crest).mul(smoothstep(0.32, 0.66, patch).mul(0.9).add(0.1))
 }
 
 /** Wind at a ground position: the gust 0..1 and the downwind lean it causes, base sway included. */

@@ -59,9 +59,9 @@ export class CombatFeedback {
         let footprint = this.footprints.get(actor.id)
         if (!footprint) {
           footprint = new Group()
-          const fill = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: 0xd6ae65,
+          const fill = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: 0x985027,
             transparent: true, opacity: 0.5, depthWrite: false, depthTest: !!warning, side: DoubleSide }))
-          const rim = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: warning ? 0x705033 : 0xffe4ab,
+          const rim = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: warning ? 0xffd17a : 0xffe4ab,
             transparent: true, opacity: 0.95, depthWrite: false, depthTest: !!warning, side: DoubleSide }))
           fill.renderOrder = warning ? -2 : 1
           rim.renderOrder = warning ? -1 : 2
@@ -72,9 +72,9 @@ export class CombatFeedback {
         const [fill, rim] = footprint.children as [Mesh<BufferGeometry, MeshBasicNodeMaterial>, Mesh<BufferGeometry, MeshBasicNodeMaterial>]
         fill.visible = !!warning
         const progress = Math.min(1, (age + 1) / Math.max(1, skill.timing.windupTicks))
-        fill.material.opacity = 0.42 + progress * 0.18
-        this.sector(fill, actor, action.direction, skill.range * (0.15 + progress * 0.85), skill.arcRadians, 0)
-        this.sector(rim, actor, action.direction, skill.range, skill.arcRadians, skill.range - (warning ? 0.07 : 0.065), !!warning)
+        fill.material.opacity = 0.45 + progress * 0.23
+        this.sector(fill, actor, action.direction, skill.range, skill.arcRadians, 0)
+        this.sector(rim, actor, action.direction, skill.range, skill.arcRadians, skill.range - (warning ? 0.11 : 0.065), !!warning)
       }
     }
     for (const [id, footprint] of this.footprints) if (!live.has(id)) { this.removeMeshGroup(footprint); this.footprints.delete(id) }
@@ -109,12 +109,25 @@ export class CombatFeedback {
   /** New hits stay closest to their target; older hits stack upward, resolving nearby screen collisions too. */
   layout(camera: Camera): void {
     const placed: Array<{ x: number; y: number; w: number; h: number }> = []
+    const player = this.world?.entities.find(actor => actor.id === this.world?.playerId)
+    if (player) {
+      const x = player.pos.x + this.field.player.x
+      const z = player.pos.z + this.field.player.z
+      const head = new Vector3(x, this.field.heightAt(x, z) + 1.65, z).applyMatrix4(camera.matrixWorldInverse)
+      const sx = camera.projectionMatrix.elements[0]! / Math.max(0.1, -head.z)
+      const sy = camera.projectionMatrix.elements[5]! / Math.max(0.1, -head.z)
+      placed.push({ x: head.x * sx, y: head.y * sy, w: 0.4 * sx, h: 0.4 * sy })
+    }
     const ordered = [...this.bursts].sort((a, b) => b.tick - a.tick || a.targetId - b.targetId)
     for (const burst of ordered) {
       const age = (this.world?.tick ?? burst.tick) - burst.tick
       const slot = ordered.filter(other => other.targetId === burst.targetId && other !== burst &&
         (other.tick > burst.tick || (other.tick === burst.tick && ordered.indexOf(other) < ordered.indexOf(burst)))).length
-      const p = burst.object.position.clone().add(new Vector3(0, 1.05 + age / 100 + slot * 0.48, 0)).applyMatrix4(camera.matrixWorldInverse)
+      const target = this.world?.entities.find(actor => actor.id === burst.targetId)
+      const anchor = target ? new Vector3(target.pos.x + this.field.player.x, 0, target.pos.z + this.field.player.z) : burst.object.position.clone()
+      anchor.y = this.field.heightAt(anchor.x, anchor.z)
+      const height = burst.targetId === this.world?.playerId ? 2.25 : 1.1
+      const p = anchor.add(new Vector3(0, height + age / 100 + slot * 0.36, 0)).applyMatrix4(camera.matrixWorldInverse)
       const depth = Math.max(0.1, -p.z)
       const sx = camera.projectionMatrix.elements[0]! / depth
       const sy = camera.projectionMatrix.elements[5]! / depth
@@ -168,8 +181,8 @@ export class CombatFeedback {
     object.traverse(node => {
       if (!(node instanceof Mesh)) return
       for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
-        if (isCelMaterial(material)) material.emissive.setRGB(actor.hitFlashTicks > 0 ? 0.22 : 0,
-          actor.hitFlashTicks > 0 ? 0.16 : 0, actor.hitFlashTicks > 0 ? 0.08 : 0)
+        const flash = actor.hitFlashTicks > 0 ? (actor.hitFlashTicks > 3 ? 2.4 : 0.9) : 0
+        if (isCelMaterial(material)) material.emissive.setRGB(flash, flash * 0.9, flash * 0.72)
       }
     })
   }
@@ -210,7 +223,7 @@ export class CombatFeedback {
     context.fillText(String(event.amount), 64, 32)
     const texture = new CanvasTexture(canvas)
     const number = new Sprite(new SpriteNodeMaterial({ map: texture, depthTest: false, depthWrite: false }))
-    number.scale.set(1.1, 0.55, 1)
+    number.scale.set(0.8, 0.4, 1)
     number.renderOrder = 4
     const object = new Group()
     object.add(number)

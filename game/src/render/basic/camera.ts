@@ -20,7 +20,7 @@ export class CameraRig {
     ['overview', { position: { x: 10, y: 38, z: 26 }, target: { x: 8, y: 0, z: 0 } }],
     ['player', { position: { x: 0, y: 14, z: 10 }, target: { x: 0, y: 0, z: 0 } }]
   ])
-  private distance = 17
+  private distance = 14
   private yaw = 20
   private snap = true
   private readonly controls = new AbortController()
@@ -65,8 +65,8 @@ export class CameraRig {
   /** Bounded distance and yaw preserve the 55° gameplay pitch. */
   setOrbit(distance: number, yaw: number): void {
     if (!Number.isFinite(distance) || !Number.isFinite(yaw)) return
-    this.distance = Math.max(17, Math.min(22, distance))
-    this.yaw = Math.max(-5, Math.min(35, yaw))
+    this.distance = Math.max(14, Math.min(19, distance))
+    this.yaw = Math.max(-5, Math.min(25, yaw))
     const pitch = 55 * Math.PI / 180
     const angle = this.yaw * Math.PI / 180
     this.followPose.position = { x: Math.sin(angle) * Math.cos(pitch) * this.distance,

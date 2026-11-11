@@ -39,7 +39,7 @@ export class MeadowView implements RenderView {
     const pitch = 55 * Math.PI / 180
     const yaw = 20 * Math.PI / 180
     this.camera = new CameraRig(renderer.domElement, {
-      position: { x: Math.sin(yaw) * Math.cos(pitch) * 17, y: 0.9 + Math.sin(pitch) * 17, z: Math.cos(yaw) * Math.cos(pitch) * 17 },
+      position: { x: Math.sin(yaw) * Math.cos(pitch) * 14, y: 0.9 + Math.sin(pitch) * 14, z: Math.cos(yaw) * Math.cos(pitch) * 14 },
       target: { x: 0, y: 0.9, z: 0 }, fov: 40
     })
     this.camera.camera.far = 4000
