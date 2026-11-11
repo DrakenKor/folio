@@ -1,68 +1,61 @@
-# T1.7 feedback — round 1
+# T1.7 feedback — round 2 final
 
-## Round 2 final pass
+All six fixes and both-backend checks are complete. Director review and navigator playtest remain external acceptance gates.
 
-- [x] Build radius-sized folded plates, a dark under-fold and a distinct front using the knight's material language.
-- [x] Stack short-lived numbers per target and separate nearby screen labels; retain small visible contact fragments.
-- [x] Ground the ochre warning beneath actors, with a dark rim and advancing windup fill.
-- [x] Reconstruct dodge trails and folding, fragmenting enemy deaths from simulation state.
-- [x] Restore seeded tree and rock framing outside the arena and share broad travelling gust patches with crowns.
-- [ ] Capture both backends, compare rounds, verify restore, performance, build, tests and lint; sign green commits.
+## Presentation
 
-Assumptions: keep all approved camera, HUD, arc, dart and palette decisions; change presentation only.
-Round 2 verification and final capture judgement will replace this checklist when complete.
+- Radius-sized Creasebacks have overlapping folded plates, triangular ridge scales, dark under-folds and ivory eyes, using the knight's cel finish.
+- Numbers last 30 ticks, cap at 16, stack by target/age and resolve screen collisions; confirmed contacts add four small fragments.
+- Ochre warnings test terrain depth beneath actors, with dark rims and radial fills advancing with processed windup age.
+- Dodge streaks and collapsing, fragmenting, fading deaths reconstruct from state; replacement clears transient contacts.
+- Trees and rocks move outside the arena boundary, restoring central framing while keeping combat clear.
+- Broad patches travel at 6 m/s through the shared grass, ground and crown wind field.
 
-Implementation and both-backend verification are complete. Independent critic and director review remain pending.
-
-- Combat reads simulation poses, pause, flash, action age, projectiles and death; it never writes gameplay state.
-- Confirmed damage produces one number per hit, capped at 16 concurrent numbers with a 42-tick lifetime.
-- World replacement clears contact history; persistent flashes, warnings and death poses reconstruct from current state.
-- Span Cut draws a thin warm contact arc; Fold Dart draws an ivory wedge, short tail and confirmed-contact fragments.
-- Creasebacks retain a low plum silhouette, folded triangular scales, ivory eyes and an ochre committed strike sector.
-- The 55° camera follows smoothly at 40° FOV, with 17–22 m distance and −5° to 35° yaw.
-- Wheel changes distance; Shift + wheel changes yaw. Bookmarks snap directly; pointer aim intersects the terrain heightfield.
-- The translated simulation arena shortens grass and excludes flowers, solid scenery and obstructing foreground crowns.
-- The HUD reads health, action/recovery and dodge availability; encounter outcomes expose restart without changing simulation rules.
-- Arena exclusion preserves the seeded shapes of every remaining tree, including distant landmark framing.
-- Wider gust shoulders and quieter shared sheen retain travelling wind and synchronized crown response.
+Approved camera, aim, HUD, cut arc, dart, shortened grass and bloom restraint are preserved. Rendering never writes simulation state.
 
 ## Verification
 
-All four acceptance areas pass in dev and static builds on WebGPU and forced WebGL2.
-Browser checks cover confirmed hits, misses, immunity, pause, expiry, pointer/dart heading at all orbit limits, both outcomes and restart.
-The full 7,200-tick fight retains hash `bec54592`; rendering leaves serialized simulation state unchanged.
-Retained tree vertex positions, normals, colours and wind attributes exactly match the approved layout.
-Scenery geometry stays outside the arena; 48 boundary/camera sight-line probes found no foreground obstruction.
-Both backends retain zero differing persistent pixels after restoring a mid-fight bookmarked snapshot.
-Raw before/after differences are 0.23707% WebGPU and 0.23714% WebGL2, from intentionally cleared numbers and fragments.
-All browser console samples contain zero errors or warnings.
+All four acceptance areas pass on WebGPU and forced WebGL2 in development and static builds.
+Checks cover confirmed hits, misses, immunity, flash/pause, expiry, both outcomes/restarts, orbit-limit visibility and pointer/projectile aim.
+The 7,200-tick fight retains hash `bec54592`; rendering leaves serialized simulation state unchanged.
+Additional checks confirm radius bounds, five crowded label layouts, decal depth/order and exact dodge/death restoration.
+All 48 camera/boundary sight lines are unobstructed. Console samples contain zero game errors or warnings.
 
-| Eight-second fight sample | Median | p95 |
+| `play.mjs perf 8` frame intervals | Median | p95 |
 | --- | --- | --- |
-| WebGPU dev | 10.0 ms | 11.7 ms |
-| WebGL2 dev | 10.0 ms | 11.4 ms |
+| WebGPU development | 10.0 ms | 11.8 ms |
+| WebGL2 development | 10.0 ms | 11.4 ms |
 | WebGPU static | 10.0 ms | 11.7 ms |
-| WebGL2 static | 10.0 ms | 11.4 ms |
+| WebGL2 static | 10.0 ms | 11.5 ms |
 
-`play.mjs perf 8` measures animation-frame intervals at 1440 × 900 CSS pixels and a 2160 × 1350 drawing buffer.
-Samples execute the committed fight commands, one simulation tick per rendered frame, including normal wave gaps.
+Apple M4 Pro, Brave Chromium 157, seed 7; 1440 × 900 CSS / 2160 × 1350 buffer.
+After 6,000 scripted warmup ticks, the normal clock advances to ticks 6,486–6,491 during sampling. Raw frame samples are retained.
 
-`fnm exec --using=24 npm run game:test`: 325 passed; one existing opt-in browser test skipped.
-`fnm exec --using=24 npm run game:build` and `fnm exec --using=24 npx --no-install eslint game`: pass.
-The build retains its existing large-chunk advisory. No dependency, installation or outside-ownership change is needed.
+Restore differences: WebGPU 0.24163%; WebGL2 0.24174%. Both have zero differing persistent pixels after excluding cleared contact transients.
+Dodge/death transforms, fade values and trail geometry restore exactly.
+
+Commands use `fnm exec --using=24`:
+
+- `npm run game:test`: 325 passed; one existing opt-in browser test skipped.
+- `npm run game:build`: pass; existing large-chunk advisory remains.
+- `npx --no-install eslint game`: pass.
+
+Local `check.mjs` and `r2-check.mjs` pass on all four backend/build combinations.
+Brave, Vite and the static server are stopped; ports 5197 and 9577 are free. Nothing was installed; no outside changes are proposed.
 
 ## Capture judgement
 
-Camera and motion sheets preserve the T1.9 palette, ink, landmark and depth; far gusts now read as a gentle sheen.
-The fight sheet separates warnings, actors and darts; overlapping pack deaths are its least obvious still-frame cue.
-HUD captures make both outcomes and restart clear. Flight and contact share one split panel to fit seven moments into six cells.
-Camera, motion, fight and outcome captures use M1; additional meadow-start comparisons retain the T1.9 setup.
-These are implementer judgements, not independent critic scores. No rubric gap is declared approved or deferred.
+Artifacts: `game/.play-out/t17/r2-{webgpu,webgl}/`, including two-column `fight-compare.png` and `wide-compare.png`.
+
+- Fight: clearer forms, numbers and ground warnings; ridge scales and dodge streaks remain subtle at reduced sheet size.
+- Cameras: central scenery frames combat again, retaining the T1.9 palette, landmark, depth and reviewed framing.
+- Motion-wide: broad soft patches travel across hills with responding crowns; bright parallel ribbons remain absent.
+- HUD: approved defeat/victory styling and restart remain readable.
+
+These are implementer judgements against T1.9 and round 1, not independent critic approval.
 
 ## Files
 
-- `render/combat/{feedback.ts,README.md}` and `ui/hud.{ts,css}`.
-- `render/basic/{camera,view}.ts`, `render/meadow.ts` and `render/meadow-view.ts`.
-- `render/foliage/{flowers,grass,trees}.ts` and `render/materials/wind.ts`.
-- `render/props/{banners,rocks}.ts` and `render/terrain/{heightfield,meadow-material}.ts`.
-- `look/standin.ts` and the HUD integration lines in `main.ts`.
+- `render/combat/{creaseback.ts,feedback.ts,README.md}` and `look/standin.ts`.
+- `render/meadow-view.ts` and `render/post/outline.ts`.
+- `render/foliage/trees.ts`, `render/materials/wind.ts` and `render/props/rocks.ts`.
