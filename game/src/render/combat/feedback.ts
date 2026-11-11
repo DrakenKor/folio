@@ -181,8 +181,8 @@ export class CombatFeedback {
     object.traverse(node => {
       if (!(node instanceof Mesh)) return
       for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
-        const flash = actor.hitFlashTicks > 0 ? (actor.hitFlashTicks > 3 ? 2.4 : 0.9) : 0
-        if (isCelMaterial(material)) material.emissive.setRGB(flash, flash * 0.9, flash * 0.72)
+        const flash = actor.hitFlashTicks > 0 ? (actor.hitFlashTicks > 3 ? 0.5 : 0.2) : 0
+        if (isCelMaterial(material)) material.emissive.setRGB(flash, flash * 0.85, flash * 0.62)
       }
     })
   }

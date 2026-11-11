@@ -82,5 +82,5 @@ Fourteen existing site WASM comparisons skip because `public/wasm` glue/binary a
 Independent critic, six-line quality scoring and navigator playtest remain the requested handoff; no M1 approval is claimed.
 
 Browser driver: `node --import tsx game/tools/t18-evaluate.mjs <dev|static> <webgpu|webgl> [perf]`.
-Input adapter: `PLAY_ORIGIN=<assigned origin> PLAY_CDP_PORT=9578 PLAY_HEADLESS=1 node game/tools/t18-input.mjs`.
+Input checks: `node game/src/debug/combat-input-check.mjs` (see its `.md`); it freezes the camera at the player bookmark and uses the encounter HUD restart.
 All Node commands use Node 24; nothing was installed, pushed, merged or rebased.

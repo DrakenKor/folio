@@ -7,7 +7,7 @@ import { restoreFixtures } from './t18-fixtures.ts'
 
 const [build, backend, mode = 'acceptance'] = process.argv.slice(2)
 assert(['dev', 'static'].includes(build) && ['webgpu', 'webgl'].includes(backend), 'Usage: t18-evaluate.mjs dev|static webgpu|webgl [acceptance|perf]')
-const origin = build === 'dev' ? 'http://127.0.0.1:5198' : 'http://127.0.0.1:8798'
+const origin = process.env.PLAY_ORIGIN ?? (build === 'dev' ? 'http://127.0.0.1:5198' : 'http://127.0.0.1:8798')
 const out = resolve(['perf', 'artifacts'].includes(mode) ? `game/.play-out/t18/${backend}` : `game/.play-out/t18/${build}-${backend}${mode === 'recovery' ? '/recovery' : ''}`)
 mkdirSync(out, { recursive: true })
 const env = { ...process.env, PLAY_CDP_PORT: '9578', PLAY_HEADLESS: '1' }

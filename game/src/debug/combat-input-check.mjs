@@ -38,7 +38,7 @@ try {
       [1, world.content.skills.find(skill => skill.id === actor.skills.primary)],
       [2, world.content.skills.find(skill => skill.id === actor.skills.secondary)]
     ]
-    const reset = (fixture = snapshot) => evaluate(`__game.pause(); __game.restore(${JSON.stringify(JSON.stringify(fixture))})`)
+    const reset = (fixture = snapshot) => evaluate(`__game.pause(); __game.restore(${JSON.stringify(JSON.stringify(fixture))}); __game.camera.bookmark("player")`)
     const step = ticks => run([{ op: 'wait', ticks }])
     const command = value => cli('cmd', JSON.stringify(value))
     const press = (button, held = false) => {
@@ -152,9 +152,9 @@ try {
       command({ ...idle, buttons: 2 }); step(1)
       assert.equal(observe().command.buttons, 2, 'Explicit streams are still consumed while dead')
       run([{ op: 'replay' }])
-      evaluate('new Promise(resolve => requestAnimationFrame(() => { document.querySelector("#death-controls button").click(); resolve() }))')
+      evaluate('new Promise(resolve => requestAnimationFrame(() => { document.querySelector("#encounter-hud .hud-outcome button").click(); resolve() }))')
       assert(player(observe()).health > 0)
-      assert.equal(evaluate('!!document.querySelector("#death-controls")'), false)
+      assert.equal(evaluate('!document.querySelector("#encounter-hud .hud-outcome").hidden'), false)
     })
     check(backend, 'console has no errors or warnings', () => run([{ op: 'console', ms: 100, expectEmpty: true }]))
   }
