@@ -1,5 +1,5 @@
-// Smooth clumps and tiered pines share cel lighting and the travelling meadow gust.
-import { CylinderGeometry, LatheGeometry, Matrix4, Mesh, Quaternion, SphereGeometry, Vector2, Vector3 } from 'three/webgpu'
+// Lobed broadleaf crowns and scalloped fir boughs share the travelling meadow gust.
+import { CylinderGeometry, LatheGeometry, Matrix4, Mesh, Quaternion, Vector2, Vector3 } from 'three/webgpu'
 import { attribute, Fn, positionLocal, sin, vec2, vec3 } from 'three/tsl'
 import { GeometryBuilder, linearColor } from '../geometry'
 import { CelMaterial } from '../materials/cel'
@@ -7,6 +7,7 @@ import type { Environment } from '../materials/environment'
 import { gustAt } from '../materials/wind'
 import { rng, subSeed } from '../rng'
 import { distanceToLine, type Heightfield } from '../terrain/heightfield'
+import { crownGeometry } from './tree-geometry'
 
 export interface TreeSite {
   x: number
@@ -23,7 +24,6 @@ export function createTrees(env: Environment, field: Heightfield) {
   const sites = placeTrees(field, random)
   const trunks = new GeometryBuilder()
   const canopies = new GeometryBuilder()
-  const sphere = new SphereGeometry(1, 48, 32)
   const matrix = new Matrix4()
   const rotation = new Quaternion()
   const up = new Vector3(0, 1, 0)
@@ -58,18 +58,14 @@ export function createTrees(env: Environment, field: Heightfield) {
         const f = tier / 4
         const r = site.radius * 1.45 * (1 - f * 0.78)
         const height = crownHeight * (0.46 - f * 0.05)
-        const cone = new LatheGeometry([
-          new Vector2(0, 0), new Vector2(r * 0.78, 0.02 * height),
-          new Vector2(r, 0.09 * height), new Vector2(r * 0.94, 0.18 * height),
-          new Vector2(r * 0.64, 0.45 * height), new Vector2(r * 0.31, 0.76 * height),
-          new Vector2(0.035, height)
-        ], 48)
-        matrix.makeTranslation(site.x, ground + trunkHeight - 0.65 + f * crownHeight * 0.84, site.z)
-        canopies.add(cone, matrix, {
+        const bough = crownGeometry(true, phase + tier * 1.1)
+        rotation.setFromAxisAngle(up, phase + tier * 0.4)
+        matrix.compose(new Vector3(site.x + lean.x * tier, ground + trunkHeight - 0.65 + f * crownHeight * 0.84, site.z + lean.z * tier), rotation, new Vector3(r, height, r))
+        canopies.add(bough, matrix, {
           color: linearColor(tint, 0.96 + tier * 0.045),
           vertex: p => sway(p, tier * 0.25)
         })
-        cone.dispose()
+        bough.dispose()
       }
     } else {
       const tall = variant === 1
@@ -102,16 +98,17 @@ export function createTrees(env: Environment, field: Heightfield) {
         }
       }
       clumps.forEach((clump, b) => {
+        const crown = crownGeometry(false, phase + b * 1.7)
         rotation.setFromAxisAngle(up, angle + b * 0.8)
         matrix.compose(clump.centre, rotation, clump.stretch.multiplyScalar(clump.radius))
-        canopies.add(sphere, matrix, {
+        canopies.add(crown, matrix, {
           color: linearColor(tint, 0.97 + random() * 0.06),
           vertex: p => sway(p, b * 0.3)
         })
+        crown.dispose()
       })
     }
   })
-  sphere.dispose()
 
   const data = attribute('sway', 'vec4')
   const swayNode = (canopy: boolean) => Fn(() => {
@@ -139,7 +136,7 @@ export function createTrees(env: Environment, field: Heightfield) {
     colorNode: vertexColor,
     positionNode: swayNode(true),
     bandOffset: null,
-    outlineWidth: 0.7
+    outlineWidth: 0.8
   })
   canopyMaterial.name = 'canopy'
   const trunkMesh = new Mesh(trunks.build(), trunkMaterial)

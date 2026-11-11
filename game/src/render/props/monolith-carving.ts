@@ -10,7 +10,7 @@ export const STONE_TURN = -0.24
 export const MONOLITH_STONE = '#a59e90'
 export const CYAN = '#65e9df'
 export const CRYSTAL_RISE = SHAFT_HEIGHT + 2.05
-const GROOVE_DEPTH = 0.025
+const GROOVE_DEPTH = 0.105
 const DIAMONDS: Point[] = [[0.76, 2.22], [0.40, 1.17]]
 const DIAMOND_CENTRE = 2.55
 const LATTICE_ROWS = [4.65, 5.30, 5.95, SHAFT_HEIGHT]
@@ -44,11 +44,11 @@ export function createCarvedShaft(env: Environment): Group {
       for (let i = 0; i < cell.length; i++) {
         const j = (i + 1) % cell.length
         if (!boundaries[i]) continue
-        const profiles: Point[] = [[0, 0], [0.35, 0.76], [1, 1]]
+        const profiles: Point[] = [[0, 0], [0.35, 0.18], [1, 1]]
         for (let level = 0; level < 2; level++) {
           const [s0, d0] = profiles[level]!
           const [s1, d1] = profiles[level + 1]!
-          surface.polygon([at(i, s0, d0), at(i, s1, d1), at(j, s1, d1), at(j, s0, d0)], level === 0 ? 0.56 : 0.88)
+          surface.polygon([at(i, s0, d0), at(i, s1, d1), at(j, s1, d1), at(j, s0, d0)], level === 0 ? 1.05 : 0.42)
         }
       }
     }

@@ -9,12 +9,12 @@ export function stoneGeometry(random: () => number): BufferGeometry {
     return new Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius)
   })
   const tilt = new Vector3((random() - 0.5) * 0.32, 0, (random() - 0.5) * 0.32)
-  const topScale = corners.map(() => 0.57 + random() * 0.22)
-  const rings = [[0.80, -0.22], [1, -0.03], [0.94, 0.48], [0.70, 0.77]].map(([scale, y], ring) =>
+  const topScale = corners.map(() => 0.46 + random() * 0.25)
+  const rings = [[0.86, -0.22], [1.02, -0.03], [1, 0.20], [0.84, 0.28], [0.88, 0.58], [0.60, 0.81]].map(([scale, y], ring) =>
     corners.map((p, i) => {
-      const s = ring === 3 ? topScale[i]! : scale!
-      const wear = ring === 2 ? Math.sin(i * 2.3) * 0.075 : 0
-      return new Vector3(p.x * s + (ring > 1 ? 0.08 : 0), y! + p.dot(tilt) + wear, p.z * s)
+      const s = ring === 5 ? topScale[i]! : scale!
+      const wear = ring > 1 ? Math.sin(i * 2.3) * 0.055 : 0
+      return new Vector3(p.x * s + Math.max(0, ring - 1) * 0.06, y! + p.dot(tilt) + wear, p.z * s - ring * 0.025)
     }))
   const positions: number[] = []
   const polygon = (points: Vector3[]) => {

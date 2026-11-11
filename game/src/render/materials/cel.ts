@@ -119,7 +119,7 @@ class CelLightingModel extends LightingModel {
     const { shadeTint, shadeHue, shadeValue, fillInLight } = this.env.shading
     const albedo = diffuseColor.rgb
     const cool = shadeTint.mul(dot(albedo, LUMA).div(dot(shadeTint, LUMA)))
-    const shade = mix(albedo, cool, shadeHue).mul(shadeValue)
+    const shade = mix(albedo, cool, shadeHue).mul(shadeValue).mul(this.readability ? 1.32 : 1)
     const fill = this.lightAmount.mul(fillInLight).oneMinus()
     reflectedLight.indirectDiffuse.addAssign(dot(irradiance, LUMA).mul(lambert(shade)).mul(fill))
     reflectedLight.indirectDiffuse.mulAssign(ambientOcclusion)
@@ -127,7 +127,8 @@ class CelLightingModel extends LightingModel {
     const delta = landmark.position.sub(positionWorld)
     const falloff = smoothstep(0, landmark.radius, delta.length()).oneMinus().pow(2)
     const facing = normalWorld.dot(delta.normalize()).max(0).mul(0.7).add(0.3)
-    reflectedLight.indirectDiffuse.addAssign(landmark.color.mul(landmark.strength.mul(this.landmarkSpill)).mul(falloff).mul(facing).mul(lambert(albedo)))
+    const spillAlbedo = mix(albedo, vec3(dot(albedo, LUMA)), 0.65)
+    reflectedLight.indirectDiffuse.addAssign(landmark.color.mul(landmark.strength.mul(this.landmarkSpill)).mul(falloff).mul(facing).mul(lambert(spillAlbedo)))
   }
 }
 

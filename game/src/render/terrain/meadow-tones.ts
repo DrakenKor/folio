@@ -6,15 +6,17 @@ import type { Environment } from '../materials/environment'
 /** Broad palette variation shared by standing blades and painted ground. */
 export function meadowPatch(env: Environment, xz: Node<'vec2'>, vertexStage = false): Node<'float'> {
   const broad = texture(env.noise, xz.div(160))
+  const middle = texture(env.noise, xz.div(40))
   const b = vertexStage ? broad.level(float(0)).r : broad.r
-  return b.sub(0.5).mul(0.8).add(0.5)
+  const m = vertexStage ? middle.level(float(0)).r : middle.r
+  return b.mul(0.65).add(m.mul(0.35)).sub(0.5).mul(2.8).add(0.5).clamp(0, 1)
 }
 
 /** Root, body and warm tip tones shared at every distance. */
 export function meadowTones(patch: Node<'float'>) {
-  const base = mix(color('#3b6e31'), color('#5f8032'), patch)
-  const body = mix(color('#4b8b35'), color('#8fa83d'), patch)
-  const tip = mix(color('#9ccc5d'), color('#dcd779'), patch)
+  const base = mix(color('#2f633a'), color('#4f7434'), patch)
+  const body = mix(color('#438044'), color('#779644'), patch)
+  const tip = mix(color('#91b76a'), color('#c2c77b'), patch)
   return { base, body, tip, ground: mix(mix(base, body, 0.8), tip, 0.16) }
 }
 
