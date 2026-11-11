@@ -1,0 +1,8 @@
+{
+  "scenario": "m1-arena",
+  "seed": 7,
+  "arena": "windstep-clearing",
+  "victory": "All three Creasebacks die",
+  "defeat": "Player health reaches zero",
+  "restart": "Rebuild m1-arena with the same seed; reset recorder and presentation effects"
+}

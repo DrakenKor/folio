@@ -8,6 +8,14 @@ import type { Entity, SimEvent, Vec2, World } from './core/types'
 export { SIM_BUILD } from './core/types'
 export const SCENARIO_NAMES = ['empty', 'meadow-start', 'dummies-1000', 'm1-arena', 'm1-fight', 'm1-stress'] as const
 
+/** Derive encounter outcome without storing presentation or intermediate wave victory. */
+export function encounterOutcome(world: World, scenario: string): 'ongoing' | 'victory' | 'defeat' {
+  const player = world.entities.find(actor => actor.id === world.playerId)
+  if (!player || player.death) return 'defeat'
+  if (scenario === 'm1-fight') return world.tick >= WINDSTEP_CLEARING.fightTicks ? 'victory' : 'ongoing'
+  return world.entities.some(actor => actor.ai && !actor.death) ? 'ongoing' : 'victory'
+}
+
 export function spawnCreaseback(world: World, pos: Vec2): Entity {
   const enemy = world.content.enemies.find(value => value.id === 'creaseback')!
   return spawnEntity(world, {
