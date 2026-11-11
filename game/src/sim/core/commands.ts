@@ -1,5 +1,6 @@
 import { hashWorld } from './hash'
 import { restore, serialize } from './snapshot'
+import { BUTTON_MASK } from './types'
 import type { Command, Replay, World } from './types'
 
 export type { Command } from './types'
@@ -8,7 +9,7 @@ export { Button, IDLE_COMMAND } from './types'
 /** Reject malformed input before it can change simulation state. */
 export function validateCommand(command: Command): void {
   if (!command || !command.move || !Number.isFinite(command.move.x) || !Number.isFinite(command.move.z) ||
-    !Number.isSafeInteger(command.buttons) ||
+    !Number.isSafeInteger(command.buttons) || command.buttons < 0 || command.buttons > BUTTON_MASK ||
     (command.aim !== null && (!command.aim || !Number.isFinite(command.aim.x) || !Number.isFinite(command.aim.z)))) throw new TypeError('Invalid command')
 }
 

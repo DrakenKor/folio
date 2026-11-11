@@ -25,11 +25,17 @@ function scriptEntries(text: string): ScriptEntry[] {
   })
 }
 
-try {
+function main(): void {
   const { values } = parseArgs({ options: {
     scenario: { type: 'string' }, seed: { type: 'string' },
-    ticks: { type: 'string' }, script: { type: 'string' }
+    ticks: { type: 'string' }, script: { type: 'string' }, help: { type: 'boolean' }
   } })
+  if (values.help) {
+    process.stdout.write('Usage: npm run game:sim -- --scenario <name> --seed <integer> --ticks <count> [--script <file>]\n' +
+      '  --scenario  Named simulation scenario\n  --seed      Integer RNG seed\n' +
+      '  --ticks     Nonnegative tick count\n  --script    JSON tick-command array\n  --help      Show options\n')
+    return
+  }
   if (!values.scenario) throw new TypeError('--scenario is required')
   const seed = integer(values.seed, 'seed')
   const ticks = integer(values.ticks, 'ticks')
@@ -43,7 +49,9 @@ try {
     step(world, command)
   }
   process.stdout.write(`${JSON.stringify({ tick: world.tick, hash: hashWorld(world), entities: world.entities.length })}\n`)
-} catch (error) {
+}
+
+try { main() } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
   process.exitCode = 1
 }

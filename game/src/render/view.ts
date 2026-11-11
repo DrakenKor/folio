@@ -21,8 +21,8 @@ export interface Frame {
 
 /**
  * A view reads frames and never writes simulation state. Animation time comes
- * from `(world.tick + alpha - action.startTick) * TICK_DT`, so a restored
- * snapshot draws the same picture.
+ * from simulation-owned action age and gait phase. Hit-stop can separate action
+ * age from elapsed world ticks; startTick alone cannot drive combat animation.
  */
 export interface RenderView {
   sync(frame: Frame): void

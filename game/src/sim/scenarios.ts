@@ -1,8 +1,9 @@
 import { rngFloat } from './core/rng'
 import { createWorld, spawnEntity } from './core/store'
+import { SIM_BUILD } from './core/types'
 import type { World } from './core/types'
 
-export const SIM_BUILD = 'm0-sim-v1'
+export { SIM_BUILD } from './core/types'
 export const SCENARIO_NAMES = ['empty', 'meadow-start', 'dummies-1000'] as const
 
 /** Build a fresh deterministic fixture without ambient state or presentation data. */

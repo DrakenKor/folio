@@ -123,8 +123,8 @@ describe('public simulation contracts', () => {
   })
 
   it('seeds independent reproducible streams and preserves draws through snapshots', () => {
-    const a = createWorld(77, 'test')
-    const b = createWorld(77, 'test')
+    const a = createWorld(77)
+    const b = createWorld(77)
     for (let i = 0; i < 100; i++) {
       expect(rngFloat(a, 'combat')).toBe(rngFloat(b, 'combat'))
       rngFloat(a, 'other')
@@ -138,12 +138,12 @@ describe('public simulation contracts', () => {
         expect(value).toBeLessThan(7)
       }
     }
-    expect(rngFloat(createWorld(78, 'test'), 'combat')).not.toBe(rngFloat(createWorld(77, 'test'), 'combat'))
+    expect(rngFloat(createWorld(78), 'combat')).not.toBe(rngFloat(createWorld(77), 'combat'))
     expect(() => rngInt(a, 'bad', 0)).toThrow()
   })
 
   it('moves at 6 m/s, aims in world space, and resolves even coincident circles', () => {
-    const world = createWorld(1, 'test')
+    const world = createWorld(1)
     const player = spawnEntity(world, { kind: 'player', pos: { x: 0, z: 0 }, radius: 0.5 })
     for (let i = 0; i < 60; i++) step(world, { move: { x: 1, z: 0 }, aim: { x: 0, z: 10 }, buttons: 0 })
     expect(world.tick).toBe(60)
