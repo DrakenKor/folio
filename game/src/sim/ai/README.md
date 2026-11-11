@@ -96,3 +96,29 @@ and removing scenario identity reproduced all 121 old fight checkpoints and both
 
 The animation fixture retains identical content and actor data. Acceptance replays compute their
 hashes at runtime and need no golden updates. Historical reports retain their recorded values.
+
+### Browser integration verification
+
+Brave on WebGPU passed `play.mjs observe` checks with seed 7 and the default `m1-arena` boot.
+One normal dodge at tick 151 kept the player alive long enough to observe every enemy's first strike.
+
+| Actor | Acquire | Chase | Telegraph | Strike |
+| --- | --- | --- | --- | --- |
+| 2 | 1 | 2 | 129 | 153 |
+| 3 | 1 | 2 | 410 | 434 |
+| 4 | 1 | 2 | 359 | 383 |
+
+The player died at tick 440; all enemies returned to idle. Clicking Restart restored the initial
+`02810f9b` hash, health `[120, 72, 72, 72]`, tick zero and an empty recorder; acquisition repeated.
+Every observed checkpoint matched Node. Browser console capture contained no errors or warnings.
+
+The committed 7,200-tick fight also ended at `bec54592` in Brave; its exported recorder replay verified.
+The same CLI command returns tick 7200, hash `bec54592`, and one surviving player:
+
+```sh
+fnm exec --using=24 npm run game:sim -- --scenario m1-fight --seed 7 --ticks 7200 --script game/scenarios/m1-fight-commands.json
+```
+
+Explicit `?scenario=meadow-start` booted thirteen M0 actors, including twelve dummies, with hash `622e8f5e`.
+The M0 smoke script passed movement, screenshots and console checks; movement arrived at tick 476 and stopped at 477.
+Brave and Vite were stopped after verification. No changes outside the task's owned paths are proposed.
