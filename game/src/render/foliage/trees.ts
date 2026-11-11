@@ -22,7 +22,8 @@ const CONIFER = ['#52805a', '#60895c', '#4c7959']
 
 export function createTrees(env: Environment, field: Heightfield) {
   const random = rng(subSeed(field.seed, 'trees'))
-  const sites = placeTrees(field, random).filter(site => {
+  const layout = placeTrees(field, random)
+  const sites = layout.filter(site => {
     if (!field.arena) return true
     const { center, radius } = field.arena
     // Keep crowns and their projected foreground silhouettes outside the fighting space.
@@ -34,7 +35,11 @@ export function createTrees(env: Environment, field: Heightfield) {
   const rotation = new Quaternion()
   const up = new Vector3(0, 1, 0)
 
-  sites.forEach((site, i) => {
+  layout.forEach((site, i) => {
+    // Consume the same shape draws even when the arena omits this tree.
+    const add = (builder: GeometryBuilder, ...part: Parameters<GeometryBuilder['add']>) => {
+      if (sites.includes(site)) builder.add(...part)
+    }
     const conifer = site.radius < 1.9
     const ground = field.heightAt(site.x, site.z)
     const phase = random() * Math.PI * 2
@@ -51,7 +56,7 @@ export function createTrees(env: Environment, field: Heightfield) {
       const wood = new CylinderGeometry(width * 0.32, width, start.distanceTo(end), 10)
       rotation.setFromUnitVectors(up, end.clone().sub(start).normalize())
       matrix.compose(start.clone().add(end).multiplyScalar(0.5), rotation, new Vector3(1, 1, 1))
-      trunks.add(wood, matrix, { color: linearColor('#856348'), vertex: p => sway(p) })
+      add(trunks, wood, matrix, { color: linearColor('#856348'), vertex: p => sway(p) })
       wood.dispose()
     }
     const trunk = new LatheGeometry([
@@ -62,7 +67,7 @@ export function createTrees(env: Environment, field: Heightfield) {
       new Vector2(radius * 0.42, trunkHeight + site.radius * 0.7)
     ], 20)
     matrix.set(1, lean.x, 0, site.x, 0, 1, 0, ground, 0, lean.z, 1, site.z, 0, 0, 0, 1)
-    trunks.add(trunk, matrix, { color: linearColor('#78543b'), vertex: p => sway(p) })
+    add(trunks, trunk, matrix, { color: linearColor('#78543b'), vertex: p => sway(p) })
     trunk.dispose()
 
     const tint = conifer ? CONIFER[i % CONIFER.length]! : BROADLEAF[i % BROADLEAF.length]!
@@ -81,7 +86,7 @@ export function createTrees(env: Environment, field: Heightfield) {
           branch(start, end, radius * (0.35 - f * 0.22))
           rotation.setFromAxisAngle(up, a)
           matrix.compose(start, rotation, new Vector3(reach, reach, reach))
-          canopies.add(bough, matrix, {
+          add(canopies, bough, matrix, {
             color: linearColor(tint, 0.97 + tier * 0.025 + b % 3 * 0.035),
             vertex: p => sway(p, b * 0.3)
           })
@@ -91,7 +96,7 @@ export function createTrees(env: Environment, field: Heightfield) {
       const leader = pineBoughGeometry(phase)
       rotation.setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 2)
       matrix.compose(tip.clone().add(new Vector3(0, -0.65, 0)), rotation, new Vector3(0.8, 0.65, 0.65))
-      canopies.add(leader, matrix, { color: linearColor(tint, 1.12), vertex: p => sway(p) })
+      add(canopies, leader, matrix, { color: linearColor(tint, 1.12), vertex: p => sway(p) })
       leader.dispose()
     } else {
       const tall = variant === 1
@@ -124,7 +129,7 @@ export function createTrees(env: Environment, field: Heightfield) {
         const crown = crownGeometry(phase + b * 1.7, form)
         rotation.setFromAxisAngle(up, angle + b * 0.8)
         matrix.compose(clump.centre, rotation, clump.stretch.clone().multiplyScalar(clump.radius))
-        canopies.add(crown, matrix, {
+        add(canopies, crown, matrix, {
           color: linearColor(tint, 0.97 + random() * 0.06),
           vertex: p => sway(p, b * 0.3)
         })
@@ -133,7 +138,7 @@ export function createTrees(env: Environment, field: Heightfield) {
           const shoulder = clump.centre.clone().add(new Vector3(Math.cos(a) * clump.radius * 0.7, -clump.radius * 0.1, Math.sin(a) * clump.radius * 0.7))
           rotation.setFromAxisAngle(up, a)
           matrix.compose(shoulder, rotation, clump.stretch.clone().multiplyScalar(clump.radius * 0.52))
-          canopies.add(crown, matrix, { color: linearColor(tint, 0.96 + leaf * 0.06), vertex: p => sway(p, b * 0.3) })
+          add(canopies, crown, matrix, { color: linearColor(tint, 0.96 + leaf * 0.06), vertex: p => sway(p, b * 0.3) })
         }
         crown.dispose()
       })
