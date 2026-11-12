@@ -59,9 +59,9 @@ export class CombatFeedback {
         let footprint = this.footprints.get(actor.id)
         if (!footprint) {
           footprint = new Group()
-          const fill = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: 0x985027,
-            transparent: true, opacity: 0.5, depthWrite: false, depthTest: !!warning, side: DoubleSide }))
-          const rim = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: warning ? 0xffd17a : 0xffe4ab,
+          const fill = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: 0xe0892e,
+            transparent: true, opacity: 0.6, depthWrite: false, depthTest: !!warning, side: DoubleSide }))
+          const rim = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({ color: warning ? 0x5c240e : 0xffe4ab,
             transparent: true, opacity: 0.95, depthWrite: false, depthTest: !!warning, side: DoubleSide }))
           fill.renderOrder = warning ? -2 : 1
           rim.renderOrder = warning ? -1 : 2
@@ -72,9 +72,8 @@ export class CombatFeedback {
         const [fill, rim] = footprint.children as [Mesh<BufferGeometry, MeshBasicNodeMaterial>, Mesh<BufferGeometry, MeshBasicNodeMaterial>]
         fill.visible = !!warning
         const progress = Math.min(1, (age + 1) / Math.max(1, skill.timing.windupTicks))
-        fill.material.opacity = 0.45 + progress * 0.23
-        this.sector(fill, actor, action.direction, skill.range, skill.arcRadians, 0)
-        this.sector(rim, actor, action.direction, skill.range, skill.arcRadians, skill.range - (warning ? 0.11 : 0.065), !!warning)
+        this.sector(fill, actor, action.direction, skill.range * (0.25 + 0.75 * progress), skill.arcRadians, 0)
+        this.sector(rim, actor, action.direction, skill.range, skill.arcRadians, skill.range - (warning ? 0.14 : 0.065), !!warning)
       }
     }
     for (const [id, footprint] of this.footprints) if (!live.has(id)) { this.removeMeshGroup(footprint); this.footprints.delete(id) }
@@ -181,7 +180,7 @@ export class CombatFeedback {
     object.traverse(node => {
       if (!(node instanceof Mesh)) return
       for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
-        const flash = actor.hitFlashTicks > 0 ? (actor.hitFlashTicks > 3 ? 0.5 : 0.2) : 0
+        const flash = (actor.hitFlashTicks > 0 ? (actor.hitFlashTicks > 3 ? 0.5 : 0.2) : 0) * (actor.ai ? 1 : 0.55)
         if (isCelMaterial(material)) material.emissive.setRGB(flash, flash * 0.85, flash * 0.62)
       }
     })
