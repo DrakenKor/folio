@@ -19,6 +19,8 @@ export default defineConfig({
     target: 'es2022'
   },
   server: {
-    port: 5173
+    port: 5173,
+    // Harness captures and test fixtures land here; writing them must not reload the page under test.
+    watch: { ignored: ['**/.play-out/**'] }
   }
 })
