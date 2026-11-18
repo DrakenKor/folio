@@ -1,10 +1,19 @@
+import { createElement } from 'react'
+import { createRoot } from 'react-dom/client'
+import { Clearing, type Controls } from './clearing'
 import { actionPhase } from '../sim/core/index'
 import type { World } from '../sim/core/types'
 import { encounterOutcome } from '../sim/scenarios'
+import marker from './marker.svg'
 import './hud.css'
 
+const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]') ?? document.createElement('link')
+icon.rel = 'icon'
+icon.href = marker
+document.head.append(icon)
+
 /** Minimal encounter HUD; all availability and outcomes are derived from the current world. */
-export function createHUD(restart: () => void) {
+export function createHUD(controls: Controls) {
   const root = document.createElement('section')
   root.id = 'encounter-hud'
   root.setAttribute('aria-label', 'Combat status')
@@ -18,12 +27,30 @@ export function createHUD(restart: () => void) {
   const healthFill = root.querySelector<HTMLElement>('.hud-health-track i')!
   const actions = [...root.querySelectorAll<HTMLElement>('.hud-action')]
   const outcome = root.querySelector<HTMLElement>('.hud-outcome')!
-  root.querySelector('button')!.onclick = restart
+  root.querySelector('button')!.onclick = controls.api.restart
+  const mount = document.createElement('div')
+  document.body.append(mount)
+  const build = createRoot(mount)
+  let rendered: World | undefined
+  let tick = -1
+  let record = ''
+  const refresh = () => {
+    const world = controls.clock.world
+    const status = controls.saves.status()
+    rendered = world; tick = world.tick; record = status.code + status.generation
+    build.render(createElement(Clearing, { ...controls, world: { ...world }, status, refresh }))
+  }
 
   return {
     sync(world: World): void {
       const player = world.entities.find(actor => actor.id === world.playerId)
-      root.hidden = !player
+      root.hidden = !player || !!player.character
+      if (player?.character && world.content.m2) {
+        const status = controls.saves.status()
+        if (rendered !== world || tick !== world.tick || record !== status.code + status.generation) refresh()
+        return
+      }
+      if (rendered) { rendered = undefined; build.render(null) }
       if (!player) return
       health.textContent = `${player.health} / ${player.maxHealth}`
       healthFill.style.width = `${100 * player.health / player.maxHealth}%`
@@ -52,6 +79,6 @@ export function createHUD(restart: () => void) {
         outcome.querySelector('button')!.textContent = result === 'victory' ? 'Fight again' : 'Try again'
       }
     },
-    dispose(): void { root.remove() }
+    dispose(): void { build.unmount(); mount.remove(); root.remove() }
   }
 }
