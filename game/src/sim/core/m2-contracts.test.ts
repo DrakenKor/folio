@@ -99,7 +99,7 @@ describe('T2.0 shared contracts', () => {
     expect(() => exportCharacter(world)).toThrow(/Unsupported/)
     expect(() => loadCharacter({}, m1Content())).toThrow(/Unsupported/)
     expect(serialize(world)).toBe(before)
-    expect(() => buildScenario('m2-clearing', 7)).toThrow(/Unsupported/)
+    expect(buildScenario('m2-clearing', 7).encounter?.phase).toBe('rest')
   })
 
   it('round trips and hashes populated continuation fields without deriving gameplay', () => {
