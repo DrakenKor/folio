@@ -1,4 +1,5 @@
 import type { CombatContent } from '../sim/core/types'
+import { contentSchema } from './schema'
 
 /** Approved M1 content; each world receives a detached copy. */
 const CONTENT: CombatContent = {
@@ -36,4 +37,4 @@ export const WINDSTEP_CLEARING = {
   waveTicks: 600, fightTicks: 7200
 } as const
 
-export function m1Content(): CombatContent { return structuredClone(CONTENT) }
+export function m1Content(): CombatContent { return contentSchema.parse(CONTENT) }

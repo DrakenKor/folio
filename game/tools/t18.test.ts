@@ -35,6 +35,6 @@ it('browser chunks consume exactly the authored 7200 commands and verify all 121
   expect(consumed).toHaveLength(7200)
   expect(consumed).toEqual(Array.from({ length: 7200 }, (_, tick) => entries.findLast((entry: { tick: number }) => entry.tick <= tick).command))
   expect(hashes).toEqual(expected.checkpoints)
-  expect(hashWorld(world)).toBe('bec54592')
+  expect(hashWorld(world)).toBe(expected.finalHash)
   expect(browser.steps.filter((step: { op: string }) => step.op === 'shot')).toHaveLength(7)
 })

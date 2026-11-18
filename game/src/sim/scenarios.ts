@@ -2,8 +2,9 @@ import { m1Content, WINDSTEP_CLEARING } from '../content/m1'
 import { fmath } from './core/fmath'
 import { rngFloat } from './core/rng'
 import { createWorld, spawnEntity } from './core/store'
-import { SCENARIO_NAMES, SIM_BUILD } from './core/types'
+import { M2_SCENARIO_NAMES, SCENARIO_NAMES, SIM_BUILD } from './core/types'
 import type { Entity, SimEvent, Vec2, World } from './core/types'
+import { UnsupportedError } from './core/unsupported'
 
 export { SCENARIO_NAMES, SIM_BUILD } from './core/types'
 
@@ -38,7 +39,6 @@ export function spawnFightWave(world: World): SimEvent[] {
 }
 
 function buildM1(world: World, name: string): World {
-  world.content = m1Content()
   world.arena = structuredClone(WINDSTEP_CLEARING.arena)
   const player = spawnEntity(world, {
     kind: 'player', ...WINDSTEP_CLEARING.player, health: WINDSTEP_CLEARING.player.maxHealth,
@@ -66,9 +66,10 @@ function buildM1(world: World, name: string): World {
 
 /** Build a fresh deterministic fixture without ambient state or presentation data. */
 export function buildScenario(name: string, seed: number): World {
+  if (M2_SCENARIO_NAMES.some(scenario => scenario === name)) throw new UnsupportedError('M2 scenarios (T2.3)')
   const scenario = SCENARIO_NAMES.find(candidate => candidate === name)
   if (!scenario) throw new RangeError(`Unknown scenario: ${name}`)
-  const world = createWorld(seed, SIM_BUILD)
+  const world = createWorld(seed, SIM_BUILD, name.startsWith('m1-') ? m1Content() : undefined)
   world.scenario = scenario
   if (name.startsWith('m1-')) return buildM1(world, name)
   if (name === 'empty') return world
