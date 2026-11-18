@@ -35,10 +35,12 @@
 .clearing-control { pointer-events: auto; position: absolute; bottom: 146px; left: 50%; transform: translateX(-50%) }
 .clearing-control > span { display: block; padding: 6px 12px }
 .loadout { position:absolute; left:50%; bottom:47px; transform:translateX(-50%); display:flex; gap:5px }
-.loadout > div { width:clamp(108px,9.6vw,148px); padding:8px 11px; border-bottom:2px solid #c7a961 }
+.loadout > div { width:clamp(119px,10vw,148px); padding:8px 10px; border-bottom:2px solid #939d87 }
+.loadout > div[data-ready=true] { border-bottom-color:#d3b572 }
 .loadout kbd, .loadout b, .loadout span { display:block }
 .loadout b { font-size:17px; margin:3px 0 }
-.loadout span { color:var(--gold); font-size:12px }
+.loadout span { color:var(--muted); font-size:12px }
+.loadout [data-ready=true] span { color:var(--gold) }
 .field-help { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); padding:3px 12px; font-size:12px; white-space:nowrap }
 .veil { pointer-events:auto; position:absolute; inset:0; background:#1b2c2359; display:grid; place-items:center; padding:24px }
 .folio { width:min(1152px,100%); max-height:100%; overflow:auto; background:var(--moss); border:1px solid #e7d5a3; box-shadow:0 14px 60px #18271f66 }
@@ -84,12 +86,14 @@
 .atlas-tools input { width:100% }
 .search-results { position:absolute; z-index:2; top:55px; left:16px; width:min(340px,80%); max-height:240px; overflow:auto; background:#f4ecd5; padding:5px; box-shadow:0 6px 16px #273e3333 }
 .search-results button { display:block; width:100%; text-align:left; border:0; border-bottom:1px solid #ccc3a6 }
-.lattice { flex:1; width:100%; height:clamp(350px,49vh,450px); min-height:0; touch-action:none; cursor:grab }
+.lattice { flex:0 0 auto; width:100%; height:clamp(320px,49vh,450px); touch-action:none; cursor:grab }
 .lattice line { stroke:#a6b49b; stroke-width:1 }
 .lattice .paid-edge { stroke:#426951; stroke-width:3 }
-.boundary { fill:#7c946317; stroke:#718668; stroke-width:2; cursor:pointer }
-.boundary.complete { fill:#a1873750; stroke:#977129; stroke-width:3 }
-.boundary.active, .boundary.chosen { fill:#9b813366; stroke:#836023; stroke-width:4 }
+.lattice .boundary { fill:#7c946317; stroke:#6b805c; stroke-width:2.6; cursor:pointer }
+.lattice .boundary.complete { fill:#a1873750; stroke:#977129; stroke-width:3 }
+.lattice .boundary.active { fill:#708e6870; stroke:#3e654e; stroke-width:4 }
+.lattice .boundary.chosen, .lattice .boundary:focus-visible { stroke:#865e22; stroke-width:4; outline:none }
+.lattice .boundary.breaking { fill:#a64f3530; stroke:#a64f35; stroke-width:4; stroke-dasharray:4 3 }
 .vertex { cursor:pointer; outline:none }
 .vertex path { fill:#d7ddbf; stroke:#63785e; stroke-width:1.4 }
 .vertex.paid path { fill:#2c5940; stroke:#284f3a }
@@ -109,7 +113,6 @@
 .action-index > button { width:100%; margin:2px 0; text-align:left; display:flex; align-items:center; justify-content:space-between; border-color:transparent; padding:8px }
 .action-index > button span { color:inherit; font-size:10px; font-weight:600 }
 .action-index .stack { margin-top:18px }
-.action-index .stack + button { border-color:#999e80; margin-top:8px; justify-content:center }
 .drawing-paper { padding:21px }
 .drawing-paper .section-title { margin-bottom:12px }
 .blueprint { background-color:#d7dcc1; background-image:linear-gradient(#82957926 1px,transparent 1px),linear-gradient(90deg,#82957926 1px,transparent 1px); background-size:20px 20px; border:1px solid #aab599; padding:8px }
@@ -177,10 +180,7 @@
   .tool-card { right:6px; max-width:55% }
   .tool-card nav { flex-wrap:wrap }
 }
-.lattice { flex: 0 0 auto; height:clamp(320px,49vh,450px) }
 .atlas { justify-content:space-between }
-.lattice .boundary { stroke:#6b805c; stroke-width:2.6 }
-.lattice .boundary.active,.lattice .boundary.chosen { stroke:#865e22; stroke-width:4 }
 .lattice .vertex[aria-pressed=true] .ring { fill:#fff8cf44; stroke:#9a5325; stroke-width:3.5 }
 .measure { fill:none; stroke:#526d53; stroke-width:1.3 }
 .measure text { font:13px Georgia,serif; text-anchor:middle; fill:#3c5944; stroke:none }
@@ -192,3 +192,9 @@
 .marker-seal { width:38px; height:38px; flex-shrink:0; background:url('./marker.svg') center / contain no-repeat }
 .full-count { padding:2px 7px; color:#6b4229; background:#d9c6a2; border:1px solid #ae936c }
 .store-warning { padding-left:10px; border-left:3px solid var(--gold) }
+
+.slot-owner { display:block; margin:4px 0 8px; font-size:13px }
+.action-index .slot-owner + button { border-color:#999e80; justify-content:center }
+.lattice .refund-trace { stroke:#a64f35; stroke-width:4; stroke-dasharray:5 2; pointer-events:none }
+.lattice .refund-ring { stroke:#9d4c35; stroke-width:2.5; fill:none }
+.changes small { display:block; font-size:10px; letter-spacing:.04em; color:var(--gold) }

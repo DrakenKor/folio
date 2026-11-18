@@ -16,12 +16,14 @@ function Drawing({ before, after }: { before: ResolvedAction; after: ResolvedAct
   const f = after.footprint
   const sector = f.kind === 'melee'
   const scale = (sector ? 66 : 205) / Math.max(before.footprint.reach, f.reach)
-  return <div className="blueprint"><svg viewBox={sector ? "0 0 300 160" : "0 34 300 92"} aria-label={sector ? 'Sector footprint' : 'Projectile footprint'}>
-    <g transform={sector ? 'translate(143 80)' : 'translate(39 80)'}>
+  const changed = before.footprint.reach !== f.reach || before.footprint.arcRadians !== f.arcRadians ||
+    before.footprint.radius !== f.radius || before.footprint.projectileAngles.length !== f.projectileAngles.length
+  return <div className="blueprint"><svg viewBox="0 0 300 160" aria-label={sector ? 'Sector footprint' : 'Projectile footprint'}>
+    <g transform={sector ? 'translate(143 80)' : 'translate(39 76)'}>
       <path className="axis" d="M-145 0H275M0 -76V76"/>
-      {footprint(after, scale, false)}{footprint(before, scale, true)}
-      {!sector && <g className="measure"><path d={`M0 17v7m0 -3H${f.reach * scale}m0 -4v7`}/>
-        <text x={f.reach * scale / 2} y="39">{num(f.reach)} m</text></g>}
+      {footprint(after, scale, false)}{changed && footprint(before, scale, true)}
+      {!sector && <g className="measure"><path d={`M0 62v7m0 -3H${f.reach * scale}m0 -4v7`}/>
+        <text x={f.reach * scale / 2} y="82">{num(f.reach)} m</text></g>}
       <circle r="4" className="origin"/></g></svg><div><b>{before.footprint.reach !== f.reach && num(before.footprint.reach) + ' → '}{num(f.reach)} m</b><span>{sector ?
         num(f.arcRadians * 180 / Math.PI) + '° sector' : f.projectileAngles.length + ' dart' + (f.projectileAngles.length === 1 ? '' : 's') + ' · ' + num(f.radius) + ' m radius'}</span></div></div>
 }
@@ -60,13 +62,18 @@ export function Drawings({ world, character: c, content, api, report }: FieldPro
   if (!current.ok) return <p>{words(current.reason)}</p>
   const before = current.value.recipe
   const after = !tracing && comparison && legal ? comparison.after.recipe : before
-  const timing = after.timing
-  const selectFold = (f: FoldDefinition) => { setFold(f.id); trace(false); showDamage(false) }
+  const phases = [['Windup', 'windupTicks'], ['Active', 'activeTicks'], ['Recovery', 'recoveryTicks']] as const
+  const hit = comparison && legal && !tracing ? comparison : null
+  const selectFold = (f: FoldDefinition) => { setFold(f.id); trace(false); showDamage(false); report('') }
   return <div className="drawing-layout"><div className="action-index"><small>Action library</small>{content.actions.map(a =>
-    <button key={a.id} aria-pressed={a.id === id} onClick={() => { setId(a.id); setFold(null); trace(false) }}>
+    <button key={a.id} aria-pressed={a.id === id} onClick={() => {
+      setId(a.id); setFold(null); trace(false); report('')
+      const assigned = c.loadout.indexOf(a.id)
+      if (assigned >= 0) setSlot(assigned)
+    }}>
       {a.name}<span>{keys[c.loadout.indexOf(a.id)] ?? '—'}</span></button>)}
     <label className="stack">Loadout slot<select value={slot} onChange={e => setSlot(Number(e.target.value))}>{keys.map((k,i) =>
-      <option key={k} value={i}>{k} · {words(c.loadout[i] ?? 'empty')}</option>)}</select></label>
+      <option key={k} value={i}>{k}</option>)}</select></label><span className="slot-owner">{content.actions.find(a => a.id === c.loadout[slot])?.name ?? 'Unassigned'}</span>
     <button disabled={world.encounter?.phase !== 'rest' || c.loadout[slot] === id} onClick={() => {
       const slots: Loadout = [...c.loadout], old = slots.indexOf(id)
       if (old >= 0) slots[old] = slots[slot] ?? null
@@ -78,9 +85,9 @@ export function Drawings({ world, character: c, content, api, report }: FieldPro
     {damage ? <><label className="stack">Damage target<select value={target.id} onChange={e => targetSelect(Number(e.target.value))}>
       {(liveTargets.length ? liveTargets : [target]).map(t => <option key={t.id} value={t.id}>{t.id === world.playerId ? 'Your defences' : words(t.kind) + ' № ' + t.id}</option>)}</select></label>
       <Damage preview={current.value} health={target.health} target={targetName}/></> : <>
-    <Drawing before={before} after={after}/><div className="phase-strip" aria-label="Action timing in ticks">{[timing.windupTicks, timing.activeTicks, timing.recoveryTicks].map((n, i) =>
-      <span key={i} style={{ flexGrow: n }}/>)}</div><div className="phase-labels">{['Windup','Active','Recovery'].map((label,i) =>
-        <span key={label}>{label} <b>{[timing.windupTicks, timing.activeTicks, timing.recoveryTicks][i]}</b> ticks</span>)}</div>
+    <Drawing before={before} after={after}/><div className="phase-strip" aria-hidden="true">{phases.map(([label, key]) =>
+      <span key={label} style={{ flexGrow: after.timing[key] }}/>)}</div><div className="phase-labels" aria-label="Action timing in ticks">{phases.map(([label, key]) =>
+        <span key={key}>{label} <b>{before.timing[key] !== after.timing[key] && before.timing[key] + ' → '}{after.timing[key]}</b> {after.timing[key] === 1 ? 'tick' : 'ticks'}</span>)}</div>
     <div className="handle-row">{(['reach','spread','material'] as const).map(handle => <button key={handle} aria-label={words(handle) + ' handle'}
       data-selected={fold?.handle === handle} onPointerDown={e => {
         if (fold?.handle === handle) { e.currentTarget.setPointerCapture(e.pointerId); trace(true) }
@@ -102,11 +109,14 @@ export function Drawings({ world, character: c, content, api, report }: FieldPro
     fold ? <><p>{words(fold.handle)} handle · {words(fold.compatibility)}</p><hr/>
       <div className="counters"><div><b>{tension} / 3</b><small>Tension</small></div><div><b>{ids.length} / 2</b><small>Folds</small></div></div>
       <hr/><small>{removing ? 'Remove these effects' : 'Gain and price'}</small><ul>{effects(fold).map(t => <li key={t}>{t}</li>)}</ul>
+      {hit && hit.before.damage.calculated !== hit.after.damage.calculated && <div className="changes">
+        <small>Undefended damage per hit</small><p><b>{hit.before.damage.calculated} → {hit.after.damage.calculated}</b></p>
+      </div>}
       <div className={'notice ' + (!legal ? 'warning' : '')}><strong>{legal ? removing ? 'Ready to unfold' : 'Compatible' : 'Cannot apply fold'}</strong>
         <p>{legal ? 'Drag ' + words(fold.handle) + ' to trace this pattern, or confirm the preview.' :
           (proposal.ok ? words(proposal.value.result.reason) : words(proposal.reason)) + ' · ' + (tension > 3 ? 'Remove a fold to free tension.' : 'Choose a compatible pattern at rest.')}</p></div>
       <button className="primary" disabled={!legal} onClick={() => {
         const r = api.character.setFolds(id, ids); report(r.accepted ? action.name + (removing ? ' unfolded' : ' folded') : words(r.reason)); setFold(null)
-      }}>Confirm</button></> : <p>Select a pattern to inspect its footprint, timing and tension.</p>}
+      }}>Confirm</button></> : <p>Select a pattern to preview its footprint, timing and tension.</p>}
     </aside></div>
 }

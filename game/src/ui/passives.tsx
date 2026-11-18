@@ -47,6 +47,9 @@ export function Passives({ world, character, content, api, report }: FieldProps)
   const result = preview.ok ? preview.value : null
   const removed = new Set(refund ? result?.refundedNodeIds : [])
   const deactivated = refund ? result?.deactivatedShapeIds ?? [] : []
+  const showChange = result?.result.accepted && (edit.type !== 'refund' || refund)
+  const hit = showChange ? result.actions.find(a =>
+    character.loadout.includes(a.skillId) && a.before.damage.calculated !== a.after.damage.calculated) : undefined
   function pick(id: string, centre = false) {
     select(id); setRefund(false)
     if (centre) {
@@ -73,7 +76,7 @@ export function Passives({ world, character, content, api, report }: FieldProps)
       <button key={id} onClick={() => pick(id, true)}>{name(id)} · {id}</button>) : 'No matches'}</div>}
     <svg className="lattice" aria-label="Passive graph" viewBox={`${view.x - 300 / view.zoom} ${view.y - 250 / view.zoom} ${600 / view.zoom} ${500 / view.zoom}`}
       onWheel={e => zoom(e.deltaY < 0 ? 1.12 : 1 / 1.12)} onPointerDown={e => {
-        if ((e.target as Element).closest('[role=button]')) return
+        if ((e.target as Element).closest('[role=button], polygon')) return
         e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX, y: e.clientY }
       }} onLostPointerCapture={() => { drag.current = null }} onPointerMove={e => {
         if (!drag.current) return
@@ -84,20 +87,32 @@ export function Passives({ world, character, content, api, report }: FieldProps)
       {edges.map(([a, b]) => <line key={a + '/' + b} x1={point(a).x} y1={point(a).y} x2={point(b).x} y2={point(b).y}
         className={allocated.has(a) && allocated.has(b) ? 'paid-edge' : ''}/>)}
       {shapes.map(s => <polygon key={s.id} points={s.perimeter.map(id => point(id).x + ',' + point(id).y).join(' ')}
-        className={['boundary', complete(s) && 'complete', active.includes(s.id) && 'active', selection === s.id && 'chosen'].filter(Boolean).join(' ')}
-        onClick={() => pick(s.id)}><title>{words(s.id)}</title></polygon>)}
+        role="button" tabIndex={0} aria-label={words(s.id)} aria-pressed={selection === s.id}
+        className={['boundary', complete(s) && 'complete', active.includes(s.id) && 'active', selection === s.id && 'chosen',
+          deactivated.includes(s.id) && 'breaking'].filter(Boolean).join(' ')}
+        onClick={() => pick(s.id)} onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); pick(s.id) }
+        }}><title>{words(s.id)}</title></polygon>)}
+      {edges.filter(([a,b]) => removed.has(a) && removed.has(b)).map(([a,b]) =>
+        <line key={a + '/' + b} className="refund-trace" x1={point(a).x} y1={point(a).y} x2={point(b).x} y2={point(b).y}/>)}
       {vertices.map(v => <g key={v.id} role="button" tabIndex={0} aria-label={v.id + ' ' + name(v.id)} aria-pressed={selection === v.id}
         className={['vertex', allocated.has(v.id) && 'paid', removed.has(v.id) && 'removed'].filter(Boolean).join(' ')}
         transform={`translate(${point(v.id).x} ${point(v.id).y})`} onClick={() => pick(v.id)}
-        onKeyDown={e => { if (['Enter',' '].includes(e.key)) { e.preventDefault(); pick(v.id) } }}>
+        onKeyDown={e => { if (['Enter',' '].includes(e.key)) { e.preventDefault(); e.stopPropagation(); pick(v.id) } }}>
         <circle r="11" fill="transparent"/><path d={v.id === root ? 'M0 -9L8 0L0 9L-8 0Z' : 'M0 -4L4 0L0 4L-4 0Z'}/>
-        {selection === v.id && <circle className="ring" r="10"/>}</g>)}</svg>
-      <footer className="legend"><span>◇ Marked boundary</span><span>◆ Allocated</span><span>Drag to pan</span></footer>
+        {removed.has(v.id) && <circle className="refund-ring" r="8"/>}
+        {selection === v.id && <circle className="ring" r={removed.has(v.id) ? 13 : 10}/>}</g>)}</svg>
+      <footer className="legend"><span>◇ Marked boundary</span><span>◆ Allocated</span><span>{refund ? 'Red · Refund route' : 'Drag to pan'}</span></footer>
     </div><aside className="ink"><div className="counters"><div><b>{character.points}</b><small>Points left</small></div><div><b>{active.length} / 2</b><small>Active shapes</small></div></div>
       <hr/><small>{shape ? 'Marked perimeter' : 'Vertex · ' + selection}</small><h2>{name(selection)}</h2>
       <ul>{(shape ? bargain(shape.id) : family?.modifiers ?? []).map(m => <li key={m.id}>{modifier(m)}</li>)}</ul>
       <p>{shape ? (active.includes(shape.id) ? 'Active boundary' : complete(shape) ? 'Boundary complete' : 'Incomplete boundary') + ' · ' +
         shape.perimeter.filter(n => allocated.has(n)).length + ' / ' + shape.perimeter.length + ' vertices' : allocated.has(selection) ? 'Allocated' : 'Allocation costs 1 point'}</p>
+      {showChange && (hit || result.delta.maxHealth !== 0) && <div className="changes">
+        {hit && <><small>Undefended damage per hit</small><p>{content.actions.find(a => a.id === hit.skillId)?.name}
+          <b>{hit.before.damage.calculated} → {hit.after.damage.calculated}</b></p></>}
+        {result.delta.maxHealth !== 0 && <p>Maximum health <b>{result.before.maxHealth} → {result.after.maxHealth}</b></p>}
+      </div>}
       {refund && <div className="notice"><strong>Refund {result?.delta.points} points</strong><p>Connected removal · {[...removed].join(' / ')}</p>
         {deactivated.length > 0 && <p>Deactivate {deactivated.map(words).join(', ')}</p>}</div>}
       {selection !== root && <div className="operations">{edit.type === 'refund' && !refund ?

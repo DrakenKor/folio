@@ -41,7 +41,9 @@ export function Inventory({ world, character: c, content, api, report }: FieldPr
       <h2>{base(item).name}</h2><ul>{details(item).map(d => <li key={d}>{d}</li>)}</ul>
       {store && <><hr/><small>Currently equipped</small><h3>{equipped ? base(equipped).name : 'Empty slot'}</h3>
         {equipped && <p>{details(equipped).join(' · ')}</p>}
-        {comparison?.result.accepted && <div className="changes">{comparison.actions.filter(a => a.before.damage.calculated !== a.after.damage.calculated).map(a =>
+        {comparison?.result.accepted && <div className="changes">{comparison.actions.some(a => a.before.damage.calculated !== a.after.damage.calculated) &&
+            <small>Damage per hit · equipped → selected</small>}
+          {comparison.actions.filter(a => a.before.damage.calculated !== a.after.damage.calculated).map(a =>
           <p key={a.skillId}>{words(a.skillId)} <b>{a.before.damage.calculated} → {a.after.damage.calculated}</b></p>)}
           {comparison.delta.maxHealth !== 0 && <p>Health <b>{comparison.before.maxHealth} → {comparison.after.maxHealth}</b></p>}
           {comparison.delta.movementSpeed !== 0 && <p>Speed <b>{num(comparison.before.movementSpeed)} → {num(comparison.after.movementSpeed)} m/s</b></p>}</div>}</>}

@@ -14,6 +14,7 @@ import './field.css'
 const pages = { Inventory: 'I', Passives: 'P', Drawings: 'K', Save: '' } as const
 type Page = keyof typeof pages
 const titles: Record<Page, string> = { Inventory: 'Field inventory', Passives: 'Passive lattice', Drawings: 'Action drawings', Save: 'Save & recovery' }
+const playKeys = /^(Key[WASDQERTF]|Digit[1-4]|Space)$/
 export interface Controls { clock: Clock; input: Input; api: ReturnType<typeof createAPI>; saves: SaveController }
 
 export function Clearing({ clock, input, api, saves, world, status, refresh }: Controls & { world: World; status: SaveStatus; refresh: () => void }) {
@@ -21,6 +22,7 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
   const [mode, setMode] = useState<RecordMode>('status')
   const [notice, report] = useState('')
   const [cleared, setCleared] = useState<number | null>(null)
+  const panel = useRef<HTMLElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const previous = useRef(status.code)
   const blocked = locked(status.code)
@@ -47,13 +49,26 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
   useLayoutEffect(() => { if (visible) heading.current?.focus() }, [visible])
   useLayoutEffect(() => {
     const keyboard = (e: KeyboardEvent) => {
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
+      if (visible && e.key === 'Tab') {
+        const controls = Array.from(panel.current?.querySelectorAll<HTMLElement>('button:enabled,input:enabled,textarea:enabled,select:enabled,[tabindex="0"]') ?? [])
+        const first = controls[0], last = controls.at(-1)
+        if ((e.shiftKey && (document.activeElement === first || document.activeElement === heading.current)) ||
+            (!e.shiftKey && document.activeElement === last)) {
+          e.preventDefault(); (e.shiftKey ? last : first)?.focus()
+        }
+        return
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key === 'Escape' && visible && !blocked) { e.preventDefault(); open(null); return }
-      if (blocked || (e.target instanceof Element && e.target.closest('input,textarea,select'))) return
+      if (e.target instanceof Element && e.target.closest('input,textarea,select')) return
+      if (visible && playKeys.test(e.code)) {
+        if (e.code === 'Space' && e.target instanceof Element && e.target.closest('button,[role=button]')) return
+        e.preventDefault(); e.stopPropagation()
+        return
+      }
+      if (e.repeat || blocked) return
       const next = (Object.keys(pages) as Page[]).find(p => 'Key' + pages[p] === e.code)
       if (next) { e.preventDefault(); open(next === visible ? null : next) }
-      else if (visible && ['KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','KeyR','KeyT','KeyF','Space'].includes(e.code) &&
-        !(e.target instanceof Element && e.target.closest('button,[role=button]'))) { e.preventDefault(); e.stopImmediatePropagation() }
     }
     window.addEventListener('keydown', keyboard, true)
     return () => window.removeEventListener('keydown', keyboard, true)
@@ -64,12 +79,13 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
   const goRecord = (next: RecordMode) => { setMode(next); open('Save') }
   const play = () => {
     const count = world.groundDrops.length
-    const r = world.encounter?.phase === 'defeat' ? api.character.returnToShelter() : api.character.beginEncounter()
-    if (r.accepted) { setCleared(world.encounter?.phase === 'active' ? count : null); report('') }
+    const starting = world.encounter?.phase !== 'defeat'
+    const r = starting ? api.character.beginEncounter() : api.character.returnToShelter()
+    if (r.accepted) { setCleared(starting ? count : null); report('') }
     else report(words(r.reason))
     document.querySelector('canvas')?.focus()
   }
-  return <div className="field-ui">{visible ? <div className="veil"><section className="folio" role="dialog" aria-modal="true" aria-label={titles[visible]}>
+  return <div className="field-ui">{visible ? <div className="veil"><section ref={panel} className="folio" role="dialog" aria-modal="true" aria-label={titles[visible]}>
     <header className="folio-head"><span className="marker-seal" aria-hidden="true"/><div><small>Windstep clearing · Rank {character.rank}</small><h1 ref={heading} tabIndex={-1}>{titles[visible]}</h1></div>
       <nav>{(Object.keys(pages) as Page[]).map(p => <button key={p} aria-current={visible === p ? 'page' : undefined} disabled={blocked && p !== 'Save'}
         onClick={() => { if (p === 'Save') setMode('status'); open(p) }}>{p}</button>)}</nav>
@@ -89,11 +105,11 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
     <div className="clearing-control">{world.encounter?.phase !== 'active' ? <button className="primary" onClick={play}>{world.encounter?.phase === 'defeat' ? 'Return to marker' :
       'Start clearing · ' + world.groundDrops.length + ' uncollected'}</button> : cleared !== null && <span role="status">{cleared} uncollected {cleared === 1 ? 'drop' : 'drops'} cleared</span>}
       {notice && <p role="status">{notice}</p>}</div>
-    <div className="loadout">{character.loadout.map((id,i) => {
+    <div className="loadout" aria-label="Action loadout">{character.loadout.map((id,i) => {
       const cooldown = id ? player.skillCooldowns[id] ?? 0 : 0
       const state = !id ? 'Empty' : player.death ? 'Fallen' : cooldown ? (cooldown / 60).toFixed(1) + ' s' :
         action?.id === id && phase ? words(phase) : action || player.impactPauseTicks || player.knockback ? 'Waiting' : 'Ready'
-      return <div key={i}><kbd>{keys[i]}</kbd><b>{id ? content.actions.find(a => a.id === id)?.name : 'Unassigned'}</b><span>{state}</span></div>
-    })}</div><div className="field-help">WASD move · Mouse aim · Space dodge{player.cooldowns.dodge > 0 && ' (' + (player.cooldowns.dodge / 60).toFixed(1) + ' s)'} · F collect</div></>}
+      return <div key={i} data-ready={state === 'Ready'}><kbd>{keys[i]}</kbd><b>{id ? content.actions.find(a => a.id === id)?.name : 'Unassigned'}</b><span>{state}</span></div>
+    })}</div><div className="field-help">WASD move · Mouse aim · Space dodge{player.cooldowns.dodge > 0 && ' (' + (player.cooldowns.dodge / 60).toFixed(1) + ' s)'} · {character.inventory.length === 30 ? 'Inventory full' : 'F collect'}</div></>}
   </div>
 }

@@ -6,7 +6,7 @@ const messages: Record<SaveStatusCode, [string, string]> = {
   blocked: ['Open in another tab', 'Play here to load the latest local character and move play to this tab.'],
   'lost-writer': ['Play moved to another tab', 'This clearing is paused. Play here to resume from the latest save.'],
   'generation-mismatch': ['A newer save is available', 'Play here to resume from the latest local character.'],
-  'read-only': ['Read-only session', 'Web Locks are unavailable. Copy save text before leaving, then paste it to resume.'],
+  'read-only': ['Read-only session', 'Web Locks are unavailable. You can play in this tab for now. Copy save text before leaving, then paste it to resume.'],
   quota: ['Save failed · storage full', 'Your previous save is intact. Copy save text to keep this character.'],
   security: ['Browser storage denied', 'Copy save text to keep your progress outside this browser.'],
   'read-failed': ['Local save unavailable', 'The browser could not read your save. Copy save text or retry loading.'],
@@ -44,6 +44,7 @@ export function Records({ saves, status, mode, change, updated }: {
       <h2>{mode === 'import' ? 'Import character' : mode === 'reset' ? 'Reset character?' : mode === 'export' ? 'Copy save text' : title}</h2>
       <p>{mode === 'reset' ? 'Replace this character with a fresh rank 1 build. Copy save text first to keep a backup.' :
         mode === 'import' ? 'Paste the complete save text. Import replaces your current character.' : mode === 'export' ? 'Keep this text to restore your equipment, folds and passive lattice.' : advice}</p>
+      {status.code === 'read-only' && (mode === 'reset' || mode === 'import') && <p>Applies to this tab only.</p>}
       {status.refunds.length > 0 && <ul>{status.refunds.map((r,i) => <li key={i}>{r}</li>)}</ul>}
       {(mode === 'import' || mode === 'export') && <textarea key={mode} ref={input} aria-label="Character save text" spellCheck={false} readOnly={mode === 'export'}
         defaultValue={mode === 'export' ? text : ''} onFocus={e => { if (mode === 'export') e.target.select() }}/>}
@@ -53,7 +54,7 @@ export function Records({ saves, status, mode, change, updated }: {
         {unchecked && <button className="primary" onClick={() => run(() => saves.load(), 'Local save checked')}>Load save</button>}
         {locked(status.code) ? <button className={unchecked ? '' : 'primary'} onClick={() => run(() => saves.takeOver(), 'Takeover complete. Latest character loaded.')}>Play here</button> :
         status.writable && <button className="primary" onClick={() => run(() => saves.flush(), 'Character saved')}>Save now</button>}
-        <button onClick={() => choose('export')}>Copy save text</button><button disabled={locked(status.code)} onClick={() => choose('import')}>Paste save</button>
+        <button className={!status.writable && !locked(status.code) ? 'primary' : undefined} onClick={() => choose('export')}>Copy save text</button><button disabled={locked(status.code)} onClick={() => choose('import')}>Paste save</button>
         {!unchecked && <button onClick={() => run(() => saves.load(), 'Local save checked')}>Load save</button>}<button disabled={locked(status.code)} onClick={() => choose('reset')}>Reset</button></>}
       {mode === 'export' && <><button className="primary" onClick={async () => {
         try { await navigator.clipboard.writeText(text); setMessage('Save text copied') }
