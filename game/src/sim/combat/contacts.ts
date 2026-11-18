@@ -3,6 +3,7 @@ import { actionPhase } from '../core/timing'
 import { TICK_DT } from '../core/types'
 import type { ActionState, Entity, EntityId, KnockbackSpec, Projectile, Vec2, World } from '../core/types'
 import type { ActorTick } from '../systems/actors'
+import { skillDefinition } from './actions'
 import { sectorOverlaps, sweepCircle } from './geometry'
 
 export interface Contact {
@@ -30,17 +31,23 @@ export function launchProjectiles(world: World, states: Map<EntityId, ActorTick>
   for (const actor of world.entities) {
     const action = actor.action
     if (actor.death || states.get(actor.id)!.paused || !action || action.kind !== 'projectile' || action.projectileSpawned) continue
-    const skill = world.content.skills.find(value => value.id === action.id)!
-    if (skill.kind !== 'projectile' || actionPhase(skill.timing, action.ageTicks) !== 'active') continue
+    const skill = skillDefinition(world, action.id)
+    if (skill.kind !== 'projectile' || actionPhase(action.recipe?.timing ?? skill.timing, action.ageTicks) !== 'active') continue
     action.projectileSpawned = true
-    const shot: Projectile = {
-      id: world.nextId++, ownerId: actor.id, faction: actor.faction, skillId: skill.id, actionStartTick: action.startTick,
-      pos: { ...actor.pos }, vel: { x: fmath.cos(action.direction) * skill.speed, z: fmath.sin(action.direction) * skill.speed },
-      radius: skill.radius, ageTicks: 0, lifetimeTicks: skill.lifetimeTicks, damage: skill.damage,
-      knockback: { ...skill.knockback }, impactPauseTicks: skill.impactPauseTicks, hitFlashTicks: skill.hitFlashTicks
+    const footprint = action.recipe?.footprint
+    for (const offset of footprint?.projectileAngles ?? [0]) {
+      const direction = action.direction + offset * Math.PI / 180
+      const speed = footprint?.speed ?? skill.speed
+      const shot: Projectile = {
+        id: world.nextId++, ownerId: actor.id, faction: actor.faction, skillId: skill.id, actionStartTick: action.startTick,
+        pos: { ...actor.pos }, vel: { x: fmath.cos(direction) * speed, z: fmath.sin(direction) * speed },
+        radius: footprint?.radius ?? skill.radius, ageTicks: 0, lifetimeTicks: footprint?.lifetimeTicks ?? skill.lifetimeTicks,
+        damage: skill.damage, knockback: { ...skill.knockback }, impactPauseTicks: skill.impactPauseTicks, hitFlashTicks: skill.hitFlashTicks,
+        ...(action.recipe && { recipe: structuredClone(action.recipe) }), ...(action.groupId && { groupId: action.groupId })
+      }
+      world.projectiles.push(shot)
+      launched.add(shot.id)
     }
-    world.projectiles.push(shot)
-    launched.add(shot.id)
   }
   return launched
 }
@@ -52,11 +59,12 @@ export function gatherContacts(world: World, states: Map<EntityId, ActorTick>, l
   for (const actor of world.entities) {
     const action = actor.action
     if (actor.death || states.get(actor.id)!.paused || !action || action.kind !== 'melee') continue
-    const skill = world.content.skills.find(value => value.id === action.id)!
-    if (skill.kind !== 'melee' || actionPhase(skill.timing, action.ageTicks) !== 'active') continue
+    const skill = skillDefinition(world, action.id)
+    if (skill.kind !== 'melee' || actionPhase(action.recipe?.timing ?? skill.timing, action.ageTicks) !== 'active') continue
+    const footprint = action.recipe?.footprint
     for (const target of world.entities) {
       if (!hostile(actor, target) || action.hitTargetIds.includes(target.id) ||
-        !sectorOverlaps(actor.pos, action.direction, skill.range, skill.arcRadians, target)) continue
+        !sectorOverlaps(actor.pos, action.direction, footprint?.reach ?? skill.range, footprint?.arcRadians ?? skill.arcRadians, target)) continue
       contacts.push({
         ...skill, travelFraction: 0, actorId: actor.id, targetId: target.id, skillId: skill.id,
         actionStartTick: action.startTick, action, projectileId: null,
