@@ -1,0 +1,21 @@
+{
+  "format": "folio.arpg.save",
+  "schema": 0,
+  "generation": 7,
+  "build": "qa-baseline",
+  "seed": 7,
+  "questFlags": {},
+  "settings": {},
+  "character": {
+    "rank": 1,
+    "xp": 0,
+    "points": 4,
+    "graph": { "profileId": "qa-graph", "seed": 7, "version": 1, "allocations": [], "activeShapes": [] },
+    "equipment": { "weapon": 11, "offhand": null, "coat": null, "boots": null, "survey-tally": null },
+    "inventory": [],
+    "stash": [],
+    "items": [{ "id": 11, "role": "weapon", "baseId": "qa-weapon", "affixes": [] }],
+    "loadout": ["span-cut", "fold-dart", null, null, null, null],
+    "folds": {}
+  }
+}
