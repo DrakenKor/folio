@@ -1,5 +1,6 @@
 import { m1Content, WINDSTEP_CLEARING } from '../content/m1'
 import { m2Content } from '../content/m2'
+import { buildBalanceScenario } from './build-scenarios'
 import { fmath } from './core/fmath'
 import { rngFloat } from './core/rng'
 import { createWorld, spawnEntity } from './core/store'
@@ -95,6 +96,7 @@ function buildM2Clearing(seed: number): World {
 /** Build a fresh deterministic fixture without ambient state or presentation data. */
 export function buildScenario(name: string, seed: number): World {
   if (name === 'm2-clearing') return buildM2Clearing(seed)
+  if (name === 'm2-balance') return buildBalanceScenario(seed)
   if (M2_SCENARIO_NAMES.some(scenario => scenario === name)) throw new UnsupportedError('M2 scenarios (T2.3)')
   const scenario = SCENARIO_NAMES.find(candidate => candidate === name)
   if (!scenario) throw new RangeError(`Unknown scenario: ${name}`)
