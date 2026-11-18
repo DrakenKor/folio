@@ -53,7 +53,7 @@ describe('play CLI disconnected CDP transport', () => {
 })
 
 describe('play command and observation hooks', () => {
-  it.each(['cmd', 'observe'])('routes %s through the public debug hook', command => {
+  it.each(['cmd', 'observe', 'net', 'stale-report', 'stale-metadata'])('checks %s through the public debug API', command => {
     mkdirSync(scratch, { recursive: true })
     const root = mkdtempSync(join(scratch, 'play-hooks-'))
     fixtures.push(root)
@@ -63,7 +63,8 @@ describe('play command and observation hooks', () => {
     const expressions = join(root, 'expressions.jsonl')
     copyFileSync(fileURLToPath(new URL('./play.mjs', import.meta.url)), tool)
     copyFileSync(fileURLToPath(new URL('./normal-fight.mjs', import.meta.url)), join(root, 'game/tools/normal-fight.mjs'))
-    writeFileSync(join(root, 'game/.play-out/session.json'), JSON.stringify({ browserUrl: 'ws://browser', targetId: 'game' }))
+    const network = { build: command === 'stale-report' ? 'older' : 'current', bytes: 1234, requests: [] }
+    writeFileSync(join(root, 'game/.play-out/session.json'), JSON.stringify({ browserUrl: 'ws://browser', targetId: 'game', network }))
     const preload = `
       import {appendFileSync} from 'node:fs';
       globalThis.fetch = async url => ({json:async()=>url.endsWith('/json/version')
@@ -77,28 +78,42 @@ describe('play command and observation hooks', () => {
           let result = {};
           if (method === 'Runtime.evaluate') {
             appendFileSync(${JSON.stringify(expressions)},JSON.stringify(params.expression)+'\\n');
-            result = {result:{value:{tick:77,actors:[],projectiles:[]}}};
+            const value = params.expression.includes('/play/build.json')
+              ? {build:'current',metadata:{build:${JSON.stringify(command === 'stale-metadata' ? 'older' : 'current')}}}
+              : {tick:77,actors:[],projectiles:[]};
+            result = {result:{value}};
           }
           queueMicrotask(()=>this.onmessage?.({data:JSON.stringify({id,result})}));
         }
         close() { this.readyState = 3 }
       };
     `
-    const input = { move: { x: 1, z: 0 }, aim: { x: 4, z: 2 }, buttons: 4 }
-    const args = command === 'cmd' ? ['cmd', JSON.stringify(input)] : ['observe']
+    const input = { move: { x: 1, z: 0 }, aim: { x: 4, z: 2 }, buttons: 123,
+      operations: [{ type: 'setLoadout', slots: ['span-cut', 'fold-dart', null, null, 'hearth-shard', 'skim-needle'] }] }
+    const args = command === 'cmd' ? ['cmd', JSON.stringify(input)] : [command === 'observe' ? 'observe' : 'net']
     const result = spawnSync(process.execPath, ['--import', `data:text/javascript;base64,${Buffer.from(preload).toString('base64')}`, tool, ...args], {
       cwd: root, encoding: 'utf8', timeout: 2000, env: { ...process.env, PLAY_CDP_PORT: '9570' }
     })
     expect(result.error).toBeUndefined()
+    if (command.startsWith('stale-')) {
+      expect(result.status).toBe(1)
+      expect(result.stderr).toMatch(command === 'stale-report' ? /Stale ready-time network measurement/ : /Build mismatch/)
+      expect(existsSync(join(root, 'game/.play-out/net.json'))).toBe(false)
+      return
+    }
     expect(result.status, result.stderr).toBe(0)
-    expect(JSON.parse(result.stdout)).toMatchObject(command === 'cmd' ? { command, queued: true } : { command, tick: 77, actors: [], projectiles: [] })
+    const output = JSON.parse(result.stdout)
+    if (command === 'net') {
+      expect(output).toMatchObject({ command, build: 'current', bytes: 1234 })
+      expect(JSON.parse(readFileSync(join(root, 'game/.play-out/net.json'), 'utf8'))).toEqual(network)
+    } else expect(output).toMatchObject(command === 'cmd' ? { command, queued: true } : { command, tick: 77, actors: [], projectiles: [] })
     const evaluated = readFileSync(expressions, 'utf8').trim().split('\n').map(line => JSON.parse(line))
-    expect(evaluated.at(-1)).toContain(command === 'cmd' ? `__game.cmd(${JSON.stringify(input)})` : '__game.observe()')
+    expect(evaluated.at(-1)).toContain(command === 'cmd' ? `__game.cmd(${JSON.stringify(input)})` : command === 'observe' ? '__game.observe()' : '__game.build')
     expect(evaluated.at(-1)).not.toMatch(/__game\.(restore|teleport|state)\(/)
   })
 })
 
-// Run with PLAY_ACCEPTANCE=1 and public/ served on loopback port 8790.
+// Run with PLAY_ACCEPTANCE=1 against a loopback static build.
 it.runIf(process.env.PLAY_ACCEPTANCE === '1')('captures both backends and measures a fresh headless load', () => {
   const root = fileURLToPath(new URL('../../', import.meta.url))
   const tool = join(root, 'game/tools/play.mjs')
@@ -119,15 +134,16 @@ it.runIf(process.env.PLAY_ACCEPTANCE === '1')('captures both backends and measur
     const imports = large ? ['--import', `data:text/javascript;base64,${Buffer.from(metrics).toString('base64')}`] : []
     const result = spawnSync(process.execPath, [...imports, tool, ...args], {
       cwd: root, encoding: 'utf8', input, timeout: 30000,
-      env: { ...process.env, PLAY_CDP_PORT: '9570', PLAY_HEADLESS: '1' }
+      env: { ...process.env, PLAY_CDP_PORT: process.env.PLAY_CDP_PORT ?? '9570', PLAY_HEADLESS: '1' }
     })
     expect(result.error).toBeUndefined()
     expect(result.status, result.stderr).toBe(0)
     return result.stdout
   }
   try {
+    const origin = process.env.PLAY_ORIGIN ?? 'http://127.0.0.1:8790'
     for (const backend of ['webgpu', 'webgl']) {
-      cli(['boot', `http://127.0.0.1:8790/play/?backend=${backend}`])
+      cli(['boot', `${origin}/play/?backend=${backend}`])
       cli(['run', '/dev/stdin'], false, JSON.stringify({ steps: [
         { op: 'eval', expression: '__game.backend', expect: backend === 'webgl' ? 'webgl2' : 'webgpu' }
       ] }))

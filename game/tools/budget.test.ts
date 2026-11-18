@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 const scratch = fileURLToPath(new URL('../.play-out/', import.meta.url))
 const tool = fileURLToPath(new URL('./budget.mjs', import.meta.url))
 const fixtures: string[] = []
+const metadata = (root: string, text: string) => writeFileSync(join(root, 'public/play/build.json'), text)
 
 function fixture() {
   mkdirSync(scratch, { recursive: true })
@@ -14,9 +15,9 @@ function fixture() {
   fixtures.push(root)
   mkdirSync(join(root, 'public/play/assets'), { recursive: true })
   mkdirSync(join(root, 'game/.play-out'), { recursive: true })
-  // The build stamp lives in the emitted entry, independent of the current git HEAD.
   writeFileSync(join(root, 'public/play/index.html'), '<script type="module" src="/play/assets/entry.js"></script>')
-  writeFileSync(join(root, 'public/play/assets/entry.js'), 'window.__game={build:`built-revision`};')
+  writeFileSync(join(root, 'public/play/assets/entry.js'), 'window.__game={build:"some-other-value"};')
+  metadata(root, '{"build":"built-revision"}')
   return root
 }
 
@@ -33,7 +34,7 @@ afterEach(() => {
 })
 
 describe('budget CLI first-load contract', () => {
-  it('accepts a measured load stamped with the deployed bundle build', () => {
+  it('accepts a measured load stamped with the deployed metadata', () => {
     const root = fixture()
     net(root)
     const result = budget(root)
@@ -79,30 +80,30 @@ describe('budget CLI first-load contract', () => {
     expect(result.stdout).toMatch(/First playable download.*OVER/)
   })
 
-  it('fails closed if the built bundle has no unambiguous stamp', () => {
+  it('rejects missing build metadata even when JavaScript has a matching stamp', () => {
     const root = fixture()
     net(root)
-    writeFileSync(join(root, 'public/play/assets/entry.js'), 'window.__game={};')
+    rmSync(join(root, 'public/play/build.json'))
+    writeFileSync(join(root, 'public/play/assets/entry.js'), 'window.__game={build:"built-revision"};')
     const result = budget(root)
     expect(result.status).toBe(1)
-    expect(result.stderr).toMatch(/build.*public\/play/i)
+    expect(result.stderr).toMatch(/public\/play\/build\.json.*missing/i)
   })
 
-  it('reads an escaped stamp from a split bundle and ignores build-like text', () => {
+  it.each(['{', 'null', '[]', '{}', '{"build":42}', '{"build":"  "}', '{"build":"built-revision","extra":true}'])('rejects malformed metadata %s', text => {
     const root = fixture()
     net(root)
-    writeFileSync(join(root, 'public/play/assets/entry.js'), 'import "./debug.mjs"; const text="build:`unrelated`";')
-    writeFileSync(join(root, 'public/play/assets/debug.mjs'), 'export const api={"build":"built-\\u0072evision"};')
-    const result = budget(root)
-    expect(result.status, result.stderr).toBe(0)
-  })
-
-  it('fails closed if emitted chunks disagree about the build', () => {
-    const root = fixture()
-    net(root)
-    writeFileSync(join(root, 'public/play/assets/stale.js'), 'window.stale={build:"older-revision"};')
+    metadata(root, text)
     const result = budget(root)
     expect(result.status).toBe(1)
-    expect(result.stderr).toMatch(/unambiguous build id.*public\/play/i)
+    expect(result.stderr).toMatch(/public\/play\/build\.json.*invalid/i)
+  })
+
+  it('rejects malformed report JSON', () => {
+    const root = fixture()
+    writeFileSync(join(root, 'game/.play-out/net.json'), '{')
+    const result = budget(root)
+    expect(result.status).toBe(1)
+    expect(result.stderr).toMatch(/net\.json.*invalid/i)
   })
 })

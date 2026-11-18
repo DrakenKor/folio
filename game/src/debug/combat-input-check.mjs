@@ -156,6 +156,32 @@ try {
       assert(player(observe()).health > 0)
       assert.equal(evaluate('!document.querySelector("#encounter-hud .hud-outcome").hidden'), false)
     })
+    check(backend, 'all six slots start their configured M2 actions through DOM input', () => {
+      evaluate('__game.scenario("m2-clearing", 7)')
+      const fixture = JSON.parse(evaluate('__game.snapshot()'))
+      fixture.world.encounter = null
+      const slots = fixture.world.entities.find(actor => actor.id === fixture.world.playerId).character.loadout
+      for (const [index, code] of ['left', 'right', 'KeyQ', 'KeyE', 'KeyR', 'KeyT'].entries()) {
+        reset(fixture)
+        const bit = [1, 2, 8, 16, 32, 64][index]
+        if (index < 2) { press(bit); step(1) }
+        else run([{ op: 'keyDown', code }, { op: 'keyUp', code }, { op: 'wait', ticks: 1 }])
+        const state = observe()
+        assert.equal(state.command.buttons, bit)
+        const action = player(state).action
+        assert.equal(action?.id, slots[index], code)
+        assert.equal(action.startTick, fixture.world.tick + 1)
+        assert.equal(action.ageTicks, 0)
+        assert.equal(action.phase, 'windup')
+      }
+      reset(fixture)
+      run([{ op: 'keyDown', code: 'KeyW' }, { op: 'keyDown', code: 'KeyF' }, { op: 'wait', ticks: 1 },
+        { op: 'keyUp', code: 'KeyF' }, { op: 'keyUp', code: 'KeyW' }])
+      const { command, actors, playerId } = observe()
+      assert.equal(command.buttons, 128)
+      assert(Math.hypot(command.move.x, command.move.z) > 0, 'W must remain movement')
+      assert.equal(actors.find(actor => actor.id === playerId).action, null)
+    })
     check(backend, 'console has no errors or warnings', () => run([{ op: 'console', ms: 100, expectEmpty: true }]))
   }
 } finally { cli('stop') }
