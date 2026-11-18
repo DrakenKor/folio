@@ -7,7 +7,8 @@ export const TICK_DT = 1 / TICK_HZ
 
 /** Bumped whenever the shape of `World` changes. */
 export const SCHEMA_VERSION = 4
-export const SIM_BUILD = 'm2-sim-v1'
+export const SIM_BUILD = 'm2-sim-v2'
+export const LEGACY_SIM_BUILD = 'm2-sim-v1'
 
 export const SCENARIO_NAMES = ['empty', 'meadow-start', 'dummies-1000', 'm1-arena', 'm1-fight', 'm1-stress'] as const
 export const M2_SCENARIO_NAMES = ['m2-clearing', 'm2-balance', 'm2-stress'] as const

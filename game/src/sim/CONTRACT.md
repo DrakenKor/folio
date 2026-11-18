@@ -1,6 +1,6 @@
 # Simulation contract
 
-Schema **4**, simulation build **`m2-sim-v1`**, fixed **60 Hz**. Shared types live in `core/types.ts`.
+Schema **4**, M2 simulation build **`m2-sim-v2`** (M0/M1 retain `m2-sim-v1`), fixed **60 Hz**. Shared types live in `core/types.ts`.
 The core loop drives movement, combat, AI and scheduled fight waves for headless, replay and browser callers.
 
 ## State and ownership
@@ -227,6 +227,7 @@ T2.0 defines contracts only. M0/M1 use null characters/encounters, empty M2 tabl
 Build content lives in `world.content.m2`: version, actions, folds, graph profiles, item bases, affixes and loot tables.
 Actions extend the legacy collision definition with names, immutable tags, typed bases, weapon coefficient and nominal reach.
 The legacy `damage` field remains for M1 compatibility; M2 resolves typed bases and weapon coefficients through T2.2.
+Creaseback strikes in M2 capture a melee weight recipe at telegraph start and read target reductions at contact.
 Sector casts use collision kind `melee` with cast/area tags; tags determine modifier eligibility, independently of collision kind.
 M2 action lookup takes priority over legacy skills. Content schemas validate geometry, finite values, legal conversions and nonnegative factors.
 Folds declare one handle, tension, compatibility, modifiers, geometry factors, phase deltas and relative projectile angles in degrees.

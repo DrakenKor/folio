@@ -1,7 +1,18 @@
 import { DAMAGE_TYPES, TICK_HZ } from '../core/types'
 import type { ActionDefinition, DamageValues, Entity, FoldDefinition, OperationReason, OperationResult, ResolvedAction, StatInspection, StatModifier, World } from '../core/types'
+import { add, multiply } from './decimal'
 import { baseAndFlats } from './damage-model'
 import { actorStats, byId, modifierSource, productStat, recoveryTiming, roundAtLeastOne, sumStat } from './stats'
+
+export function buildAction(world: World, id: string): ActionDefinition | undefined {
+  const content = world.content.m2
+  if (!content) return
+  const action = content.actions.find(action => action.id === id)
+  if (action || id !== 'creaseback-strike') return action
+  const strike = world.content.skills.find(skill => skill.id === id)
+  if (strike?.kind === 'melee') return { ...strike, name: 'Creaseback Strike', tags: ['melee'], reach: strike.range,
+    baseDamage: { weight: strike.damage, heat: 0, gale: 0 }, weaponCoefficient: 0 }
+}
 
 type RecipeResult = { ok: true; value: ResolvedAction } | { ok: false; reason: OperationReason }
 
@@ -26,7 +37,7 @@ export function resolveRecipe(world: World, actor: Entity, action: ActionDefinit
   if (action.tags.includes('weapon') && character) {
     const weapon = character.items.find(item => item.id === character.equipment.weapon)!
     const base = content.itemBases.find(base => base.id === weapon.baseId)!
-    for (const type of DAMAGE_TYPES) sourceDamage[type] += action.weaponCoefficient * base.weaponDamage[type]
+    for (const type of DAMAGE_TYPES) sourceDamage[type] = add(sourceDamage[type], multiply(action.weaponCoefficient, base.weaponDamage[type]))
   }
   const eligible = (mod: StatModifier) => mod.requiredTags.every(tag => action.tags.includes(tag))
   const modifiers = stats.sources.flatMap(source => source.modifiers).filter(eligible).sort(byId)

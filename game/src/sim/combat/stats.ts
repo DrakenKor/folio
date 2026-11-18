@@ -1,6 +1,7 @@
 import { rngInt } from '../core/rng'
 import { DAMAGE_TYPES, EQUIPMENT_ROLES, GAIT } from '../core/types'
 import type { ActionTag, ActionTiming, CharacterState, DamageValues, Entity, GraphProfile, StatInspection, StatModifier, World } from '../core/types'
+import { add, multiply } from './decimal'
 
 export const zeroDamage = (): DamageValues => ({ weight: 0, heat: 0, gale: 0 })
 export const byId = (a: { id: string }, b: { id: string }) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0
@@ -59,7 +60,7 @@ function buildSources(world: World, character: CharacterState): Source[] {
     for (const affix of item.affixes) {
       const family = content.affixes.find(family => family.id === affix.familyId)!
       sources.push(modifierSource(id + '/affix/' + family.id, family.name,
-        [{ ...family.modifier, value: affix.roll * family.valuePerPoint }]))
+        [{ ...family.modifier, value: multiply(affix.roll, family.valuePerPoint) }]))
     }
   }
   const graph = character.graph
@@ -102,7 +103,7 @@ export function actorStats(world: World, actor: Entity, incomingTags: ActionTag[
   const reductions = zeroDamage()
   for (const mod of modifiers) {
     if (mod.kind === 'reduction' && mod.requiredTags.every(tag => incomingTags.includes(tag)) &&
-      (!mod.types.length || mod.types.includes(mod.damageType))) reductions[mod.damageType] += mod.value
+      (!mod.types.length || mod.types.includes(mod.damageType))) reductions[mod.damageType] = add(reductions[mod.damageType], mod.value)
   }
   for (const type of DAMAGE_TYPES) reductions[type] = Math.min(.75, Math.max(0, reductions[type]))
   const dodge = world.content.dodge

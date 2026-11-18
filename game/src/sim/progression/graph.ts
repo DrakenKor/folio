@@ -108,3 +108,15 @@ export function editGraph(character: CharacterState, profile: GraphProfile, edit
   graph.activeShapes = graph.activeShapes.filter(id => complete.some(s => s.id === id))
   return null
 }
+
+export function validateGraph(character: CharacterState, profile: GraphProfile): void {
+  const graph = character.graph
+  if (connectedNodes(graph.allocations, profile.radius).size !== graph.allocations.length + 1) {
+    throw new TypeError('Invalid graph connectivity')
+  }
+  const candidate = { ...character, graph: { ...graph, activeShapes: [] as string[] } }
+  for (const shapeId of graph.activeShapes) {
+    const reason = editGraph(candidate, profile, { type: 'activateShape', shapeId, active: true })
+    if (reason) throw new TypeError('Invalid saved shape: ' + reason)
+  }
+}

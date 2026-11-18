@@ -1,7 +1,7 @@
 import type { ActionPreview, EntityId, Operation, OperationResult, QueryResult, StatInspection, World } from '../core/types'
 import { AILMENT_RULES } from './ailments'
 import { calculateDamage } from './damage-model'
-import { resolveRecipe } from './recipe'
+import { buildAction, resolveRecipe } from './recipe'
 import { actorStats } from './stats'
 
 export { processAilments } from './ailments'
@@ -39,12 +39,13 @@ export function previewAction(world: World, actorId: EntityId, skillId: string, 
   if (!world.content.m2) return { ok: false, reason: 'unsupported' }
   const actor = world.entities.find(actor => actor.id === actorId)
   if (!actor) return { ok: false, reason: 'no-actor' }
-  const action = world.content.m2.actions.find(action => action.id === skillId)
+  const action = buildAction(world, skillId)
   if (!action) return { ok: false, reason: 'unknown-skill' }
   const target = world.entities.find(actor => actor.id === targetId)
   if (!target) return { ok: false, reason: 'unknown-target' }
   const stats = actorStats(world, actor)
-  const resolved = resolveRecipe(world, actor, action, undefined, stats)
+  const captured = actor.ai && actor.action?.id === skillId && actor.action.recipe
+  const resolved = captured ? { ok: true as const, value: structuredClone(captured) } : resolveRecipe(world, actor, action, undefined, stats)
   if (!resolved.ok) return resolved
   const recipe = resolved.value
   const damage = calculateDamage(recipe, actorStats(world, target, recipe.tags).reductions, target.health)

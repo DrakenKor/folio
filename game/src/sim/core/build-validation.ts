@@ -1,4 +1,6 @@
 import { validateDamage, validateModifiers, validateTiming } from '../../content/schema'
+import { buildAction } from '../combat/recipe'
+import { validateGraph } from '../progression/graph'
 import { ACTION_TAGS, EQUIPMENT_ROLES } from './types'
 import type { CharacterState, ResolvedAction, RolledItem, World } from './types'
 
@@ -14,13 +16,13 @@ const texts = (values: string[]) => Array.isArray(values) && Array.from(values).
 const ids = (values: number[]) => Array.isArray(values) && Array.from(values).every(positiveId) && unique(values)
 
 function recipe(value: ResolvedAction, world: World): void {
-  check(record(value) && world.content.m2?.actions.some(action => action.id === value.skillId) &&
+  const definition = value && buildAction(world, value.skillId)
+  check(record(value) && definition &&
     Array.isArray(value.tags) && unique(value.tags) && value.tags.every(tag => ACTION_TAGS.includes(tag)) &&
     texts(value.folds) && value.folds.length <= 2 && value.folds.every(id => world.content.m2!.folds.some(fold => fold.id === id)), 'recipe')
   validateDamage(value.sourceDamage)
   validateModifiers(value.modifiers)
   validateTiming(value.timing)
-  const definition = world.content.m2!.actions.find(action => action.id === value.skillId)!
   check(value.tags.length === definition.tags.length && value.tags.every(tag => definition.tags.includes(tag)), 'immutable recipe tags')
   const shape = value.footprint
   check(record(shape) && shape.kind === definition.kind &&
@@ -52,10 +54,11 @@ function character(value: CharacterState, world: World): void {
   check(record(value) && integer(value.rank) && value.rank >= 1 && value.rank <= 21 && integer(value.xp) &&
     (value.rank === 21 ? value.xp === 0 : value.xp < 60 * value.rank) && integer(value.points), 'rank/XP/points')
   const graph = value.graph
+  const profile = world.content.m2?.graphProfiles.find(profile => profile.id === graph?.profileId && profile.version === graph.version)
   check(record(graph) && text(graph.profileId) && Number.isSafeInteger(graph.seed) && positiveId(graph.version) &&
     texts(graph.allocations) && texts(graph.activeShapes) && graph.activeShapes.length <= 2 &&
-    value.points + graph.allocations.length === value.rank + 3 &&
-    world.content.m2?.graphProfiles.some(profile => profile.id === graph.profileId && profile.version === graph.version), 'graph/budget')
+    value.points + graph.allocations.length === value.rank + 3 && profile, 'graph/budget')
+  validateGraph(value, profile)
   check(Array.isArray(value.items) && ids(value.inventory) && value.inventory.length <= 30 && ids(value.stash) && value.stash.length <= 30 &&
     record(value.equipment) && EQUIPMENT_ROLES.every(role => value.equipment[role] === null || positiveId(value.equipment[role]!)) &&
     value.equipment.weapon !== null, 'item stores')
@@ -88,7 +91,7 @@ export function validateBuildState(world: World): void {
     }
     check(record(actor.skillCooldowns) && Object.entries(actor.skillCooldowns).every(([id, ticks]) =>
       text(id) && integer(ticks) && (world.content.skills.some(skill => skill.id === id) || world.content.m2?.actions.some(action => action.id === id))), 'action cooldowns')
-    if (actor.action && actor.action.kind !== 'dodge' && world.content.m2?.actions.some(action => action.id === actor.action!.id)) {
+    if (actor.action && actor.action.kind !== 'dodge' && buildAction(world, actor.action.id)) {
       check(actor.action.recipe !== undefined, 'captured action recipe')
     }
     if (actor.action?.recipe !== undefined) {
