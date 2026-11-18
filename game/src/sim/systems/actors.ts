@@ -42,6 +42,9 @@ export function beginActors(world: World, command: Command): Map<EntityId, Actor
     for (const slot of ['primary', 'secondary', 'dodge'] as const) {
       actor.cooldowns[slot] = Math.max(0, actor.cooldowns[slot] - 1)
     }
+    for (const id of Object.keys(actor.skillCooldowns)) {
+      if (--actor.skillCooldowns[id]! <= 0) delete actor.skillCooldowns[id]
+    }
     consumeIntent(actor, state, input)
   }
   return states

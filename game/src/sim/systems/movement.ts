@@ -1,4 +1,5 @@
 import { actionTiming, movementInput } from '../combat/actions'
+import { actorStats, baseMovementSpeed } from '../combat/stats'
 import { fmath } from '../core/fmath'
 import { actionPhase } from '../core/timing'
 import { BODY_TURN_PER_TICK, GAIT, TICK_DT, TICK_HZ } from '../core/types'
@@ -42,8 +43,7 @@ export function moveEntities(world: World, states: Map<EntityId, ActorTick>): vo
         actor.vel = { x: fmath.cos(actor.action.direction) * speed, z: fmath.sin(actor.action.direction) * speed }
       }
     } else if (magnitude > 0) {
-      const speed = actor.id === world.playerId ? GAIT.runSpeed : actor.ai ?
-        world.content.enemies.find(enemy => enemy.id === actor.ai!.enemyId)!.moveSpeed : 1
+      const speed = actor.character || world.ailments.length ? actorStats(world, actor).movementSpeed : baseMovementSpeed(world, actor)
       actor.vel = { x: fmath.cos(actor.facing) * speed * magnitude, z: fmath.sin(actor.facing) * speed * magnitude }
       state.ordinary = { x: actor.vel.x * TICK_DT, z: actor.vel.z * TICK_DT }
     }
