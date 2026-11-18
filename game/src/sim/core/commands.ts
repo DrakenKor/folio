@@ -1,22 +1,55 @@
 import { hashWorld } from './hash'
 import { restore, serialize } from './snapshot'
-import { BUTTON_MASK } from './types'
-import type { Command, Replay, World } from './types'
+import { BUTTON_MASK, EQUIPMENT_ROLES } from './types'
+import type { Command, Operation, Replay, World } from './types'
 
 export type { Command } from './types'
 export { Button, IDLE_COMMAND } from './types'
+
+/** Check structure only; semantic rejection is a recorded operation result. */
+export function validateOperation(operation: Operation): void {
+  const text = (value: unknown) => typeof value === 'string' && value.length > 0
+  const item = (value: number) => Number.isSafeInteger(value) && value > 0
+  const store = (value: string) => value === 'inventory' || value === 'stash'
+  const texts = (values: string[]) => Array.isArray(values) && Array.from(values).every(text)
+  let valid = !!operation && typeof operation === 'object' && !Array.isArray(operation)
+  if (valid) switch (operation.type) {
+    case 'allocate': case 'refund': valid = text(operation.nodeId); break
+    case 'activateShape': valid = text(operation.shapeId) && typeof operation.active === 'boolean'; break
+    case 'equip': case 'pickup': valid = item(operation.itemId); break
+    case 'unequip': valid = EQUIPMENT_ROLES.includes(operation.role); break
+    case 'setLoadout': valid = Array.isArray(operation.slots) && operation.slots.length === 6 && Array.from(operation.slots).every(slot => slot === null || text(slot)); break
+    case 'setFolds': valid = text(operation.skillId) && texts(operation.foldIds); break
+    case 'stash': case 'discard': valid = item(operation.itemId) && store(operation.from); break
+    case 'beginEncounter': case 'returnToShelter': break
+    default: valid = false
+  }
+  if (!valid) throw new TypeError('Invalid command operation')
+  // Only declared fields enter recordings, events or hooks.
+  const fields: Record<Operation['type'], string[]> = {
+    allocate: ['nodeId'], refund: ['nodeId'], activateShape: ['shapeId', 'active'], equip: ['itemId'], unequip: ['role'],
+    setLoadout: ['slots'], setFolds: ['skillId', 'foldIds'], pickup: ['itemId'], stash: ['itemId', 'from'], discard: ['itemId', 'from'],
+    beginEncounter: [], returnToShelter: []
+  }
+  if (Object.keys(operation).some(key => key !== 'type' && !fields[operation.type].includes(key))) throw new TypeError('Invalid command operation field')
+}
 
 /** Reject malformed input before it can change simulation state. */
 export function validateCommand(command: Command): void {
   if (!command || !command.move || !Number.isFinite(command.move.x) || !Number.isFinite(command.move.z) ||
     !Number.isSafeInteger(command.buttons) || command.buttons < 0 || command.buttons > BUTTON_MASK ||
     (command.aim !== null && (!command.aim || !Number.isFinite(command.aim.x) || !Number.isFinite(command.aim.z)))) throw new TypeError('Invalid command')
+  if (command.operations !== undefined) {
+    if (!Array.isArray(command.operations)) throw new TypeError('Invalid command operations')
+    for (const operation of command.operations) validateOperation(operation)
+  }
 }
 
 /** Detach an input before keeping it as replay data. */
 export function copyCommand(command: Command): Command {
   validateCommand(command)
-  return { move: { x: command.move.x, z: command.move.z }, aim: command.aim ? { x: command.aim.x, z: command.aim.z } : null, buttons: command.buttons }
+  return { move: { x: command.move.x, z: command.move.z }, aim: command.aim ? { x: command.aim.x, z: command.aim.z } : null,
+    buttons: command.buttons, ...(command.operations === undefined ? {} : { operations: structuredClone(command.operations) }) }
 }
 
 interface Checkpoint { tick: number; text: string }

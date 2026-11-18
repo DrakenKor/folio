@@ -1,21 +1,49 @@
-import { actionPhase, canonical, copyCommand, hashWorld, IDLE_COMMAND, restore, serialize, verifyReplay } from '../sim/core/index'
-import type { Command, Replay } from '../sim/core/index'
+import { actionPhase, canonical, copyCommand, exportCharacter, hashWorld, IDLE_COMMAND, inspectStats, loadCharacter, previewAction, previewBuild, restore, serialize, validateOperation, verifyReplay } from '../sim/core/index'
+import type { Command, EquipmentRole, ItemId, ItemStore, Loadout, Operation, OperationResult, Replay } from '../sim/core/index'
 import { buildScenario } from '../sim/scenarios'
 import type { CameraRig } from '../render/basic/camera'
 import type { Clock } from '../platform/clock'
 import type { Input } from '../platform/input'
 import { decode, encode } from '../platform/encoding'
+import { SaveController } from '../platform/saves'
 
 export interface ScriptEntry { tick: number; command: Command }
 
-export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: Promise<void>, loseDevice: () => void) {
+export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: Promise<void>, loseDevice: () => void, saves?: SaveController) {
   const replace = (text: string) => {
     const world = restore(text)
     input.release()
     clock.replace(world)
   }
+  const save = saves ?? new SaveController({ build: __BUILD_ID__, content: clock.world.content,
+    getWorld: () => clock.world, replaceWorld: world => replace(serialize(world)), exportCharacter, loadCharacter })
+  const edit = (operation: Operation): OperationResult => {
+    validateOperation(operation)
+    input.release()
+    clock.advance(1, { ...IDLE_COMMAND, operations: [structuredClone(operation)] })
+    return { accepted: false, reason: 'unsupported' }
+  }
   return {
     ready,
+    character: {
+      allocate: (nodeId: string) => edit({ type: 'allocate', nodeId }),
+      refund: (nodeId: string) => edit({ type: 'refund', nodeId }),
+      activateShape: (shapeId: string, active = true) => edit({ type: 'activateShape', shapeId, active }),
+      equip: (itemId: ItemId) => edit({ type: 'equip', itemId }),
+      unequip: (role: EquipmentRole) => edit({ type: 'unequip', role }),
+      setLoadout: (slots: Loadout) => edit({ type: 'setLoadout', slots }),
+      setFolds: (skillId: string, foldIds: string[]) => edit({ type: 'setFolds', skillId, foldIds }),
+      pickup: (itemId: ItemId) => edit({ type: 'pickup', itemId }),
+      stash: (itemId: ItemId, from: ItemStore) => edit({ type: 'stash', itemId, from }),
+      discard: (itemId: ItemId, from: ItemStore) => edit({ type: 'discard', itemId, from }),
+      beginEncounter: () => edit({ type: 'beginEncounter' }),
+      returnToShelter: () => edit({ type: 'returnToShelter' }),
+      preview: (operation: Operation) => previewBuild(clock.world, operation)
+    },
+    stats: (actorId = clock.world.playerId!) => inspectStats(clock.world, actorId),
+    damage: (skillId: string, targetId: number, actorId = clock.world.playerId!) => previewAction(clock.world, actorId, skillId, targetId),
+    save: { status: () => save.status(), export: () => save.export(), import: (text: string) => save.import(text),
+      flush: () => save.flush(), load: () => save.load() },
     describe(): string {
       const world = clock.world
       const player = world.entities.find(entity => entity.id === world.playerId)

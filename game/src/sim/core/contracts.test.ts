@@ -161,7 +161,10 @@ describe('M1 snapshot contracts', () => {
     envelope.schema = envelope.world.schema = 2
     envelope.build = envelope.world.build = 'm1-sim-v3'
     expect(() => restore(JSON.stringify(envelope))).toThrow(/Unsupported snapshot format or schema/)
-    expect(SIM_BUILD).toBe('m1-sim-v4')
+    envelope.schema = envelope.world.schema = 3
+    envelope.build = envelope.world.build = 'm1-sim-v4'
+    expect(() => restore(JSON.stringify(envelope))).toThrow(/Unsupported snapshot format or schema/)
+    expect(SIM_BUILD).toBe('m2-sim-v1')
   })
 
   it('hashes mutable combat, gait, AI, projectile and input continuation data', () => {

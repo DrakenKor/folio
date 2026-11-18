@@ -1,6 +1,6 @@
-# M1 simulation contract
+# Simulation contract
 
-Schema **3**, simulation build **`m1-sim-v4`**, fixed **60 Hz**. Shared types live in `core/types.ts`.
+Schema **4**, simulation build **`m2-sim-v1`**, fixed **60 Hz**. Shared types live in `core/types.ts`.
 The core loop drives movement, combat, AI and scheduled fight waves for headless, replay and browser callers.
 
 ## State and ownership
@@ -39,7 +39,10 @@ Bounds include actor centres at `distance(pos, center) <= radius`, without subtr
 Direct `createWorld` construction defaults to `empty`; only `m1-fight` schedules additional fight waves.
 
 `world.content` is immutable after scenario construction, ordered by content id and carried in every snapshot/replay checkpoint.
-It contains only `SkillDefinition[]`, `EnemyDefinition[]` and `DodgeDefinition`; there is no modifier, support, loot or asset schema.
+M1 contains `SkillDefinition[]`, `EnemyDefinition[]` and `DodgeDefinition`; optional `m2` carries versioned build content.
+`content/schema.ts` exports detached `.parse(unknown)` schemas for content, actions, folds, graph profiles, item bases, affixes and loot tables.
+`createWorld(seed, build?, content?)` validates and copies content before construction; `m1Content()` validates its approved definitions too.
+Direct fixture edits are validated on snapshot restore; authored content ids are unique kebab-case, with sorted legacy skill/enemy tables.
 Tests can construct neutral definitions directly through this public boundary without registering hidden module state.
 
 | Record | Meaning |
@@ -156,8 +159,10 @@ Snapshot restore itself preserves recorded button history for deterministic cont
 
 ## Fixed system and hit resolution order
 
-1. Validate command; set working tick N+1, sample entry pause/positions, advance existing world timers and consume button edges/aim.
-2. Process dead-actor expiry; advance unpaused action ages; wander dummies, then drive live AI in actor id order through shared primitives.
+1. Validate and copy the whole command before mutation; set working tick N+1 and apply operations in array order.
+   Sample entry pause/positions, advance existing world timers and consume button edges/aim.
+2. Process dead-actor expiry and unpaused action ages; call `processAilments` for due pulses before expiry.
+   Wander dummies, then drive live AI in actor id order through shared primitives.
 3. Select/cancel actions in actor id order; capture directions/cooldowns and enqueue action/dodge notifications.
 4. Turn bodies; integrate ordinary locomotion, dodge or knockback; apply arena bounds and deterministic actor circle separation.
 5. Finalize gait using ordinary resolved travel; launch projectiles at the first active age, allocating ids in actor order.
@@ -165,7 +170,7 @@ Snapshot restore itself preserves recorded button history for deterministic cont
 7. Sort contacts by `(travelFraction, targetId, actorId, projectileId)`; melee fraction is zero and absent projectile id is zero.
 8. Resolve each contact serially, rechecking source/target life, faction, immunity and melee deduplication before damage.
 9. Commit health, deduplication, interruption, knockback, pause and death immediately; invalidate later contacts from killed/interrupted actions.
-10. For `world.scenario === m1-fight`, append scheduled wave spawn events after all contacts resolve.
+10. Call `processProgression` for death rewards and clearing transitions, then append any scheduled M1 fight waves.
 11. Publish ordered events and completed world tick; snapshot/hash reads only this fully committed state.
 
 Sweeps use segment-versus-expanded-target-circle on the ground plane, with radius equal to target plus projectile radius.
@@ -204,13 +209,145 @@ Any additional shared render/clock fields go through the orchestrator; renderer 
 
 Restore rejects missing/invalid scenario identity, health, phases, timers, ids, AI references, content, circular arenas and projectile payloads without defaulting.
 Death despawn duration must match its AI-referenced definition, or be null for an AI-free actor.
-Schema-one and schema-two snapshots/replays fail with `Unsupported snapshot format or schema`; mismatched builds fail explicitly.
+Schema-one through schema-three snapshots/replays fail with `Unsupported snapshot format or schema`; mismatched builds fail explicitly.
 The hash uses canonical-envelope FNV-1a; schema/build and persisted scenario identity change all previous fixture hashes.
 Core `step` and `verifyReplay` handle M0 and M1; the CLI uses the same loop without a separate encounter adapter.
 
-Current golden hashes: M0 smoke `622e8f5e`; full 7,200-tick M1 fight `bec54592` (121 checkpoints).
-The animation combat snapshot also carries schema 3 and `scenario: empty`.
+Current golden hashes: M0 smoke `b5af476d`; full 7,200-tick M1 fight `0fbf3195` (121 checkpoints).
+The animation combat snapshot also carries schema 4 and `scenario: empty`.
 See `ai/README.md` for the fixture hash ledger and behavior comparison against the adapter baseline.
 Historical reports retain their recorded values; acceptance replays derive current hashes at runtime.
 
 Run `fnm exec --using=24 npm run game:test`, `npm run game:build` and `npx --no-install eslint game` with the same Node prefix.
+
+
+## M2 continuation and boundaries
+
+T2.0 defines contracts only. M0/M1 use null characters/encounters, empty M2 tables and no additional RNG draws.
+Build content lives in `world.content.m2`: version, actions, folds, graph profiles, item bases, affixes and loot tables.
+Actions extend the legacy collision definition with names, immutable tags, typed bases, weapon coefficient and nominal reach.
+The legacy `damage` field remains for M1 compatibility; M2 resolves typed bases and weapon coefficients through T2.2.
+Sector casts use collision kind `melee` with cast/area tags; tags determine modifier eligibility, independently of collision kind.
+M2 action lookup takes priority over legacy skills. Content schemas validate geometry, finite values, legal conversions and nonnegative factors.
+Folds declare one handle, tension, compatibility, modifiers, geometry factors, phase deltas and relative projectile angles in degrees.
+Graph profiles contain radius/version, six seeded families and six oriented rhombus/hexagon bargains; generation belongs to T2.3.
+Affixes declare category/roles, a modifier template, integer tier ranges/unlock ranks and roll-to-value scale; loot tables declare weighted categories.
+Content identities and replacement defaults are checked before construction; detailed balance/card counts belong to T2.4 and QA.
+
+| Snapshot field | Contract |
+| --- | --- |
+| `entity.character` | Null or rank/XP/unspent points, graph profile/seed/version, paid allocations, active shapes, rolled items, equipment, inventory/stash, six-slot loadout and per-action folds. |
+| `entity.skillCooldowns` | Remaining ticks by action identity; legacy primary/secondary/dodge cooldowns remain for M1. |
+| `world.nextItemId` | Independent monotonically increasing positive item allocator, including owned and ground items. |
+| `world.rng.loot` | Persisted named loot stream; required for populated characters, never advanced by previews or rejected operations. |
+| `world.encounter` | Null or identity, rest/active/defeat phase, attempt and rewarded actor ids for deduplicated XP/loot. |
+| `world.groundDrops` | At most 60 stable rolled items with positions; inventory/stash each hold at most 30. |
+| `world.ailments` | Target/source ids, stable ailment id, application/expiry ticks and nullable next pulse tick. Sorted by target id then ailment id; dead/despawned sources retain credit. |
+| `world.actionGroups` | Stable group id, actor/start identity and sorted unique hit ids; survives action completion while fan projectiles remain. Sorted by group id. |
+| `action.recipe`, `projectile.recipe` | Captured source damage/modifiers, immutable tags, folds, timing and complete footprint; optional only for legacy/dodge records. |
+| `action.groupId`, `projectile.groupId` | References the retained fan group; optional for non-fan and legacy records. |
+
+Character item tables are identified by numeric ids; equipment and packed inventory/stash arrays reference each owned item exactly once.
+Paid allocations exclude the implicit free root; `points + allocations.length == rank + 3`, rank 1–21, cap XP zero.
+The five equipment keys are weapon/offhand/coat/boots/survey-tally; a populated character retains a weapon.
+No derived cache is snapshot data. Canonical JSON/FNV-1a includes every continuation field, recipe, hit list, content definition and RNG.
+`M2_SCENARIO_NAMES` reserves clearing/balance/stress snapshot identities; construction explicitly throws unsupported pending T2.3/T2.8.
+
+## Operations and results
+
+`Command.operations?: Operation[]` is an ordered list; omission and `[]` both mean no operations.
+Copying preserves omission for M1 callers; explicit lists are deeply copied into hooks, events and recorder exports.
+Unknown types/fields, missing payloads and malformed values throw before tick advancement or any earlier operation.
+Unknown content ids, duplicate loadout/fold choices and other semantic errors reach the owning hook and emit replayable rejection.
+Each operation is atomic; a rejection changes no build, item or RNG. Later operations observe earlier accepted edits.
+
+| Operation payload after `type` | Meaning |
+| --- | --- |
+| `allocate/refund: nodeId` | Coordinate node id; refund includes disconnected paid dependants. |
+| `activateShape: shapeId, active` | Explicit activation or deactivation. |
+| `equip: itemId`; `unequip: role` | Atomic inventory/equipment swap; weapon cannot be removed. |
+| `setLoadout: slots` | Whole six-entry tuple, nullable unique action ids, ordered LMB/RMB/Q/E/R/T. |
+| `setFolds: skillId, foldIds` | Whole selected fold list for one action; compatibility/handles/tension are semantic checks. |
+| `pickup: itemId` | Stable ground item id, live player within 1.5 m. |
+| `stash/discard: itemId, from` | Explicit inventory/stash source; stash transfers to the other store, discard destroys. |
+| `beginEncounter/returnToShelter` | No payload; accepted transitions suppress command buttons on that tick. |
+
+`operationAccepted` carries tick, array index, detached operation and reason `ok`.
+`operationRejected` carries the same identity plus an `OPERATION_REASONS` code; codes are stable and machine-readable.
+Malformed commands throw; unsupported systems return `unsupported`, never pretend acceptance.
+`setLoadout/setFolds` route to `combat/build.ts::applyCombatOperation`; all others route to `progression/index.ts::applyProgressionOperation`.
+All twelve currently emit unsupported rejection. Rest requirements, heals, item edits, XP/loot and graph changes await their owners.
+Build edits and discard require rest; entering rest heals, clears combat transients and releases held input.
+Beginning an encounter ends rest and suppresses held attacks on that tick. Six-slot action priority follows Dodge, then tuple order.
+
+`processAilments(world, events)` runs after timer/death-age advancement and before AI/actions.
+T2.2 applies contact ailments after direct damage and before death handling inside its combat resolver.
+`processProgression(world, events)` runs after contacts and before M1 wave scheduling for death rewards and encounter transitions.
+Both return explicit unsupported results today; populated unsupported lifecycle state throws `UnsupportedError` rather than silently simulating.
+M1 empty lifecycle state passes through unchanged. Source/target processing and contact ordering retain the M1 rules above.
+
+## Queries and damage numbers
+
+Core exports `inspectStats(world, actorId)`, `previewAction(world, actorId, skillId, targetId)` and `previewBuild(world, edit)`.
+They return `QueryResult<T>`: detached `{ok:true,value}` or explicit `{ok:false,reason}`; all currently return `unsupported`.
+Build preview uses the player and one Operation, with result, before/after stats/action previews, numeric deltas and cascading refund ids.
+Stats expose stable source ids/labels/modifiers, health, movement, reductions and dodge timing.
+Action preview exposes the captured recipe, effective conversions, phases/footprint, ailment rules and every damage stage.
+It reports both calculated integer hit and health-clamped applied damage, with unrounded final-type contributions.
+Queries consume no RNG, mutate no world and depend on no retained cache; cold/warm results agree.
+
+Damage types iterate weight, heat, gale; sources iterate stable instance id. Tags are AND filters; final-type sets are OR filters.
+Base plus eligible flats remain nonnegative; convert each original source once, simultaneously, without ancestry scaling.
+Legal requests are weight→heat, weight→gale and heat→gale, individually [0,1]; normalize outgoing requests by max(1,total).
+For each final type, add boosts into max(0,1+sum), multiply independent nonnegative factors, then apply reduction clamped [0,.75].
+Sum unrounded final-type damage and round once with floor(total+.5); applied damage clamps to target health. Zero is permitted.
+Player wording is boost/multiplier. No new arithmetic, ailment or recipe resolution is implemented by T2.0.
+
+## Character saves and platform handoff
+
+Core exports pure `exportCharacter(world): CharacterData` and `loadCharacter(data: unknown, content): CharacterLoad`.
+The load result is `{world, refunds}` with readable refund messages; both hooks currently throw `UnsupportedError` pending T2.3.
+CharacterData holds contentVersion, seed, character, lootRng, nextItemId and reserved empty questFlags/settings.
+It excludes encounters, ground drops, projectiles, ailments, clock/presentation state and derived caches; loads create a fresh rested clearing.
+Exact continuation uses snapshots, never player saves; all world replacements reset recorder, input and render interpolation.
+
+`SaveEnvelope` adds format `folio.arpg.save`, schema 1, platform generation and application build id.
+Fixture-only `LegacySaveEnvelope` schema 0 omits contentVersion/lootRng/nextItemId; T2.5 migrates before validation.
+Future/corrupt/invalid saves preserve stored text and disable writes; removed content refunds and replacements belong to the load/migration boundary.
+`SaveController` takes injected projection/load callbacks, current-world/replacement callbacks, content/build and optional storage/locks.
+It exposes status/export/import/flush/load/reset/takeOver/dispose. Status carries code, writable, generation, copyable text and refunds.
+The stub performs zero storage/lock access; status/async methods return unsupported, text export throws unsupported.
+
+T2.5 enforces the 1 MiB entire-envelope limit in both UTF-8 bytes and UTF-16 storage bytes, including import/export validation.
+Only `folio.arpg.writer` holders write; every transaction holds never-stolen `folio.arpg.commit`, verifies writer ownership, rereads generation,
+requires equality with the last loaded/written generation and writes generation+1. Takeover steals writer, then loads/commits inside commit lock.
+Loss/mismatch demotes the old tab; imports commit at stored generation+1. Generation never enters simulation hashes or clocks.
+Missing Web Locks means zero localStorage writes, including import/reset/migration/pagehide; text round trips remain available.
+Wrap every storage read/write; failures leave prior bytes intact and return typed status plus copyable text.
+Autosave follows encounter transitions, 30-second intervals and pagehide; debug scenarios/replays never autosave player progression.
+Startup priority is explicit debug state, verified same-session graphics recovery, player save, new character.
+
+`debug/api.ts` preserves string `build` and exposes character methods matching every Operation, stats/damage/preview and save status/export/import/flush/load.
+Character methods release input, advance one recorded idle-command tick and explicitly return unsupported pending T2.7 result reporting.
+Save mutations delegate to SaveController.
+T2.7 supplies live tools/input wiring; T2.8 supplies save/clock/session integration and M2 scenario dispatch.
+
+## T2.0 verification evidence and handoff
+
+M1 fight remains 7,200 ticks, seed 7: 154 damage events, 36 deaths, one dodge, final player health 100.
+The new final hash is `0fbf3195`; removing only schema-4 fields and restoring old schema/build reproduces the exact M1 final state.
+Complete ordered events retain SHA-256 `28ed005012b3174a767c0511bec7d4bb6fc7d1c9f2687530c5c88cf9c4ae8196`.
+The state hash changes solely from schema/build and inert continuation defaults; all 121 fixture/browser checkpoints are migrated.
+The smoke scenario and animation snapshot are migrated too; authored commands and historical reports retain their original data.
+
+T2.0 checks constructors, structural validation, ordered unsupported operations, detached previews/recordings and snapshot continuation contracts.
+The complete test command has one ownership-bound failure: `game/tools/t18.test.ts:38` hardcodes the schema-3 fight hash.
+Proposal for the orchestrator: compare with `expected.finalHash` from the migrated fixture; no assertion is weakened or removed.
+T2.0 leaves that unowned file unchanged. QA retains exclusive ownership of the M2 behavioral harness.
+
+Node 24 verification: `npm run game:build` and `npx --no-install eslint game` pass.
+`npm run game:test` reports 357 passed, one failed (the unowned hash literal above), one existing browser check skipped.
+Excluding only `**/tools/t18.test.ts` passes all 357 remaining tests; the 30 T2.0 contract checks pass.
+The skipped check is gated by unset `PLAY_ACCEPTANCE=1`; browser acceptance is outside T2.0's checks.
+`npx --no-install tsx game/scenarios/m1-fight.ts` verifies all 121 checkpoints and the replay.
+The animation snapshot restores to canonical schema-4 bytes; SaveController probes return unsupported with zero storage access.

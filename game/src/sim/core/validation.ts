@@ -1,5 +1,7 @@
-import { BUTTON_MASK, SCENARIO_NAMES } from './types'
-import type { ActionTiming, KnockbackSpec, World } from './types'
+import { validateContent } from '../../content/schema'
+import { validateBuildState } from './build-validation'
+import { BUTTON_MASK, M2_SCENARIO_NAMES, SCENARIO_NAMES } from './types'
+import type { KnockbackSpec, World } from './types'
 
 function check(condition: unknown, field: string): asserts condition {
   if (!condition) throw new TypeError(`Invalid snapshot ${field}`)
@@ -14,12 +16,6 @@ const record = (value: unknown) => !!value && typeof value === 'object' && !Arra
 const vector = (value: { x: number; z: number }) => record(value) && Number.isFinite(value.x) && Number.isFinite(value.z)
 const buttons = (value: number) => integer(value) && value <= BUTTON_MASK
 
-function timing(value: ActionTiming): boolean {
-  return record(value) && integer(value.windupTicks) && positiveInteger(value.activeTicks) &&
-    integer(value.recoveryTicks) && integer(value.moveCancelTicks) && value.moveCancelTicks <= value.recoveryTicks &&
-    Number.isSafeInteger(value.windupTicks + value.activeTicks + value.recoveryTicks)
-}
-
 function knockback(value: KnockbackSpec): boolean {
   return record(value) && nonnegative(value.speed) && integer(value.ticks)
 }
@@ -28,30 +24,11 @@ function knockback(value: KnockbackSpec): boolean {
 export function validateWorld(world: World): void {
   check(record(world) && Number.isSafeInteger(world.seed) && integer(world.tick) && positiveInteger(world.nextId) &&
     Array.isArray(world.entities) && Array.isArray(world.projectiles) && record(world.rng), 'world')
-  check(SCENARIO_NAMES.includes(world.scenario), 'scenario')
+  check([...SCENARIO_NAMES, ...M2_SCENARIO_NAMES].includes(world.scenario), 'scenario')
   const content = world.content
-  check(record(content) && Array.isArray(content.skills) && Array.isArray(content.enemies), 'content')
-  let previousContentId = ''
-  for (const skill of content.skills) {
-    check(record(skill) && text(skill.id) && skill.id > previousContentId && skill.id !== 'dodge' && timing(skill.timing) &&
-      integer(skill.cooldownTicks) && nonnegative(skill.damage) && knockback(skill.knockback) &&
-      integer(skill.impactPauseTicks) && integer(skill.hitFlashTicks), 'skill')
-    check(skill.kind === 'melee' ? positive(skill.range) && positive(skill.arcRadians) && skill.arcRadians <= 6.283185307179586 :
-      skill.kind === 'projectile' && positive(skill.speed) && nonnegative(skill.radius) && positiveInteger(skill.lifetimeTicks), 'skill geometry')
-    previousContentId = skill.id
-  }
-  previousContentId = ''
-  for (const enemy of content.enemies) {
-    check(record(enemy) && text(enemy.id) && enemy.id > previousContentId && positive(enemy.maxHealth) &&
-      nonnegative(enemy.radius) && nonnegative(enemy.moveSpeed) && nonnegative(enemy.acquireRange) &&
-      nonnegative(enemy.attackRange) && enemy.attackRange <= enemy.acquireRange && positiveInteger(enemy.deathTicks) &&
-      content.skills.some(skill => skill.id === enemy.skillId), 'enemy definition')
-    previousContentId = enemy.id
-  }
+  try { validateContent(content) } catch (error) { throw new TypeError(`Invalid snapshot content: ${String(error)}`) }
+  const skills = [...(content.m2?.actions ?? []), ...content.skills]
   const dodge = content.dodge
-  check(record(dodge) && timing(dodge.timing) && dodge.timing.windupTicks === 0 && positive(dodge.distance) &&
-    positiveInteger(dodge.cooldownTicks) && integer(dodge.invulnerableFrom) && integer(dodge.invulnerableUntil) &&
-    dodge.invulnerableFrom < dodge.invulnerableUntil && dodge.invulnerableUntil <= dodge.timing.activeTicks, 'dodge definition')
   check(world.arena === null || (record(world.arena) && vector(world.arena.center) && positive(world.arena.radius)), 'arena')
 
   let previousId = 0
@@ -68,7 +45,7 @@ export function validateWorld(world: World): void {
     check((entity.health === 0) === (death !== null), 'health/death consistency')
     check(record(entity.skills) && ['primary', 'secondary'].every(slot => {
       const id = entity.skills[slot as keyof typeof entity.skills]
-      return id === null || content.skills.some(skill => skill.id === id)
+      return id === null || skills.some(skill => skill.id === id)
     }), 'skill slots')
     check(record(entity.cooldowns) && integer(entity.cooldowns.primary) && integer(entity.cooldowns.secondary) &&
       integer(entity.cooldowns.dodge) && buttons(entity.previousButtons) && integer(entity.impactPauseTicks) && integer(entity.hitFlashTicks), 'entity timers/buttons')
@@ -80,9 +57,9 @@ export function validateWorld(world: World): void {
       check(record(action) && death === null && integer(action.startTick) && action.startTick <= world.tick &&
         integer(action.ageTicks) && action.ageTicks <= world.tick - action.startTick && Number.isFinite(action.direction) &&
         Array.isArray(action.hitTargetIds) && typeof action.projectileSpawned === 'boolean', 'action timer')
-      const definition = content.skills.find(skill => skill.id === action.id)
+      const definition = skills.find(skill => skill.id === action.id)
       check(action.kind === 'dodge' ? action.id === 'dodge' : definition && definition.kind === action.kind, 'action definition')
-      const phases = action.kind === 'dodge' ? dodge.timing : definition!.timing
+      const phases = action.kind === 'dodge' ? dodge.timing : action.recipe?.timing ?? definition!.timing
       check(action.ageTicks < phases.windupTicks + phases.activeTicks + phases.recoveryTicks, 'action age')
       check(action.kind === 'projectile' || !action.projectileSpawned, 'projectile launch flag')
       let lastTarget = 0
@@ -109,13 +86,14 @@ export function validateWorld(world: World): void {
       !actorIds.has(projectile.id), 'projectile id')
     const owner = world.entities.find(entity => entity.id === projectile.ownerId)
     check(owner && owner.death === null && owner.faction === projectile.faction &&
-      content.skills.some(skill => skill.id === projectile.skillId && skill.kind === 'projectile'), 'projectile owner/skill')
+      skills.some(skill => skill.id === projectile.skillId && skill.kind === 'projectile'), 'projectile owner/skill')
     check(integer(projectile.actionStartTick) && projectile.actionStartTick <= world.tick &&
       vector(projectile.pos) && vector(projectile.vel) && nonnegative(projectile.radius) && integer(projectile.ageTicks) &&
       positiveInteger(projectile.lifetimeTicks) && projectile.ageTicks < projectile.lifetimeTicks && nonnegative(projectile.damage) &&
       knockback(projectile.knockback) && integer(projectile.impactPauseTicks) && integer(projectile.hitFlashTicks), 'projectile data')
     previousId = projectile.id
   }
+  try { validateBuildState(world) } catch (error) { throw new TypeError(`Invalid snapshot build state: ${String(error)}`) }
   for (const state of Object.values(world.rng)) {
     check(Array.isArray(state) && state.length === 4 && state.every(word => integer(word) && word <= 0xffffffff) &&
       state.some(word => word !== 0), 'RNG stream')
