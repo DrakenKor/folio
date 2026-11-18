@@ -19,6 +19,7 @@ export interface Controls { clock: Clock; input: Input; api: ReturnType<typeof c
 
 export function Clearing({ clock, input, api, saves, world, status, refresh }: Controls & { world: World; status: SaveStatus; refresh: () => void }) {
   const [page, setPage] = useState<Page | null>(null)
+  const [drawingSlot, setDrawingSlot] = useState(0)
   const [mode, setMode] = useState<RecordMode>('status')
   const [notice, report] = useState('')
   const [cleared, setCleared] = useState<number | null>(null)
@@ -29,9 +30,10 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
   const visible = blocked ? 'Save' : page
   const player = world.entities.find(e => e.id === world.playerId)!
   const character = player.character!, content = world.content.m2!
-  const open = useCallback((next: Page | null) => {
+  const open = useCallback((next: Page | null, slot = 0) => {
     input.release()
     clock.suspend('inspection', next !== null)
+    if (next === 'Drawings') setDrawingSlot(slot)
     setPage(next); report('')
     if (!next) document.querySelector('canvas')?.focus()
   }, [clock, input])
@@ -92,7 +94,7 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
       {!blocked && <button className="close" aria-label="Close panel" onClick={() => open(null)}>×</button>}</header>
     {visible === 'Inventory' && <Inventory {...props}/>}
     {visible === 'Passives' && <Passives {...props}/>}
-    {visible === 'Drawings' && <Drawings {...props}/>}
+    {visible === 'Drawings' && <Drawings {...props} initialSlot={drawingSlot}/>}
     {visible === 'Save' && <Records saves={saves} status={status} mode={mode} change={m => { setPage('Save'); clock.suspend('inspection',true); setMode(m) }} updated={refresh}/>}
     <footer className="folio-foot"><span>{world.encounter?.phase === 'rest' ? 'At the marker' : 'Away from marker · inspection only'}</span>
       <span role="status">{notice}</span><span>{blocked ? 'Waiting for writer access' : 'Paused · Esc to return'}</span></footer></section></div> :
@@ -105,11 +107,12 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
     <div className="clearing-control">{world.encounter?.phase !== 'active' ? <button className="primary" onClick={play}>{world.encounter?.phase === 'defeat' ? 'Return to marker' :
       'Start clearing · ' + world.groundDrops.length + ' uncollected'}</button> : cleared !== null && <span role="status">{cleared} uncollected {cleared === 1 ? 'drop' : 'drops'} cleared</span>}
       {notice && <p role="status">{notice}</p>}</div>
-    <div className="loadout" aria-label="Action loadout">{character.loadout.map((id,i) => {
+    <div className="loadout" role="group" aria-label="Inspect action slots">{character.loadout.map((id,i) => {
       const cooldown = id ? player.skillCooldowns[id] ?? 0 : 0
       const state = !id ? 'Empty' : player.death ? 'Fallen' : cooldown ? (cooldown / 60).toFixed(1) + ' s' :
         action?.id === id && phase ? words(phase) : action || player.impactPauseTicks || player.knockback ? 'Waiting' : 'Ready'
-      return <div key={i} data-ready={state === 'Ready'}><kbd>{keys[i]}</kbd><b>{id ? content.actions.find(a => a.id === id)?.name : 'Unassigned'}</b><span>{state}</span></div>
+      return <button key={i} type="button" data-ready={state === 'Ready'} onClick={() => open('Drawings', i)}>
+        <kbd>{keys[i]}</kbd><b>{id ? content.actions.find(a => a.id === id)?.name : 'Unassigned'}</b><span>{state}</span></button>
     })}</div><div className="field-help">WASD move · Mouse aim · Space dodge{player.cooldowns.dodge > 0 && ' (' + (player.cooldowns.dodge / 60).toFixed(1) + ' s)'} · {character.inventory.length === 30 ? 'Inventory full' : 'F collect'}</div></>}
   </div>
 }

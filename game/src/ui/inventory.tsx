@@ -49,18 +49,17 @@ export function Inventory({ world, character: c, content, api, report }: FieldPr
           {comparison.delta.movementSpeed !== 0 && <p>Speed <b>{num(comparison.before.movementSpeed)} → {num(comparison.after.movementSpeed)} m/s</b></p>}</div>}</>}
       {full && store && <p className="store-warning">Both stores are full. Discard an item to make room.</p>}
       <div className="operations">
-        {store ? <><button className="primary" disabled={!comparison?.result.accepted} onClick={() => {
+        {store && discarding ? <><button className="primary" disabled={!editable} onClick={() => {
+          const r = api.character.discard(item.id, store); discard(false); report(r.accepted ? 'Item discarded' : words(r.reason))
+        }}>Confirm discard</button><button autoFocus onClick={() => discard(false)}>Keep item</button></> :
+        store ? <><button className="primary" disabled={!comparison?.result.accepted} onClick={() => {
           const r = api.character.equip(item.id); report(r.accepted ? 'Equipped ' + base(item).name : words(r.reason))
         }}>Equip {base(item).name}</button>
         {comparison && !comparison.result.accepted && <p>{words(comparison.result.reason)}</p>}
         <button disabled={!editable || c[store === 'inventory' ? 'stash' : 'inventory'].length === 30} onClick={() => {
           const r = api.character.stash(item.id, store); report(r.accepted ? 'Item moved' : words(r.reason))
         }}>{store === 'inventory' ? 'Move to stash' : 'Move to inventory'}</button>
-        <button disabled={!editable} onClick={() => {
-          if (!discarding) return discard(true)
-          const r = api.character.discard(item.id, store); discard(false); report(r.accepted ? 'Item discarded' : words(r.reason))
-        }}>{discarding ? 'Confirm discard' : 'Discard'}</button>
-        {discarding && <button onClick={() => discard(false)}>Keep item</button>}</> :
+        <button disabled={!editable} onClick={() => discard(true)}>Discard</button></> :
         <button disabled={!editable || item.role === 'weapon' || c.inventory.length === 30} onClick={() => {
           const r = api.character.unequip(item.role); report(r.accepted ? 'Moved to inventory' : words(r.reason))
         }}>Unequip</button>}</div></aside></div>

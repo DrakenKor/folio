@@ -34,6 +34,7 @@ export function Passives({ world, character, content, api, report }: FieldProps)
   const preview = useMemo(() => previewBuild(world, edit), [edit, world])
   if (!topology.ok) return <p>{words(topology.reason)}</p>
   const { vertices, edges, shapes } = topology.value
+  const orderedShapes = [...shapes].sort((a, b) => Number(active.includes(a.id)) - Number(active.includes(b.id)))
   const profile = content.graphProfiles.find(p => p.id === character.graph.profileId)!
   const allocated = new Set([root, ...character.graph.allocations])
   const complete = (s: typeof shapes[number]) => s.perimeter.every(id => allocated.has(id))
@@ -86,7 +87,7 @@ export function Passives({ world, character, content, api, report }: FieldProps)
       }}>
       {edges.map(([a, b]) => <line key={a + '/' + b} x1={point(a).x} y1={point(a).y} x2={point(b).x} y2={point(b).y}
         className={allocated.has(a) && allocated.has(b) ? 'paid-edge' : ''}/>)}
-      {shapes.map(s => <polygon key={s.id} points={s.perimeter.map(id => point(id).x + ',' + point(id).y).join(' ')}
+      {orderedShapes.map(s => <polygon key={s.id} points={s.perimeter.map(id => point(id).x + ',' + point(id).y).join(' ')}
         role="button" tabIndex={0} aria-label={words(s.id)} aria-pressed={selection === s.id}
         className={['boundary', complete(s) && 'complete', active.includes(s.id) && 'active', selection === s.id && 'chosen',
           deactivated.includes(s.id) && 'breaking'].filter(Boolean).join(' ')}
@@ -101,14 +102,17 @@ export function Passives({ world, character, content, api, report }: FieldProps)
         onKeyDown={e => { if (['Enter',' '].includes(e.key)) { e.preventDefault(); e.stopPropagation(); pick(v.id) } }}>
         <circle r="11" fill="transparent"/><path d={v.id === root ? 'M0 -9L8 0L0 9L-8 0Z' : 'M0 -4L4 0L0 4L-4 0Z'}/>
         {removed.has(v.id) && <circle className="refund-ring" r="8"/>}
-        {selection === v.id && <circle className="ring" r={removed.has(v.id) ? 13 : 10}/>}</g>)}</svg>
-      <footer className="legend"><span>◇ Marked boundary</span><span>◆ Allocated</span><span>{refund ? 'Red · Refund route' : 'Drag to pan'}</span></footer>
+        {selection === v.id && <circle className="ring" r={removed.has(v.id) ? 13 : 10}/>}
+        <circle className="focus-ring" r={removed.has(v.id) && selection === v.id ? 17 : 14}/></g>)}</svg>
+      <footer className="legend"><span>◇ Marked boundary</span><span>◆ Allocated</span>
+        <span><i className="active-swatch" aria-hidden="true"/>Active boundary</span><span>{refund ? 'Red · Refund route' : 'Drag to pan'}</span></footer>
     </div><aside className="ink"><div className="counters"><div><b>{character.points}</b><small>Points left</small></div><div><b>{active.length} / 2</b><small>Active shapes</small></div></div>
       <hr/><small>{shape ? 'Marked perimeter' : 'Vertex · ' + selection}</small><h2>{name(selection)}</h2>
       <ul>{(shape ? bargain(shape.id) : family?.modifiers ?? []).map(m => <li key={m.id}>{modifier(m)}</li>)}</ul>
       <p>{shape ? (active.includes(shape.id) ? 'Active boundary' : complete(shape) ? 'Boundary complete' : 'Incomplete boundary') + ' · ' +
         shape.perimeter.filter(n => allocated.has(n)).length + ' / ' + shape.perimeter.length + ' vertices' : allocated.has(selection) ? 'Allocated' : 'Allocation costs 1 point'}</p>
       {showChange && (hit || result.delta.maxHealth !== 0) && <div className="changes">
+        {edit.type === 'activateShape' && <strong>{edit.active ? 'If activated' : 'If deactivated'}</strong>}
         {hit && <><small>Undefended damage per hit</small><p>{content.actions.find(a => a.id === hit.skillId)?.name}
           <b>{hit.before.damage.calculated} → {hit.after.damage.calculated}</b></p></>}
         {result.delta.maxHealth !== 0 && <p>Maximum health <b>{result.before.maxHealth} → {result.after.maxHealth}</b></p>}
@@ -116,11 +120,11 @@ export function Passives({ world, character, content, api, report }: FieldProps)
       {refund && <div className="notice"><strong>Refund {result?.delta.points} points</strong><p>Connected removal · {[...removed].join(' / ')}</p>
         {deactivated.length > 0 && <p>Deactivate {deactivated.map(words).join(', ')}</p>}</div>}
       {selection !== root && <div className="operations">{edit.type === 'refund' && !refund ?
-        <button onClick={() => setRefund(true)}>Refund</button> : <button className="primary" disabled={!result?.result.accepted} onClick={() => {
+        <button className="primary" onClick={() => setRefund(true)}>Refund</button> : <button className="primary" disabled={!result?.result.accepted} onClick={() => {
           const r = edit.type === 'activateShape' ? api.character.activateShape(edit.shapeId, edit.active) :
             edit.type === 'refund' ? api.character.refund(selection) : api.character.allocate(selection)
           setRefund(false); report(r.accepted ? 'Lattice updated' : words(r.reason))
-        }}>{shape ? active.includes(shape.id) ? 'Deactivate shape' : 'Activate shape' : 'Confirm'}</button>}{result && !result.result.accepted && <p>{words(result.result.reason)}</p>}</div>}
+        }}>{edit.type === 'activateShape' ? (edit.active ? 'Activate ' : 'Deactivate ') + name(edit.shapeId) : 'Confirm'}</button>}{result && !result.result.accepted && <p>{words(result.result.reason)}</p>}</div>}
       <hr/><label className="stack">Inspect a perimeter<select value={shape?.id ?? ''} onChange={e => pick(e.target.value, true)}>
         <option disabled value="">Choose a shape</option>{shapes.map(s => <option key={s.id} value={s.id}>{words(s.id)}{complete(s) ? ' · complete' : ''}</option>)}</select></label>
     </aside></div>

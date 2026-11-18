@@ -1,6 +1,7 @@
 .field-ui {
   --moss: #253a32; --deep: #192f28; --ink: #293c32; --cream: #f4ebcf; --paper: #e9e2c9;
   --gold: #e6c27b; --line: #b2a98a; --muted: #c6cfb8;
+  --focus-ring: #ffe09a;
   position: fixed; inset: 0; pointer-events: none; color: var(--cream);
   font: 14px/1.45 system-ui,sans-serif; font-variant-numeric: tabular-nums;
 }
@@ -10,7 +11,8 @@
 .field-ui button, .field-ui select { cursor: pointer }
 .field-ui button:disabled { opacity: .53; cursor: default }
 .field-ui button:not(:disabled):hover { box-shadow: inset 0 0 0 1px currentColor }
-.field-ui :focus-visible { outline: 3px solid #d68935; outline-offset: 2px }
+.field-ui :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px }
+.field-ui button:focus-visible { position: relative; z-index: 1 }
 .field-ui h1:focus { outline: none }
 .field-ui h1, .field-ui h2, .field-ui h3, .field-ui .loadout b { font-family: Georgia,serif; font-weight: 400; line-height: 1.1 }
 .field-ui h1 { font-size: clamp(28px,2.7vw,42px); margin: 5px 0 0 }
@@ -23,7 +25,7 @@
 .field-ui li { margin: 5px 0 }
 .field-ui .primary { background: var(--gold); color: #23382f; font-weight: 650; border-color: #ebd49b; padding: 10px 16px }
 .field-ui .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%) }
-.vital-card, .tool-card, .loadout > div, .field-help, .clearing-control > span { background: #22382ff5; border: 1px solid #b9aa7d88 }
+.vital-card, .tool-card, .field-ui .loadout > button, .field-help, .clearing-control > span { background: #22382ff5; border: 1px solid #b9aa7d88 }
 .vital-card, .tool-card { position: absolute; top: 24px; padding: 13px 18px }
 .vital-card { left: 24px; width: 235px }
 .vital-card strong { display: block; font: 26px Georgia,serif; margin: 5px 0 10px }
@@ -35,11 +37,12 @@
 .clearing-control { pointer-events: auto; position: absolute; bottom: 146px; left: 50%; transform: translateX(-50%) }
 .clearing-control > span { display: block; padding: 6px 12px }
 .loadout { position:absolute; left:50%; bottom:47px; transform:translateX(-50%); display:flex; gap:5px }
-.loadout > div { width:clamp(119px,10vw,148px); padding:8px 10px; border-bottom:2px solid #939d87 }
-.loadout > div[data-ready=true] { border-bottom-color:#d3b572 }
+.field-ui .loadout > button { display:flex; flex-direction:column; align-items:flex-start; text-align:left; pointer-events:auto;
+  width:clamp(119px,10vw,148px); padding:8px 10px; border-bottom:2px solid #939d87 }
+.field-ui .loadout > button[data-ready=true] { border-bottom-color:#d3b572 }
 .loadout kbd, .loadout b, .loadout span { display:block }
 .loadout b { font-size:17px; margin:3px 0 }
-.loadout span { color:var(--muted); font-size:12px }
+.loadout span { margin-top:auto; padding-top:2px; color:var(--muted); font-size:12px }
 .loadout [data-ready=true] span { color:var(--gold) }
 .field-help { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); padding:3px 12px; font-size:12px; white-space:nowrap }
 .veil { pointer-events:auto; position:absolute; inset:0; background:#1b2c2359; display:grid; place-items:center; padding:24px }
@@ -51,7 +54,7 @@
 .folio-head nav [aria-current=page] { color:var(--cream); border-bottom-color:var(--gold) }
 .folio-head .close { border:1px solid #a2ab9577; font-size:22px; line-height:1; padding:4px 9px }
 .folio-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(256px,29%) }
-.paper, .action-index { background:var(--paper); color:var(--ink) }
+.paper, .action-index { --focus-ring:#334984; background:var(--paper); color:var(--ink) }
 .paper { padding:22px 26px }
 .ink { padding:24px; background:linear-gradient(135deg,#344c3f,#22372f 68%); border-left:1px solid #99a88c55; min-width:0 }
 .ink > h2, .record-copy h2 { margin:7px 0 10px }
@@ -89,17 +92,21 @@
 .lattice { flex:0 0 auto; width:100%; height:clamp(320px,49vh,450px); touch-action:none; cursor:grab }
 .lattice line { stroke:#a6b49b; stroke-width:1 }
 .lattice .paid-edge { stroke:#426951; stroke-width:3 }
-.lattice .boundary { fill:#7c946317; stroke:#6b805c; stroke-width:2.6; cursor:pointer }
+.lattice .boundary { fill:#7c946317; stroke:#74886a; stroke-width:2.2; cursor:pointer; stroke-linejoin:round }
 .lattice .boundary.complete { fill:#a1873750; stroke:#977129; stroke-width:3 }
-.lattice .boundary.active { fill:#708e6870; stroke:#3e654e; stroke-width:4 }
-.lattice .boundary.chosen, .lattice .boundary:focus-visible { stroke:#865e22; stroke-width:4; outline:none }
+.lattice .boundary.chosen { fill:#c49a4770; stroke:#865e22; stroke-width:4 }
+.lattice .boundary.active { fill:#78a58696; stroke:#24533e; stroke-width:5.5 }
+.lattice .boundary.active.chosen { fill:#639b78b8; stroke:#204b37 }
 .lattice .boundary.breaking { fill:#a64f3530; stroke:#a64f35; stroke-width:4; stroke-dasharray:4 3 }
 .vertex { cursor:pointer; outline:none }
 .vertex path { fill:#d7ddbf; stroke:#63785e; stroke-width:1.4 }
 .vertex.paid path { fill:#2c5940; stroke:#284f3a }
 .vertex.removed path { fill:#9f4638; stroke:#773729; stroke-width:3 }
-.vertex .ring, .vertex:focus-visible > circle:first-child { fill:none; stroke:#8e4f26; stroke-width:2.8 }
+.lattice .vertex:focus-visible { outline:none }
+.vertex .focus-ring { fill:none; stroke:var(--focus-ring); stroke-width:2.5; opacity:0; pointer-events:none; vector-effect:non-scaling-stroke }
+.vertex:focus-visible .focus-ring { opacity:1 }
 .legend { display:flex; justify-content:space-between; border-top:1px solid #b0b99e; padding-top:9px; color:#435143; font-size:12px }
+.active-swatch { display:inline-block; width:10px; height:10px; margin-right:5px; background:#78a58696; border:2px solid #24533e; vertical-align:baseline }
 .counters,.totals { display:flex; gap:30px }
 .counters b,.totals b,.hit-value strong { display:block; font:30px/1.15 Georgia,serif }
 .counters small,.totals small,.stack { display:block }
@@ -120,6 +127,12 @@
 .blueprint .axis { fill:none; stroke:#899b80; stroke-width:1; stroke-dasharray:3 3 }
 .draft { fill:#7b9c7466; stroke:#385e48; stroke-width:2 }
 .trace { fill:none; stroke:#92712f; stroke-width:2; stroke-dasharray:4 3 }
+.endpoint { color:#70511c }
+.endpoint.proposed { color:#24533e }
+.endpoint path, .endpoint circle { fill:none; stroke:currentColor; stroke-width:1.8 }
+.endpoint .tip { fill:currentColor }
+.endpoint circle { fill:#e9e2c9 }
+.endpoint text { fill:currentColor; font:600 14px system-ui,sans-serif; paint-order:stroke; stroke:#d7dcc1; stroke-width:3px; stroke-linejoin:round }
 .origin { fill:#315642; stroke:#f0e9cb; stroke-width:1.3 }
 .blueprint > div { display:flex; align-items:baseline; justify-content:space-between; gap:8px }
 .blueprint b { font:24px Georgia,serif }
@@ -133,7 +146,16 @@
 .handle-row button { flex:1; touch-action:none; border-style:dashed }
 .handle-row button[data-selected=true] { color:#264832; background:#c5d0b5; border:2px solid #49634c; cursor:grab }
 .patterns { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin-top:6px }
-.patterns button { font-size:13px; padding:6px 3px; background:#f2ead2 }
+.patterns button { font-size:13px; padding:6px 3px; border-color:#bcb396; background:#eae4cc }
+.ink .fold-effects { margin:14px 0 6px; color:#e0e3d1; font-size:13px }
+.ink .fold-hint { margin:8px 0 16px; color:var(--muted); font-size:12px }
+.fold-decision { margin-top:14px }
+.fold-decision > small { display:block; padding:9px 11px 0; color:var(--gold); background:#172b22 }
+.fold-decision dl { margin:0; padding:5px 11px 9px; background:#172b22 }
+.fold-decision dl > div { display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; gap:8px; border-top:1px solid #b7bda231 }
+.fold-decision dt { font-size:12px; color:#e0e3d1 }
+.fold-decision dd { margin:0; font-weight:700; white-space:nowrap }
+.fold-decision .primary { width:100%; margin-top:5px }
 .damage-card { margin-top:14px }
 .damage-card .section-title h2 { font-size:23px }
 .hit-value { text-align:right }
@@ -173,7 +195,7 @@
   .action-index > * { flex-shrink:0 }
   .action-index > button { width:auto }
   .loadout { width:98%; gap:2px }
-  .loadout > div { width:16.66%; padding:5px }
+  .field-ui .loadout > button { width:16.66%; padding:5px }
   .loadout b { font-size:13px }
   .vital-card,.tool-card { top:8px; padding:8px }
   .vital-card { left:6px; width:150px }
@@ -181,7 +203,7 @@
   .tool-card nav { flex-wrap:wrap }
 }
 .atlas { justify-content:space-between }
-.lattice .vertex[aria-pressed=true] .ring { fill:#fff8cf44; stroke:#9a5325; stroke-width:3.5 }
+.lattice .vertex[aria-pressed=true] .ring { fill:none; stroke:#925122; stroke-width:3.5; pointer-events:none }
 .measure { fill:none; stroke:#526d53; stroke-width:1.3 }
 .measure text { font:13px Georgia,serif; text-anchor:middle; fill:#3c5944; stroke:none }
 .source-list { list-style:none; padding:0!important }
@@ -198,3 +220,4 @@
 .lattice .refund-trace { stroke:#a64f35; stroke-width:4; stroke-dasharray:5 2; pointer-events:none }
 .lattice .refund-ring { stroke:#9d4c35; stroke-width:2.5; fill:none }
 .changes small { display:block; font-size:10px; letter-spacing:.04em; color:var(--gold) }
+.changes strong { display:block; margin-bottom:3px }
