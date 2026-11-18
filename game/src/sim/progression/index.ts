@@ -1,14 +1,14 @@
 import { applyCombatOperation, inspectStats, previewAction } from '../combat/build'
 import { validateOperation } from '../core/commands'
 import { spawnEntity } from '../core/store'
-import type { BuildPreview, CharacterData, CharacterLoad, CombatContent, Operation, OperationReason, OperationResult, QueryResult, World } from '../core/types'
-import { UnsupportedError } from '../core/unsupported'
+import type { BuildPreview, Operation, OperationReason, OperationResult, QueryResult, World } from '../core/types'
 import { beginEncounter, healAtRest, returnToShelter } from './encounter'
 import { editGraph } from './graph'
 import { changeEquipment, moveItem, pickup } from './items'
 
 export { processProgression } from './encounter'
 export { graphTopology, type GraphTopology } from './graph'
+export { exportCharacter, loadCharacter } from './character'
 
 function apply(world: World, operation: Operation): OperationReason | null {
   const content = world.content.m2
@@ -83,14 +83,4 @@ export function previewBuild(world: World, edit: Operation): QueryResult<BuildPr
     refundedNodeIds: current.graph.allocations.filter(id => !changed.graph.allocations.includes(id)),
     deactivatedShapeIds: current.graph.activeShapes.filter(id => !changed.graph.activeShapes.includes(id))
   } }
-}
-
-/** Project one character without combat transients or platform generation. */
-export function exportCharacter(_world: World): CharacterData {
-  throw new UnsupportedError('exportCharacter (T2.3)')
-}
-
-/** Validate a projection and construct a fresh rested clearing, returning content refunds. */
-export function loadCharacter(_data: unknown, _content: CombatContent): CharacterLoad {
-  throw new UnsupportedError('loadCharacter (T2.3)')
 }
