@@ -30,7 +30,8 @@ export function actionClip(actorId: number, action: Readonly<ActionState>): Clip
   if (action.kind === 'dodge') return 'dodge'
   let hash = 2166136261
   for (const code of `${action.id}:${actorId}:${action.startTick}`) hash = Math.imul(hash ^ code.charCodeAt(0), 16777619) >>> 0
-  const variants = action.kind === 'melee' ? MELEE : CAST
+  const cast = action.recipe ? action.recipe.tags.includes('cast') : action.kind === 'projectile'
+  const variants = cast ? CAST : MELEE
   return variants[hash % variants.length]!
 }
 
@@ -45,7 +46,7 @@ export function actionTime(clip: ClipName, timing: Readonly<ActionTiming>, age: 
 
 export function actorPoseState(actor: Readonly<Entity>, world: Readonly<World>, previous?: Readonly<Entity>): PoseState {
   const skill = world.content.skills.find(skill => skill.id === actor.action?.id)
-  return { actor, tick: world.tick, timing: actor.action?.kind === 'dodge' ? world.content.dodge.timing : skill?.timing ?? null,
+  return { actor, tick: world.tick, timing: actor.action?.kind === 'dodge' ? world.content.dodge.timing : actor.action?.recipe?.timing ?? skill?.timing ?? null,
     flashTicks: Math.max(1, ...world.content.skills.map(skill => skill.hitFlashTicks)), previous }
 }
 

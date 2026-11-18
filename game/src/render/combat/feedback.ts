@@ -50,10 +50,12 @@ export class CombatFeedback {
         this.dodge(actor, world.content.dodge.timing.activeTicks, world.content.dodge.distance)
       }
       const skill = world.content.skills.find(skill => skill.id === action?.id)
+      const sector = action?.recipe?.footprint ?? (skill?.kind === 'melee' ? { kind: skill.kind, reach: skill.range, arcRadians: skill.arcRadians } : undefined)
+      const timing = action?.recipe?.timing ?? skill?.timing
       const age = action?.ageTicks ?? 0
-      const warning = actor.ai && skill?.kind === 'melee' && age < skill.timing.windupTicks
-      const cut = !actor.ai && skill?.kind === 'melee' && age >= skill.timing.windupTicks && age < skill.timing.windupTicks + skill.timing.activeTicks
-      if (!actor.death && action && skill?.kind === 'melee' && (warning || cut)) {
+      const warning = actor.ai && sector?.kind === 'melee' && timing && age < timing.windupTicks
+      const cut = !actor.ai && sector?.kind === 'melee' && timing && age >= timing.windupTicks && age < timing.windupTicks + timing.activeTicks
+      if (!actor.death && action && sector && timing && (warning || cut)) {
         live.add(actor.id)
         let footprint = this.footprints.get(actor.id)
         if (!footprint) {
@@ -70,9 +72,9 @@ export class CombatFeedback {
         }
         const [fill, rim] = footprint.children as [Mesh<BufferGeometry, MeshBasicNodeMaterial>, Mesh<BufferGeometry, MeshBasicNodeMaterial>]
         fill.visible = !!warning
-        const progress = Math.min(1, (age + 1) / Math.max(1, skill.timing.windupTicks))
-        this.sector(fill, actor, action.direction, skill.range * (0.25 + 0.75 * progress), skill.arcRadians, 0)
-        this.sector(rim, actor, action.direction, skill.range, skill.arcRadians, skill.range - (warning ? 0.14 : 0.065), !!warning)
+        const progress = Math.min(1, (age + 1) / Math.max(1, timing.windupTicks))
+        this.sector(fill, actor, action.direction, sector.reach * (0.25 + 0.75 * progress), sector.arcRadians, 0)
+        this.sector(rim, actor, action.direction, sector.reach, sector.arcRadians, sector.reach - (warning ? 0.14 : 0.065), !!warning)
       }
     }
     for (const [id, footprint] of this.footprints) if (!live.has(id)) { this.removeMeshGroup(footprint); this.footprints.delete(id) }
@@ -99,6 +101,8 @@ export class CombatFeedback {
       const x = dart.pos.x + this.field.player.x
       const z = dart.pos.z + this.field.player.z
       object.position.set(x, this.field.heightAt(x, z) + 0.7, z)
+      const radius = dart.recipe?.footprint.radius ?? dart.radius
+      object.scale.set(1, radius / 0.12, radius / 0.12)
       object.rotation.y = -Math.atan2(dart.vel.z, dart.vel.x)
     }
     for (const [id, object] of this.darts) if (!flying.has(id)) { this.removeMeshGroup(object); this.darts.delete(id) }
