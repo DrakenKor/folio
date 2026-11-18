@@ -1,4 +1,7 @@
 import { WebGPURenderer } from 'three/webgpu'
+import { m2Content } from './content/m2'
+import { exportCharacter, loadCharacter } from './sim/core'
+import { SaveController } from './platform/saves'
 import { createHUD } from './ui/hud'
 import { Clock } from './platform/clock'
 import { Input } from './platform/input'
@@ -67,7 +70,11 @@ function loseDevice(): void {
   }
 }
 
-const api = createAPI(clock, input, view.camera, ready, loseDevice)
+const saves = new SaveController({
+  build: __BUILD_ID__, content: initial.world.content.m2 ? initial.world.content : m2Content(), getWorld: () => clock.world,
+  replaceWorld: world => { input.release(); clock.replace(world) }, exportCharacter, loadCharacter
+})
+const api = createAPI(clock, input, view.camera, ready, loseDevice, saves)
 Object.assign(api.debug, { view })
 Object.assign(api, {
   async sheet(entity: string, clip: string): Promise<string> {
@@ -77,7 +84,7 @@ Object.assign(api, {
     return renderCharacterSheet(view instanceof MeadowView ? view.asset : undefined, clip, url.searchParams.get('backend') === 'webgl')
   }
 })
-const hud = createHUD(() => api.restart())
+const hud = createHUD({ clock, input, api, saves })
 if (import.meta.env.DEV || url.searchParams.get('debug') === '1') window.__game = api
 
 window.addEventListener('keydown', async event => {
@@ -117,6 +124,9 @@ if (import.meta.hot) import.meta.hot.dispose(() => {
   listeners.abort()
   input.dispose()
   hud.dispose()
+  saves.dispose()
   view.dispose()
   void renderer.dispose()
 })
+
+declare const __BUILD_ID__: string
