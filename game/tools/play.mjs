@@ -555,6 +555,19 @@ async function run(file) {
         case 'cmd': await cmd(step.command); break
         case 'observe': report('observe', await observe()); break
         case 'replay': await replay(); break
+        case 'recover': {
+          const previous = (await page.send('Page.getFrameTree')).frameTree.frame.loaderId
+          await evaluate(`(() => {
+            const button = document.querySelector('#graphics-stopped button');
+            if (!button) throw new Error('No graphics Reload control');
+            setTimeout(() => button.click(), 0);
+          })()`)
+          await until(() => mainLoader && mainLoader !== previous, 'graphics Reload document')
+          await until(() => evaluate('!!window.__game').catch(() => false), 'recovered game')
+          await evaluate('__game.ready.then(() => true)')
+          report('recover', { state: await observe() })
+          break
+        }
         case 'background': await background(step.seconds); break
         case 'blur': await blur(step.ms); break
         case 'console': await consoleSample(step.ms ?? 0, step.expectEmpty ?? false); break

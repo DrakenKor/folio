@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Button, createWorld, IDLE_COMMAND, serialize, spawnEntity, verifyReplay } from '../sim/core/index'
 import { Clock } from '../platform/clock'
 import { Input } from '../platform/input'
+import { buildScenario } from '../sim/scenarios'
 import type { CameraRig } from '../render/basic/camera'
 import { createAPI } from './api'
 
@@ -106,5 +107,20 @@ describe('debug command boundary', () => {
     api.restart()
     expect(api.hash()).toBe(start)
     expect(api.observe().command).toBeNull()
+  })
+
+  it('restarts a recovered defeat from its scenario and seed', () => {
+    const { api, clock } = setup()
+    api.scenario('m1-arena', 19)
+    const start = api.snapshot()
+    api.step(900)
+    expect(api.observe().actors.find(actor => actor.id === clock.world.playerId)?.health).toBe(0)
+    const camera = { set() {}, bookmark() {}, follow() {}, register() {} } as unknown as CameraRig
+    const recovered = createAPI(clock, input, camera, Promise.resolve(), () => {})
+    recovered.restart()
+    expect(recovered.snapshot()).toBe(start)
+    expect(clock.world).toEqual(buildScenario('m1-arena', 19))
+    expect(recovered.observe().command).toBeNull()
+    expect(clock.recorder.exportReplay().commands).toEqual([])
   })
 })
