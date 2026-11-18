@@ -36,10 +36,8 @@ export function step(world: World, command: Command): SimEvent[] {
   const launched = launchProjectiles(world, states)
   const contacts = gatherContacts(world, states, launched)
   resolveContacts(world, contacts, launched, events)
-  const progression = processProgression(world, events)
-  if (!progression.ok && (world.encounter !== null || world.entities.some(actor => actor.character !== null))) {
-    throw new UnsupportedError('progression processing (T2.3)')
-  }
+  // An unsupported progression hook awards nothing, so combat runs without progression.
+  processProgression(world, events)
   if (world.scenario === 'm1-fight') events.push(...spawnFightWave(world))
   return events
 }

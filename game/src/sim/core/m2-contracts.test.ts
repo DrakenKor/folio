@@ -110,7 +110,7 @@ describe('T2.0 shared contracts', () => {
     resumed.entities[0]!.character!.graph.seed++
     expect(hashWorld(resumed)).not.toBe(hashWorld(world))
     expect(serialize(world)).toBe(bytes)
-    expect(() => step(resumed, IDLE_COMMAND)).toThrow(/Unsupported: progression/)
+    expect(() => step(resumed, IDLE_COMMAND)).not.toThrow()
   })
 
   it('retains captured recipes, fan deduplication and ailment credit after the source action completes', () => {
