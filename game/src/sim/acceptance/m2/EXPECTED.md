@@ -112,6 +112,11 @@ Each identifier is a test title; parameterized cases cover every listed entry.
 | Full stress fixture, conversions, two folds per action, active ailments, sustained 200/64 | m2-stress.json descriptor; T2.8 executes |
 | Performance/transfer/storage/deployment budgets, dev/static × both backends, human UI rubric/reviews | T2.8 evaluation; browser supports both backends and two capture sizes |
 
+## Harness corrections
+
+- P14 held the starting rank while awarding XP for 160 kills; at 20 XP per kill and `60*rank` per rank, rank 1 reaches about rank 10, so the fixture now resets rank and XP before each kill.
+- P16 placed its post-load target at the fixed point (1, 0); a loaded character spawns at the clearing's rest point, so the target is now 1 m from each candidate's player.
+
 ## Contract gaps and assumptions
 
 - **Commit race hook missing.** Proposal: a development-only async barrier inside SaveController's real commit lock, after writer/generation checks.

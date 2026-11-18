@@ -15,8 +15,8 @@ function give(world: World, store: 'inventory' | 'stash' | 'ground' = 'inventory
   else { player.character!.items.push(item); player.character![store].push(item.id) }
   return item
 }
-function enemy(world: World, health = 1) {
-  return target(world, health, { x: 1, z: 0 }, { kind: 'creaseback', ai: { enemyId: 'creaseback', phase: 'idle', ageTicks: 0, targetId: null } })
+function enemy(world: World, health = 1, pos = { x: 1, z: 0 }) {
+  return target(world, health, pos, { kind: 'creaseback', ai: { enemyId: 'creaseback', phase: 'idle', ageTicks: 0, targetId: null } })
 }
 
 
@@ -225,6 +225,7 @@ describe('M2 items, XP, loot and clearing', () => {
     const { world, player } = fixture(content); player.character!.rank = rank; player.character!.points = rank + 3
     const tiers = new Set<number>(); const roles = new Set<string>(); const rolls = new Set<number>()
     for (let n = 0; n < 160; n++) {
+      player.character!.rank = rank; player.character!.xp = 0
       hit(world, player, enemy(world)); ticks(world, 30)
       for (const drop of world.groundDrops) {
         const item = drop.item; roles.add(item.role)
@@ -262,7 +263,7 @@ describe('M2 items, XP, loot and clearing', () => {
     for (const candidate of [world, loaded]) {
       candidate.encounter!.phase = 'active'
       const actor = candidate.entities.find(e => e.id === candidate.playerId)!
-      hit(candidate, actor, enemy(candidate))
+      hit(candidate, actor, enemy(candidate, 1, { x: actor.pos.x + 1, z: actor.pos.z }))
     }
     expect(loaded.groundDrops.map(d => d.item)).toEqual(world.groundDrops.map(d => d.item))
     expect(loaded.rng.loot).toEqual(world.rng.loot)
