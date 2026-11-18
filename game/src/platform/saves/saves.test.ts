@@ -7,7 +7,7 @@ import { SaveController, SAVE_MAX_BYTES } from './index'
 
 afterEach(() => vi.unstubAllGlobals())
 
-function session(initial: string | null, fault?: 'quota' | 'security' | 'read') {
+function session(initial: string | null, fault?: 'quota' | 'security' | 'read', playerEntry = true) {
   const content = neutralContent()
   const fresh = () => fixture(content, true).world
   let world = fresh()
@@ -19,7 +19,7 @@ function session(initial: string | null, fault?: 'quota' | 'security' | 'read') 
   })
   const save = new SaveController({
     build: 'platform-test', content, getWorld: () => world, replaceWorld: next => { world = next },
-    createFreshWorld: fresh, exportCharacter: project,
+    createFreshWorld: fresh, exportCharacter: project, isPlayerSession: () => playerEntry,
     loadCharacter(value) {
       const data = value as CharacterData
       const next = fresh()
@@ -43,7 +43,7 @@ function session(initial: string | null, fault?: 'quota' | 'security' | 'read') 
       removeItem() { throw new Error('Unexpected removal') }
     }
   })
-  return { save, bytes: () => bytes, writes: () => writes }
+  return { save, world: () => world, bytes: () => bytes, writes: () => writes }
 }
 
 it('migrates the schema 0 fixture and keeps all missing-lock operations in memory', async () => {
@@ -138,5 +138,67 @@ it('preserves unreadable bytes until an explicit reset installs a fresh save', a
     expect(bytes()).toBe('{')
     expect(await save.reset()).toMatchObject({ ok: true, status: { writable: true, generation: 1 } })
     expect(JSON.parse(bytes()!).character.points).toBe(4)
+  } finally { save.dispose() }
+})
+
+it('waits for an in-flight commit before freezing the graphics recovery generation', async () => {
+  let timer!: () => void
+  const tab = Object.assign(new EventTarget(), { setInterval: (fn: () => void) => { timer = fn; return 1 }, clearInterval() {} })
+  vi.stubGlobal('window', tab)
+  const { save, writes } = session(null)
+  try {
+    await save.load()
+    save.commitBarrier('arm')
+    const commit = save.flush()
+    await vi.waitFor(() => expect(save.commitBarrier('reached')).toBe(true))
+    let captured = false
+    const recovery = save.suspendForRecovery().then(() => { captured = true; return save.status().generation })
+    timer()
+    tab.dispatchEvent(new Event('pagehide'))
+    await Promise.resolve()
+    expect(captured).toBe(false)
+    save.commitBarrier('release')
+    expect((await commit).ok).toBe(true)
+    expect(await recovery).toBe(1)
+    timer()
+    tab.dispatchEvent(new Event('pagehide'))
+    await save.flush()
+    expect(writes()).toBe(1)
+  } finally { save.dispose() }
+})
+
+it('copies live progress after quota failure and retains the original stored bytes', async () => {
+  const prior = JSON.stringify({ ...legacy, schema: 1, nextItemId: 12, contentVersion: 'qa-v1', lootRng: [1, 2, 3, 4] })
+  const { save, world, bytes } = session(prior, 'quota')
+  try {
+    await save.load()
+    expect(await save.flush()).toMatchObject({ reason: 'quota' })
+    world().entities[0]!.character!.xp = 41
+    expect(JSON.parse(save.export()).character.xp).toBe(41)
+    expect(save.status().text).toBe(prior)
+    expect(bytes()).toBe(prior)
+  } finally { save.dispose() }
+})
+
+it('keeps a non-owner blocked when reading the save fails', async () => {
+  const owner = session(null).save, other = session(null, 'read').save
+  try {
+    expect((await owner.load()).status.writable).toBe(true)
+    expect(await other.load()).toMatchObject({ reason: 'read-failed', status: { code: 'blocked', writable: false } })
+    expect(owner.status().writable).toBe(true)
+  } finally { other.dispose(); owner.dispose() }
+})
+
+it('keeps explicit debug entries playable and isolated across save operations', async () => {
+  const { save, bytes, writes } = session('{', undefined, false)
+  try {
+    expect(save.status().code).toBe('read-only')
+    expect((await save.load()).status.code).toBe('read-only')
+    expect((await save.import(save.export())).ok).toBe(true)
+    expect((await save.reset()).ok).toBe(true)
+    expect((await save.takeOver()).ok).toBe(false)
+    expect((await save.flush()).ok).toBe(false)
+    expect(writes()).toBe(0)
+    expect(bytes()).toBe('{')
   } finally { save.dispose() }
 })

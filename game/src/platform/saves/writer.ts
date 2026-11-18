@@ -10,6 +10,8 @@ export class Writer {
 
   constructor(private locks: LockManager, private onLoss: () => void) {}
 
+  get ownsLock(): boolean { return !!this.lease }
+
   async acquire(steal: boolean): Promise<boolean> {
     if (this.disposed) throw new SaveError('lost-writer')
     if (this.lease) return true

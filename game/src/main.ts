@@ -72,12 +72,13 @@ window.addEventListener('focus', suspension, options)
 document.addEventListener('visibilitychange', suspension, options)
 suspension()
 
-renderer.onDeviceLost = () => {
+renderer.onDeviceLost = async () => {
   if (lost) return
   lost = true
   clock.suspend('graphics', true)
   input.release()
   cancelAnimationFrame(animation)
+  await saves.suspendForRecovery()
   const { code, generation } = saves.status()
   storeSession(url, clock.world, clock.userPaused, playerSession, true, { code, generation })
   graphicsStopped()

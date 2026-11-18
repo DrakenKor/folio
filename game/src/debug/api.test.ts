@@ -3,6 +3,7 @@ import { Blob } from 'node:buffer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Button, createWorld, IDLE_COMMAND, previewBuild, serialize, spawnEntity, step, verifyReplay } from '../sim/core/index'
 import type { Loadout, Operation } from '../sim/core/index'
+import { decode, encode } from '../platform/encoding'
 import { Clock } from '../platform/clock'
 import { Input } from '../platform/input'
 import { buildScenario } from '../sim/scenarios'
@@ -17,7 +18,7 @@ beforeEach(() => {
 })
 afterEach(() => { input?.dispose(); document.body.replaceChildren(); vi.unstubAllGlobals() })
 
-function setup() {
+function setup(onDebugWorld = () => {}) {
   const world = createWorld(7)
   const player = spawnEntity(world, { kind: 'player', pos: { x: 0, z: 0 }, radius: 0.4 })
   const canvas = document.createElement('canvas')
@@ -25,7 +26,7 @@ function setup() {
   input = new Input(canvas, () => ({ forward: { x: 0, z: -1 }, right: { x: 1, z: 0 } }), () => ({ x: 2, z: 3 }))
   const clock = new Clock(world, world => input.command(world), world => input.afterStep(world))
   const camera = { set() {}, bookmark() {}, follow() {}, register() {} } as unknown as CameraRig
-  const api = createAPI(clock, input, camera, Promise.resolve(), () => {})
+  const api = createAPI(clock, input, camera, Promise.resolve(), () => {}, undefined, onDebugWorld)
   clock.pause()
   return { api, clock, world, player, canvas }
 }
@@ -202,4 +203,32 @@ describe('debug build controls', () => {
     api.step(13)
     expect(api.observe().actors[0]!.action).toMatchObject({ id: 'rill-fan', ageTicks: 12, phase: 'windup' })
   })
+})
+
+it('rejects a divergent replay before replacing the live world or changing session ownership', async () => {
+  const replaced = vi.fn()
+  const { api } = setup(replaced)
+  const replay = JSON.parse(await decode(await api.exportReplay()))
+  replay.hashes[0][1] = 'bad'
+  api.step(5)
+  const before = api.hash()
+  expect(await api.loadReplay(await encode(JSON.stringify(replay)))).toEqual({ ok: false, divergedAt: 0 })
+  expect(api.hash()).toBe(before)
+  expect(replaced).not.toHaveBeenCalled()
+})
+
+it('replays a westward dodge with signed-zero coordinates after text export', async () => {
+  const { api } = setup()
+  api.cmd({ move: { x: -1, z: -0 }, aim: { x: -1, z: -0 }, buttons: Button.Dodge })
+  api.step(2)
+  expect(await api.loadReplay(await api.exportReplay())).toEqual({ ok: true })
+})
+
+it('exposes the commit barrier through the static debug API', () => {
+  vi.stubEnv('DEV', false)
+  try {
+    const { api } = setup()
+    expect(api.save.commitBarrier('arm')).toBe(false)
+    expect(api.save.commitBarrier('release')).toBe(false)
+  } finally { vi.unstubAllEnvs() }
 })

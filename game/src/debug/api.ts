@@ -49,7 +49,7 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
     damage: (skillId: string, targetId: number, actorId = clock.world.playerId!) => previewAction(clock.world, actorId, skillId, targetId),
     save: { status: () => save.status(), export: () => save.export(), import: (text: string) => save.import(text),
       flush: () => save.flush(), load: () => save.load(), reset: () => save.reset(), takeOver: () => save.takeOver(),
-      ...(import.meta.env.DEV ? { commitBarrier: (action: 'arm' | 'reached' | 'release') => save.commitBarrier(action) } : {}) },
+      commitBarrier: (action: 'arm' | 'reached' | 'release') => save.commitBarrier(action) },
     describe(): string {
       const world = clock.world
       const player = world.entities.find(entity => entity.id === world.playerId)
@@ -122,7 +122,7 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
     async loadReplay(text: string) {
       const replay: Replay = JSON.parse(await decode(text))
       const result = verifyReplay(replay)
-      // Check replay hashes before replacing live state.
+      if (!result.ok) return result
       replace(JSON.stringify(replay.start))
       clock.pause()
       for (const command of replay.commands) clock.advance(1, command)
