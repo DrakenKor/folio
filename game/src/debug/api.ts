@@ -1,5 +1,6 @@
-import { actionPhase, canonical, copyCommand, exportCharacter, hashWorld, IDLE_COMMAND, inspectStats, loadCharacter, previewAction, previewBuild, restore, serialize, validateOperation, verifyReplay } from '../sim/core/index'
+import { actionPhase, canonical, copyCommand, exportCharacter, hashWorld, IDLE_COMMAND, inspectStats, loadCharacter, previewAction, previewBuild, restore, serialize, step, verifyReplay } from '../sim/core/index'
 import type { Command, EquipmentRole, ItemId, ItemStore, Loadout, Operation, OperationResult, Replay } from '../sim/core/index'
+import { actionTiming } from '../sim/combat/actions'
 import { buildScenario } from '../sim/scenarios'
 import type { CameraRig } from '../render/basic/camera'
 import type { Clock } from '../platform/clock'
@@ -18,10 +19,14 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
   const save = saves ?? new SaveController({ build: __BUILD_ID__, content: clock.world.content,
     getWorld: () => clock.world, replaceWorld: world => replace(serialize(world)), exportCharacter, loadCharacter })
   const edit = (operation: Operation): OperationResult => {
-    validateOperation(operation)
+    const command = copyCommand({ ...IDLE_COMMAND, operations: [operation] })
+    // Clock buffers events for rendering. Read the decision from a detached tick.
+    const event = step(structuredClone(clock.world), command).find(event =>
+      event.type === 'operationAccepted' || event.type === 'operationRejected')
+    if (!event) throw new Error(`No result for operation ${operation.type}`)
     input.release()
-    clock.advance(1, { ...IDLE_COMMAND, operations: [structuredClone(operation)] })
-    return { accepted: false, reason: 'unsupported' }
+    clock.advance(1, command)
+    return event.type === 'operationAccepted' ? { accepted: true, reason: event.reason } : { accepted: false, reason: event.reason }
   }
   return {
     ready,
@@ -75,9 +80,7 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
         playerId: world.playerId, commandTick: command ? world.tick : null, command,
         actors: world.entities.map(actor => {
           const action = actor.action
-          const timing = action?.kind === 'dodge' ? world.content.dodge.timing :
-            world.content.skills.find(skill => skill.id === action?.id)?.timing
-          return { ...actor, action: action ? { ...action, phase: actionPhase(timing!, action.ageTicks) } : null }
+          return { ...actor, action: action ? { ...action, phase: actionPhase(actionTiming(world, actor)!, action.ageTicks) } : null }
         }), projectiles: world.projectiles })
     },
     cmd: (command: Command) => input.queue(command),

@@ -3,8 +3,9 @@ import type { Command, Vec2, World } from '../sim/core/index'
 
 interface Basis { forward: Vec2; right: Vec2 }
 const KEY_BUTTONS: Record<string, number> = {
-  Space: Button.Dodge, KeyQ: Button.Skill1, Digit1: Button.Skill1,
-  Digit2: Button.Skill2, Digit3: Button.Skill3, Digit4: Button.Skill4, KeyE: Button.Interact
+  Space: Button.Dodge, KeyF: Button.Interact,
+  KeyQ: Button.Skill1, KeyE: Button.Skill2, KeyR: Button.Skill3, KeyT: Button.Skill4,
+  Digit1: Button.Skill1, Digit2: Button.Skill2, Digit3: Button.Skill3, Digit4: Button.Skill4
 }
 const MOVEMENT_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD']
 

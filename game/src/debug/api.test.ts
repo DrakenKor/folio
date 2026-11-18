@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { Blob } from 'node:buffer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Button, createWorld, IDLE_COMMAND, serialize, spawnEntity, verifyReplay } from '../sim/core/index'
+import { Button, createWorld, IDLE_COMMAND, previewBuild, serialize, spawnEntity, step, verifyReplay } from '../sim/core/index'
+import type { Loadout, Operation } from '../sim/core/index'
 import { Clock } from '../platform/clock'
 import { Input } from '../platform/input'
 import { buildScenario } from '../sim/scenarios'
@@ -122,5 +123,83 @@ describe('debug command boundary', () => {
     expect(clock.world).toEqual(buildScenario('m1-arena', 19))
     expect(recovered.observe().command).toBeNull()
     expect(clock.recorder.exportReplay().commands).toEqual([])
+  })
+})
+
+describe('debug build controls', () => {
+  it('returns simulation decisions, releases input and records exactly one idle tick per edit', () => {
+    const { api, clock, canvas } = setup()
+    api.scenario('m2-clearing', 7)
+    expect(api.build).toBe('test-debug')
+    const slots: Loadout = [null, 'fold-dart', 'rill-fan', 'plinth-blow', 'hearth-shard', 'skim-needle']
+    const expectedSlots = [...slots]
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))
+    canvas.dispatchEvent(new MouseEvent('pointerdown', { button: 0 }))
+    api.cmd({ ...IDLE_COMMAND, buttons: Button.Secondary })
+    expect(api.character.setLoadout(slots)).toEqual({ accepted: true, reason: 'ok' })
+    slots[1] = null
+    expect(api.character.setFolds('fold-dart', ['missing-fold'])).toEqual({ accepted: false, reason: 'unknown-fold' })
+    const commands = clock.recorder.exportReplay().commands
+    expect(commands).toEqual([
+      { ...IDLE_COMMAND, operations: [{ type: 'setLoadout', slots: expectedSlots }] },
+      { ...IDLE_COMMAND, operations: [{ type: 'setFolds', skillId: 'fold-dart', foldIds: ['missing-fold'] }] }
+    ])
+    expect(api.observe()).toMatchObject({ tick: 2, paused: true })
+    expect(verifyReplay(clock.recorder.exportReplay())).toEqual({ ok: true })
+    api.step()
+    expect(api.observe().command).toEqual(IDLE_COMMAND)
+  })
+
+  it('submits each progression operation with its public payload and reports its result', () => {
+    const { api, clock } = setup()
+    api.scenario('m2-clearing', 7)
+    const operations: Array<[Operation, () => ReturnType<typeof api.character.allocate>]> = [
+      [{ type: 'allocate', nodeId: '1,0' }, () => api.character.allocate('1,0')],
+      [{ type: 'refund', nodeId: '1,0' }, () => api.character.refund('1,0')],
+      [{ type: 'activateShape', shapeId: 'rhombus-0', active: false }, () => api.character.activateShape('rhombus-0', false)],
+      [{ type: 'equip', itemId: 1 }, () => api.character.equip(1)],
+      [{ type: 'unequip', role: 'weapon' }, () => api.character.unequip('weapon')],
+      [{ type: 'pickup', itemId: 99 }, () => api.character.pickup(99)],
+      [{ type: 'stash', itemId: 99, from: 'inventory' }, () => api.character.stash(99, 'inventory')],
+      [{ type: 'discard', itemId: 99, from: 'stash' }, () => api.character.discard(99, 'stash')],
+      [{ type: 'beginEncounter' }, () => api.character.beginEncounter()],
+      [{ type: 'returnToShelter' }, () => api.character.returnToShelter()]
+    ]
+    for (const [operation, call] of operations) {
+      const expected = structuredClone(clock.world)
+      const command = { ...IDLE_COMMAND, operations: [operation] }
+      const event = step(expected, command).find(event => event.type === 'operationAccepted' || event.type === 'operationRejected')!
+      expect(call()).toEqual({ accepted: event.type === 'operationAccepted', reason: event.reason })
+      expect(api.snapshot()).toBe(serialize(expected))
+      expect(api.observe().command).toEqual(command)
+    }
+  })
+
+  it('observes the resolved M2 recipe and keeps query results detached', () => {
+    const { api, clock } = setup()
+    api.scenario('m2-clearing', 7)
+    const allocate = { type: 'allocate', nodeId: '1,0' } as const
+    const beforePreview = api.snapshot()
+    expect(api.character.preview(allocate)).toEqual(previewBuild(clock.world, allocate))
+    expect(api.snapshot()).toBe(beforePreview)
+    expect(api.character.setFolds('rill-fan', ['ballast-pleat'])).toEqual({ accepted: true, reason: 'ok' })
+    const fixture = structuredClone(clock.world)
+    fixture.encounter = null
+    spawnEntity(fixture, { kind: 'target', faction: 'enemy', pos: { x: 1, z: 1 }, radius: 0.4 })
+    api.restore(serialize(fixture))
+    const targetId = fixture.entities.at(-1)!.id
+    const before = api.snapshot()
+    const stats = api.stats()
+    const action = api.damage('rill-fan', targetId)
+    expect(stats).toMatchObject({ ok: true, value: { actorId: fixture.playerId } })
+    expect(action).toMatchObject({ ok: true, value: { recipe: { folds: ['ballast-pleat'], timing: { windupTicks: 16 } } } })
+    if (stats.ok) stats.value.sources.length = 0
+    if (action.ok) action.value.recipe.timing.windupTicks = 0
+    expect(api.stats()).not.toEqual(stats)
+    expect(api.damage('rill-fan', targetId)).not.toEqual(action)
+    expect(api.snapshot()).toBe(before)
+    api.cmd({ ...IDLE_COMMAND, buttons: Button.Skill1 })
+    api.step(13)
+    expect(api.observe().actors[0]!.action).toMatchObject({ id: 'rill-fan', ageTicks: 12, phase: 'windup' })
   })
 })

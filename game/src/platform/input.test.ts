@@ -22,8 +22,9 @@ const pointer = (type: string, button: number) => {
 describe('input', () => {
   it.each([
     ['primary', Button.Primary, 0], ['secondary', Button.Secondary, 2], ['Space', Button.Dodge, 'Space'],
-    ['Q', Button.Skill1, 'KeyQ'], ['1', Button.Skill1, 'Digit1'], ['2', Button.Skill2, 'Digit2'],
-    ['3', Button.Skill3, 'Digit3'], ['4', Button.Skill4, 'Digit4'], ['E', Button.Interact, 'KeyE']
+    ['Q', Button.Skill1, 'KeyQ'], ['E', Button.Skill2, 'KeyE'], ['R', Button.Skill3, 'KeyR'],
+    ['T', Button.Skill4, 'KeyT'], ['F', Button.Interact, 'KeyF'],
+    ['1', Button.Skill1, 'Digit1'], ['2', Button.Skill2, 'Digit2'], ['3', Button.Skill3, 'Digit3'], ['4', Button.Skill4, 'Digit4']
   ])('maps %s and consumes a brief press exactly once', (_name, bit, code) => {
     const controls = browserInput()
     const world = createWorld(7)
@@ -69,12 +70,12 @@ describe('input', () => {
 
   it('normalizes camera-relative diagonals and combines buttons', () => {
     const held = new HeldInput()
-    held.keys = new Set(['KeyW', 'KeyD', 'Space', 'Digit3'])
+    held.keys = new Set(['KeyW', 'KeyD', 'Space', 'KeyQ', 'KeyE', 'KeyR', 'KeyT', 'KeyF'])
     held.mouseButtons = Button.Primary
     const command = held.command(basis())
     expect(command.move.x).toBeCloseTo(Math.SQRT1_2)
     expect(command.move.z).toBeCloseTo(-Math.SQRT1_2)
-    expect(command.buttons).toBe(Button.Primary | Button.Dodge | Button.Skill3)
+    expect(command.buttons).toBe(Button.Primary | Button.Dodge | Button.Skill1 | Button.Skill2 | Button.Skill3 | Button.Skill4 | Button.Interact)
   })
 
   it.each(['blur', 'hide'])('releases movement, buttons, aim and agent target on %s', async reason => {
