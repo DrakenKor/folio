@@ -1,5 +1,5 @@
-import { actionPhase, canonical, copyCommand, exportCharacter, hashWorld, IDLE_COMMAND, inspectStats, loadCharacter, previewAction, previewBuild, restore, serialize, step, verifyReplay } from '../sim/core/index'
-import type { Command, EquipmentRole, ItemId, ItemStore, Loadout, Operation, OperationResult, Replay } from '../sim/core/index'
+import { actionPhase, canonical, copyCommand, exportCharacter, hashWorld, IDLE_COMMAND, inspectStats, loadCharacter, previewAction, previewBuild, restore, serialize, verifyReplay } from '../sim/core/index'
+import type { Command, EquipmentRole, ItemId, ItemStore, Loadout, Operation, OperationResult, Replay, World } from '../sim/core/index'
 import { actionTiming } from '../sim/combat/actions'
 import { buildScenario } from '../sim/scenarios'
 import type { CameraRig } from '../render/basic/camera'
@@ -10,9 +10,11 @@ import { SaveController } from '../platform/saves'
 
 export interface ScriptEntry { tick: number; command: Command }
 
-export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: Promise<void>, loseDevice: () => void, saves?: SaveController) {
+export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: Promise<void>, loseDevice: () => void, saves?: SaveController,
+  onDebugWorld: (world: World) => void = () => {}) {
   const replace = (text: string) => {
     const world = restore(text)
+    onDebugWorld(world)
     input.release()
     clock.replace(world)
   }
@@ -20,12 +22,10 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
     getWorld: () => clock.world, replaceWorld: world => replace(serialize(world)), exportCharacter, loadCharacter })
   const edit = (operation: Operation): OperationResult => {
     const command = copyCommand({ ...IDLE_COMMAND, operations: [operation] })
-    // Clock buffers events for rendering. Read the decision from a detached tick.
-    const event = step(structuredClone(clock.world), command).find(event =>
+    input.release()
+    const event = clock.advance(1, command).find(event =>
       event.type === 'operationAccepted' || event.type === 'operationRejected')
     if (!event) throw new Error(`No result for operation ${operation.type}`)
-    input.release()
-    clock.advance(1, command)
     return event.type === 'operationAccepted' ? { accepted: true, reason: event.reason } : { accepted: false, reason: event.reason }
   }
   return {

@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 // Isolate the M1 player through restore; all tick intent uses DOM input or commands.
-const root = fileURLToPath(new URL('../../../..', import.meta.url))
+const root = fileURLToPath(new URL('../../..', import.meta.url))
 const tool = fileURLToPath(new URL('../../tools/play.mjs', import.meta.url))
 const origin = process.env.PLAY_ORIGIN ?? 'http://127.0.0.1:5196'
 const env = { ...process.env, PLAY_CDP_PORT: process.env.PLAY_CDP_PORT ?? '9576', PLAY_HEADLESS: process.env.PLAY_HEADLESS ?? '1' }
