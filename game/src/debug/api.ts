@@ -9,7 +9,6 @@ import { decode, encode } from '../platform/encoding'
 export interface ScriptEntry { tick: number; command: Command }
 
 export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: Promise<void>, loseDevice: () => void) {
-  let restartSnapshot = serialize(clock.world)
   const replace = (text: string) => {
     const world = restore(text)
     input.release()
@@ -68,9 +67,8 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
     scenario(name: string, seed = 1): void {
       const snapshot = serialize(buildScenario(name, seed))
       replace(snapshot)
-      restartSnapshot = snapshot
     },
-    restart(): void { replace(restartSnapshot) },
+    restart(): void { replace(serialize(buildScenario(clock.world.scenario, clock.world.seed))) },
     simulate(script: ScriptEntry[], ticks: number): string {
       if (!Array.isArray(script)) throw new TypeError('Script must be an array')
       if (!Number.isSafeInteger(ticks) || ticks < 0) throw new RangeError('Ticks must be a nonnegative safe integer')

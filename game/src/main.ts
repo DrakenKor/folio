@@ -49,7 +49,7 @@ renderer.onDeviceLost = () => {
   clock.suspend('graphics', true)
   input.release()
   cancelAnimationFrame(animation)
-  storeSession(clock.world, true, true)
+  storeSession(clock.world, clock.userPaused, true)
   graphicsStopped()
 }
 

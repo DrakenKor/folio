@@ -6,14 +6,14 @@ import { isCelMaterial } from '../materials/cel'
 
 const NUMBER_TICKS = 30
 
-interface Burst { key: string; targetId: number; tick: number; object: Group; number: Sprite; texture: CanvasTexture }
+interface Burst { targetId: number; tick: number; object: Group; number: Sprite; texture: CanvasTexture }
 
 /** Disposable contact history; persistent flashes and attack footprints come from state. */
 export class CombatFeedback {
   readonly object = new Group()
   private world: Readonly<World> | null = null
   private bursts: Burst[] = []
-  private seen = new Map<string, number>()
+  private seen = new WeakSet<SimEvent>()
   private footprints = new Map<number, Group>()
   private darts = new Map<number, Group>()
   private trails = new Map<number, Group>()
@@ -28,7 +28,6 @@ export class CombatFeedback {
     if (this.world !== frame.world) { this.clear(); this.world = frame.world }
     const { world } = frame
     const time = world.tick + frame.alpha
-    for (const [key, tick] of this.seen) if (world.tick - tick >= NUMBER_TICKS) this.seen.delete(key)
     for (const event of frame.events) if (event.type === 'damage' && world.tick - event.tick < NUMBER_TICKS) this.contact(event)
     this.bursts = this.bursts.filter(burst => {
       const age = time - burst.tick
@@ -189,7 +188,7 @@ export class CombatFeedback {
   clear(): void {
     this.bursts.forEach(burst => this.removeBurst(burst))
     this.bursts = []
-    this.seen.clear()
+    this.seen = new WeakSet()
     for (const group of [...this.footprints.values(), ...this.darts.values(), ...this.trails.values()]) this.removeMeshGroup(group)
     this.footprints.clear()
     this.darts.clear()
@@ -204,9 +203,9 @@ export class CombatFeedback {
   }
 
   private contact(event: Extract<SimEvent, { type: 'damage' }>): void {
-    const key = `${event.tick}:${event.actorId}:${event.targetId}:${event.skillId}`
-    if (this.seen.has(key)) return
-    this.seen.set(key, event.tick)
+    // Each emitted damage object identifies one contact, including simultaneous hits from the same owner.
+    if (this.seen.has(event)) return
+    this.seen.add(event)
     if (this.bursts.length === 16) this.removeBurst(this.bursts.shift()!)
     const canvas = document.createElement('canvas')
     canvas.width = 128
@@ -231,7 +230,7 @@ export class CombatFeedback {
     const z = event.position.z + this.field.player.z
     object.position.set(x, this.field.heightAt(x, z), z)
     this.object.add(object)
-    this.bursts.push({ key, targetId: event.targetId, tick: event.tick, object, number, texture })
+    this.bursts.push({ targetId: event.targetId, tick: event.tick, object, number, texture })
   }
 
   /** Conform the committed sector to the rendered terrain, including the two radial edges. */
