@@ -1,0 +1,161 @@
+{
+  "format": "folio.arpg.m2-balance-fixture",
+  "version": 1,
+  "id": "weight-melee",
+  "scenario": "m2-balance",
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "ticks": 7200,
+  "waves": 12,
+  "enemiesPerWave": 3,
+  "graphSeed": 7,
+  "rank": 21,
+  "xp": 0,
+  "points": 0,
+  "allocations": [
+    "-1,0",
+    "-1,-1",
+    "0,-1",
+    "0,1",
+    "1,0",
+    "1,1",
+    "1,2",
+    "1,3",
+    "0,4",
+    "-1,5",
+    "0,5",
+    "1,4",
+    "2,1",
+    "2,2",
+    "2,3",
+    "3,0",
+    "3,1",
+    "3,2",
+    "4,-1",
+    "4,0",
+    "4,1",
+    "5,-2",
+    "5,-1",
+    "5,0"
+  ],
+  "activeShapes": [
+    "rhombus-0",
+    "rhombus-3"
+  ],
+  "gear": [
+    {
+      "role": "weapon",
+      "affixes": [
+        {
+          "kind": "flat",
+          "damageType": "weight",
+          "requiredTags": [
+            "weapon"
+          ],
+          "tier": 2,
+          "roll": 8
+        },
+        {
+          "kind": "health",
+          "tier": 2,
+          "roll": 15
+        }
+      ]
+    },
+    {
+      "role": "offhand",
+      "affixes": [
+        {
+          "kind": "health",
+          "tier": 2,
+          "roll": 15
+        }
+      ]
+    },
+    {
+      "role": "coat",
+      "affixes": [
+        {
+          "kind": "boost",
+          "requiredTags": [],
+          "types": [],
+          "tier": 2,
+          "roll": 8
+        },
+        {
+          "kind": "health",
+          "tier": 2,
+          "roll": 15
+        }
+      ]
+    },
+    {
+      "role": "boots",
+      "affixes": [
+        {
+          "kind": "movement",
+          "tier": 2,
+          "roll": 5
+        }
+      ]
+    },
+    {
+      "role": "survey-tally",
+      "affixes": [
+        {
+          "kind": "boost",
+          "requiredTags": [
+            "cast"
+          ],
+          "tier": 2,
+          "roll": 15
+        },
+        {
+          "kind": "reach",
+          "requiredTags": [
+            "projectile"
+          ],
+          "tier": 2,
+          "roll": 8
+        }
+      ]
+    }
+  ],
+  "loadout": [
+    "span-cut",
+    "fold-dart",
+    "hearth-shard",
+    "skim-needle",
+    "sill-rake",
+    "cairn-wake"
+  ],
+  "folds": {
+    "span-cut": [
+      "close-pleat",
+      "stanch-pleat"
+    ]
+  },
+  "controller": {
+    "version": 1,
+    "desiredDistance": 1.15,
+    "dodgeTelegraphDistance": 1.9,
+    "dodgeTelegraphAge": 16,
+    "attackDistance": 1.44
+  },
+  "gate": {
+    "minimumKills": 36,
+    "minimumHealthFraction": 0.25,
+    "minimumSuccessfulSeeds": 8
+  },
+  "schedule": "m2-balance.json"
+}

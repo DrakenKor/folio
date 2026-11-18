@@ -1,0 +1,68 @@
+{
+  "format": "folio.arpg.m2-stress-fixture",
+  "version": 1,
+  "scenario": "m2-stress",
+  "seed": 7,
+  "actors": 200,
+  "liveProjectiles": 64,
+  "warmupTicks": 120,
+  "samples": 600,
+  "characterFixture": "m2-weight-melee.json",
+  "foldsPerAction": 2,
+  "ailments": [
+    "burden",
+    "emberprint",
+    "draftbind"
+  ],
+  "sustainPopulation": true,
+  "sustainProjectiles": true,
+  "record": [
+    "contacts",
+    "damageEvaluations",
+    "actorPeak",
+    "projectilePeak",
+    "coldCacheRebuildMs"
+  ],
+  "timingExcludes": [
+    "hashing",
+    "artifactIO"
+  ],
+  "budgetsMs": {
+    "median": 2,
+    "p95": 4
+  },
+  "folds": {
+    "span-cut": [
+      "short-pleat",
+      "kiln-pleat"
+    ],
+    "fold-dart": [
+      "short-pleat",
+      "kiln-pleat"
+    ],
+    "rill-fan": [
+      "long-pleat",
+      "broad-pleat"
+    ],
+    "plinth-blow": [
+      "short-pleat",
+      "kiln-pleat"
+    ],
+    "hearth-shard": [
+      "short-pleat",
+      "draft-pleat"
+    ],
+    "skim-needle": [
+      "long-pleat",
+      "fine-pleat"
+    ],
+    "sill-rake": [
+      "short-pleat",
+      "vane-pleat"
+    ],
+    "cairn-wake": [
+      "short-pleat",
+      "draft-pleat"
+    ]
+  }
+}
