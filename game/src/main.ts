@@ -5,7 +5,7 @@ import { SaveController } from './platform/saves'
 import { createHUD } from './ui/hud'
 import { Clock } from './platform/clock'
 import { Input } from './platform/input'
-import { initialWorld, storeSession } from './platform/session'
+import { initialWorld, recoverSession, storeSession } from './platform/session'
 import { BasicView } from './render/basic/view'
 import { MeadowView } from './render/meadow-view'
 import { createAPI } from './debug/api'
@@ -14,19 +14,45 @@ import { graphicsStopped, toast } from './debug/overlay'
 const canvas = document.getElementById('stage') as HTMLCanvasElement
 const url = new URL(location.href)
 const initial = await initialWorld(url)
-const renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: url.searchParams.get('backend') === 'webgl' })
-await renderer.init()
-document.body.dataset.backend = 'isWebGPUBackend' in renderer.backend ? 'webgpu' : 'webgl2'
-const view = url.searchParams.get('view') === 'basic' ? new BasicView(renderer) : await MeadowView.create(renderer, initial.world)
-const input = new Input(canvas, () => view.camera.basis(), (x, y) => view instanceof MeadowView ? view.groundPoint(x, y) : view.camera.groundPoint(x, y))
-const clock = new Clock(initial.world, world => {
+let playerSession = initial.playerEntry
+let phase = initial.world.encounter?.phase
+let releaseInput = () => {}
+const clock: Clock = new Clock(initial.world, world => {
   if (view instanceof MeadowView) view.advance(world)
   return input.command(world)
 }, world => {
   input.afterStep(world)
   if (view instanceof MeadowView) view.advance(world)
+  if (phase !== world.encounter?.phase) {
+    phase = world.encounter?.phase
+    input.release()
+    if (playerSession) void saves.flush()
+  }
 })
-if (initial.paused) clock.pause()
+const replaceWorld = (world: typeof initial.world) => {
+  releaseInput()
+  phase = world.encounter?.phase
+  clock.replace(world)
+}
+const saves = new SaveController({
+  build: __BUILD_ID__, content: initial.playerEntry ? initial.world.content : m2Content(), getWorld: () => clock.world,
+  isPlayerSession: () => playerSession,
+  replaceWorld: world => { playerSession = initial.playerEntry; replaceWorld(world) }, exportCharacter, loadCharacter
+})
+if (initial.playerEntry) await saves.load()
+const recovered = recoverSession(initial.recovery, initial.playerEntry, saves.status())
+if (recovered) {
+  playerSession = recovered.playerSession
+  replaceWorld(recovered.world)
+}
+if (initial.paused || recovered?.paused) clock.pause()
+
+const renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: url.searchParams.get('backend') === 'webgl' })
+await renderer.init()
+document.body.dataset.backend = 'isWebGPUBackend' in renderer.backend ? 'webgpu' : 'webgl2'
+const view = url.searchParams.get('view') === 'basic' ? new BasicView(renderer) : await MeadowView.create(renderer, clock.world)
+const input = new Input(canvas, () => view.camera.basis(), (x, y) => view instanceof MeadowView ? view.groundPoint(x, y) : view.camera.groundPoint(x, y))
+releaseInput = () => input.release()
 if (url.searchParams.has('bookmark')) view.camera.bookmark(url.searchParams.get('bookmark')!)
 
 let lost = false
@@ -52,7 +78,8 @@ renderer.onDeviceLost = () => {
   clock.suspend('graphics', true)
   input.release()
   cancelAnimationFrame(animation)
-  storeSession(clock.world, clock.userPaused, true)
+  const { code, generation } = saves.status()
+  storeSession(url, clock.world, clock.userPaused, playerSession, true, { code, generation })
   graphicsStopped()
 }
 
@@ -70,11 +97,10 @@ function loseDevice(): void {
   }
 }
 
-const saves = new SaveController({
-  build: __BUILD_ID__, content: initial.world.content.m2 ? initial.world.content : m2Content(), getWorld: () => clock.world,
-  replaceWorld: world => { input.release(); clock.replace(world) }, exportCharacter, loadCharacter
+const api = createAPI(clock, input, view.camera, ready, loseDevice, saves, world => {
+  playerSession = false
+  phase = world.encounter?.phase
 })
-const api = createAPI(clock, input, view.camera, ready, loseDevice, saves)
 Object.assign(api.debug, { view })
 Object.assign(api, {
   async sheet(entity: string, clip: string): Promise<string> {
@@ -114,13 +140,9 @@ function draw(now: number): void {
 }
 animation = requestAnimationFrame(draw)
 
-window.addEventListener('pagehide', () => {
-  if (import.meta.env.DEV) storeSession(clock.world, clock.userPaused)
-}, options)
-
 if (import.meta.hot) import.meta.hot.dispose(() => {
   cancelAnimationFrame(animation)
-  storeSession(clock.world, clock.userPaused)
+  if (!initial.playerEntry) storeSession(url, clock.world, clock.userPaused, false)
   listeners.abort()
   input.dispose()
   hud.dispose()

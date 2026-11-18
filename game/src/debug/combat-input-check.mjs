@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 // Isolate the M1 player through restore; all tick intent uses DOM input or commands.
-const root = fileURLToPath(new URL('../../../..', import.meta.url))
+const root = fileURLToPath(new URL('../../..', import.meta.url))
 const tool = fileURLToPath(new URL('../../tools/play.mjs', import.meta.url))
 const origin = process.env.PLAY_ORIGIN ?? 'http://127.0.0.1:5196'
 const env = { ...process.env, PLAY_CDP_PORT: process.env.PLAY_CDP_PORT ?? '9576', PLAY_HEADLESS: process.env.PLAY_HEADLESS ?? '1' }
@@ -157,6 +157,7 @@ try {
       assert.equal(evaluate('!document.querySelector("#encounter-hud .hud-outcome").hidden'), false)
     })
     check(backend, 'all six slots start their configured M2 actions through DOM input', () => {
+      cli('boot', `${origin}/play/?view=basic&backend=${backend}&paused=1`)
       evaluate('__game.scenario("m2-clearing", 7)')
       const fixture = JSON.parse(evaluate('__game.snapshot()'))
       fixture.world.encounter = null
@@ -182,7 +183,10 @@ try {
       assert(Math.hypot(command.move.x, command.move.z) > 0, 'W must remain movement')
       assert.equal(actors.find(actor => actor.id === playerId).action, null)
     })
-    check(backend, 'console has no errors or warnings', () => run([{ op: 'console', ms: 100, expectEmpty: true }]))
+    check(backend, 'console has no errors or warnings', () => {
+      const console = run([{ op: 'console', ms: 100 }]).find(row => row.command === 'console')
+      assert.deepEqual(console.entries.filter(entry => ['warning', 'warn', 'error'].includes(entry.type)), [])
+    })
   }
 } finally { cli('stop') }
 const failed = results.filter(result => result.result === 'FAIL')

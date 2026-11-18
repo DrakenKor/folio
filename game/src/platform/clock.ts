@@ -43,18 +43,22 @@ export class Clock {
   }
 
   /** Manual steps also record commands, but do not draw or consume wall time. */
-  advance(ticks: number, command?: Command): void {
+  advance(ticks: number, command?: Command): SimEvent[] {
     if (!Number.isSafeInteger(ticks) || ticks < 0) throw new RangeError('Ticks must be a nonnegative safe integer')
+    const events: SimEvent[] = []
     for (let i = 0; i < ticks; i++) {
       this.capturePoses()
       const input = command ?? this.readCommand(this.world)
       const start = performance.now()
-      this.events.push(...step(this.world, input))
+      const tickEvents = step(this.world, input)
+      events.push(...tickEvents)
+      this.events.push(...tickEvents)
       this.recorder.record(input)
       this.pendingTickTimes.push(performance.now() - start)
       this.afterStep(this.world)
     }
     if (this.paused) this.capturePoses()
+    return events
   }
 
   frame(now: number): Frame {

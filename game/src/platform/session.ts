@@ -1,34 +1,59 @@
 import { restore, serialize } from '../sim/core/index'
-import type { World } from '../sim/core/index'
+import type { SaveStatus, World } from '../sim/core/index'
 import { buildScenario } from '../sim/scenarios'
 import { decode } from './encoding'
 
 const RELOAD_KEY = 'folio.arpg.dev.snapshot'
 const GRAPHICS_KEY = 'folio.arpg.graphics.snapshot'
-interface Saved { snapshot: string; paused: boolean }
-
-export function storeSession(world: World, paused: boolean, graphics = false): void {
-  try {
-    sessionStorage.setItem(graphics ? GRAPHICS_KEY : RELOAD_KEY, JSON.stringify({ snapshot: serialize(world), paused }))
-  } catch (error) { console.warn('Could not keep the reload snapshot', error) }
+type SaveIdentity = Pick<SaveStatus, 'code' | 'generation'>
+interface Saved {
+  entry: string
+  snapshot: string
+  paused: boolean
+  playerSession: boolean
+  save?: SaveIdentity
 }
 
-/** Explicit snapshot links take precedence over development reload state. */
-export async function initialWorld(url: URL): Promise<{ world: World; paused: boolean }> {
+function entryKey(url: URL): string {
+  const entry = new URL(url)
+  entry.hash = ''
+  entry.searchParams.delete('fresh')
+  return entry.href
+}
+
+export function storeSession(url: URL, world: World, paused: boolean, playerSession: boolean, graphics = false, save?: SaveIdentity): void {
+  const saved: Saved = { entry: entryKey(url), snapshot: serialize(world), paused, playerSession, save }
+  try { sessionStorage.setItem(graphics ? GRAPHICS_KEY : RELOAD_KEY, JSON.stringify(saved)) }
+  catch { /* Recovery storage can be unavailable. */ }
+}
+
+function takeSession(key: string, url: URL): Saved | undefined {
+  try {
+    const text = sessionStorage.getItem(key)
+    sessionStorage.removeItem(key)
+    if (text) {
+      const saved: Saved = JSON.parse(text)
+      if (saved.entry === entryKey(url)) return saved
+    }
+  } catch { /* Ignore an unavailable or unreadable recovery record. */ }
+}
+
+export async function initialWorld(url: URL) {
   const fragment = new URLSearchParams(url.hash.slice(1)).get('snap')
-  if (fragment) return { world: restore(await decode(fragment)), paused: url.searchParams.get('paused') === '1' }
-  const keys = [GRAPHICS_KEY]
-  if (import.meta.env.DEV && url.searchParams.get('fresh') !== '1') keys.push(RELOAD_KEY)
-  for (const key of keys) {
-    try {
-      const text = sessionStorage.getItem(key)
-      sessionStorage.removeItem(key)
-      if (text) {
-        const saved: Saved = JSON.parse(text)
-        return { world: restore(saved.snapshot), paused: saved.paused || url.searchParams.get('paused') === '1' }
-      }
-    } catch (error) { console.warn('Could not restore the reload snapshot', error) }
-  }
-  const seed = Number(url.searchParams.get('seed') ?? 1)
-  return { world: buildScenario(url.searchParams.get('scenario') ?? 'm1-arena', seed), paused: url.searchParams.get('paused') === '1' }
+  const scenario = url.searchParams.get('scenario')
+  const graphics = takeSession(GRAPHICS_KEY, url)
+  const reload = import.meta.env.DEV ? takeSession(RELOAD_KEY, url) : undefined
+  const paused = url.searchParams.get('paused') === '1'
+  const playerEntry = !fragment && scenario === null
+  const world = fragment ? restore(await decode(fragment)) : buildScenario(scenario ?? 'm2-clearing', Number(url.searchParams.get('seed') ?? 1))
+  return { world, paused, playerEntry, recovery: fragment ? undefined : graphics ?? (!playerEntry && url.searchParams.get('fresh') !== '1' ? reload : undefined) }
+}
+
+/** Only reinstall player-entry recovery after the current document checks the save under its writer lock. */
+export function recoverSession(saved: Saved | undefined, playerEntry: boolean, status: SaveStatus) {
+  if (!saved) return
+  if (playerEntry && (!saved.save || saved.save.generation !== status.generation ||
+    !(saved.save.code === 'ready' && status.writable || saved.save.code === 'read-only' && status.code === 'read-only'))) return
+  try { return { world: restore(saved.snapshot), paused: saved.paused, playerSession: saved.playerSession } }
+  catch { /* The snapshot may use an incompatible schema after a reload. */ }
 }
