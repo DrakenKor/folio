@@ -1,9 +1,10 @@
 import { m1Content, WINDSTEP_CLEARING } from '../content/m1'
+import { m2Content } from '../content/m2'
 import { fmath } from './core/fmath'
 import { rngFloat } from './core/rng'
 import { createWorld, spawnEntity } from './core/store'
 import { M2_SCENARIO_NAMES, SCENARIO_NAMES, SIM_BUILD } from './core/types'
-import type { Entity, SimEvent, Vec2, World } from './core/types'
+import type { CharacterState, Entity, Loadout, RolledItem, SimEvent, Vec2, World } from './core/types'
 import { UnsupportedError } from './core/unsupported'
 
 export { SCENARIO_NAMES, SIM_BUILD } from './core/types'
@@ -64,8 +65,36 @@ function buildM1(world: World, name: string): World {
   return world
 }
 
+function buildM2Clearing(seed: number): World {
+  const world = createWorld(seed, SIM_BUILD, m2Content())
+  const content = world.content.m2!
+  const profile = content.graphProfiles[0]!
+  const starterBases = content.itemBases.filter(base => base.starter)
+  const items: RolledItem[] = starterBases.map(base => ({ id: world.nextItemId++, baseId: base.id, role: base.role, affixes: [] }))
+  const equipment = Object.fromEntries(items.map(item => [item.role, item.id])) as CharacterState['equipment']
+  const loadout: Loadout = ['span-cut', 'fold-dart', 'rill-fan', 'plinth-blow', 'hearth-shard', 'skim-needle']
+  const maxHealth = starterBases.flatMap(base => base.modifiers).reduce<number>((health, modifier) =>
+    health + (modifier.kind === 'health' ? modifier.value : 0), WINDSTEP_CLEARING.player.maxHealth)
+
+  world.scenario = 'm2-clearing'
+  world.arena = structuredClone(WINDSTEP_CLEARING.arena)
+  world.encounter = { id: 'm2-clearing', phase: 'rest', attempt: 0, rewardedIds: [] }
+  // Initialise the saved loot stream using the same first draw as the M2 fixtures.
+  rngFloat(world, 'loot')
+  spawnEntity(world, {
+    kind: 'player', ...WINDSTEP_CLEARING.player, health: maxHealth, maxHealth,
+    skills: { primary: loadout[0], secondary: loadout[1] },
+    character: {
+      rank: 1, xp: 0, points: 4, graph: { profileId: profile.id, seed, version: profile.version, allocations: [], activeShapes: [] },
+      equipment, items, inventory: [], stash: [], loadout, folds: {}
+    }
+  })
+  return world
+}
+
 /** Build a fresh deterministic fixture without ambient state or presentation data. */
 export function buildScenario(name: string, seed: number): World {
+  if (name === 'm2-clearing') return buildM2Clearing(seed)
   if (M2_SCENARIO_NAMES.some(scenario => scenario === name)) throw new UnsupportedError('M2 scenarios (T2.3)')
   const scenario = SCENARIO_NAMES.find(candidate => candidate === name)
   if (!scenario) throw new RangeError(`Unknown scenario: ${name}`)
