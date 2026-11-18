@@ -5,7 +5,6 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { gzipSync } from 'node:zlib'
-import ts from 'typescript'
 
 const MB = 1024 * 1024
 const CAPS = {
@@ -43,31 +42,27 @@ const jsGzip = sum(
 )
 const siteRaw = existsSync('out') ? sum(files('out').map(f => statSync(f).size)) : null
 
-// Vite inlines __BUILD_ID__ in literal `build` properties. Parse emitted JS,
-// including split chunks, rather than trusting filenames or the current HEAD.
-const builds = new Set()
-for (const file of gameFiles.filter(f => ['.js', '.mjs'].includes(extname(f)))) {
-  const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
-  const visit = node => {
-    if (ts.isPropertyAssignment(node) && node.name.getText(source).replace(/^['"]|['"]$/g, '') === 'build' &&
-        (ts.isStringLiteral(node.initializer) || ts.isNoSubstitutionTemplateLiteral(node.initializer))) {
-      builds.add(node.initializer.text)
-    }
-    ts.forEachChild(node, visit)
+function readJson(file, retry) {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'))
+  } catch (error) {
+    throw new Error(`${file} is ${error.code === 'ENOENT' ? 'missing' : 'invalid'}; ${retry}`, { cause: error })
   }
-  visit(source)
 }
 
+const hasBuild = value => typeof value?.build === 'string' && value.build.length > 0 && !/\s/.test(value.build)
 let firstLoad
 try {
+  const buildFile = join(gameDir, 'build.json')
+  const rebuild = 'run game:build'
+  const metadata = readJson(buildFile, rebuild)
+  if (!hasBuild(metadata) || Object.keys(metadata).length !== 1) throw new Error(`${buildFile} has an invalid build id or shape; ${rebuild}`)
   const reportFile = 'game/.play-out/net.json'
-  if (!existsSync(reportFile)) throw new Error(`${reportFile} is missing; run game:play -- boot, then game:play -- net`)
-  const network = JSON.parse(readFileSync(reportFile, 'utf8'))
-  if (typeof network.build !== 'string' || !network.build) throw new Error(`${reportFile} has no valid build id; boot and measure again`)
-  if (builds.size !== 1 || ![...builds][0]) throw new Error('Cannot read an unambiguous build id from public/play/; run game:build')
-  const [build] = builds
-  if (network.build !== build) throw new Error(`Network build mismatch: report ${network.build}, public/play/ ${build}; boot and measure again`)
-  if (!Number.isSafeInteger(network.bytes) || network.bytes <= 0) throw new Error(`${reportFile} has invalid transfer bytes; boot and measure again`)
+  const remeasure = 'run game:play -- boot, then game:play -- net'
+  const network = readJson(reportFile, remeasure)
+  if (!hasBuild(network)) throw new Error(`${reportFile} has an invalid build id; ${remeasure}`)
+  if (!Number.isSafeInteger(network.bytes) || network.bytes <= 0) throw new Error(`${reportFile} has invalid transfer bytes; ${remeasure}`)
+  if (network.build !== metadata.build) throw new Error(`Network build mismatch: report ${network.build}, ${buildFile} ${metadata.build}; ${remeasure}`)
   firstLoad = network.bytes
 } catch (error) {
   console.error(`game:budget: ${error.message}`)

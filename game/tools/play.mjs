@@ -206,6 +206,19 @@ async function cmd(value) {
   report('cmd', { queued: true })
 }
 
+async function currentBuild() {
+  const { build, metadata } = await evaluate(`(async () => {
+    const response = await fetch('/play/build.json', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error('/play/build.json returned HTTP ' + response.status);
+    return { build: __game.build, metadata: await response.json() };
+  })()`)
+  assert(typeof build === 'string' && build.length > 0 && !/\s/.test(build), '__game.build has no valid build id')
+  assert(metadata && typeof metadata.build === 'string' && metadata.build.length > 0 &&
+    !/\s/.test(metadata.build) && Object.keys(metadata).length === 1, '/play/build.json has invalid build metadata')
+  assert.equal(metadata.build, build, 'Build mismatch between /play/build.json and __game.build')
+  return build
+}
+
 async function boot(url, scenario = options.scenario, snap = options.snap) {
   assert(url, 'Usage: boot <url> [--scenario name] [--snap file]')
   await launch()
@@ -236,11 +249,12 @@ async function boot(url, scenario = options.scenario, snap = options.snap) {
   await until(() => navigation.loaderId ? mainLoader === navigation.loaderId : mainLoader && mainLoader !== previousLoader, 'new game document')
   await until(() => evaluate('!!window.__game').catch(() => false), 'window.__game')
   await evaluate('__game.ready.then(() => true)')
-  const build = await evaluate('__game.build')
-  assert(typeof build === 'string' && build, 'Game has no build id')
-  const network = { build, readyMs: performance.now() - navigationStart,
-    bytes: [...requests.values()].reduce((total, request) => total + request.bytes, 0), requests: [...requests.values()] }
+  // Capture transfer at ready, before fetching the build stamp for verification.
+  const readyMs = performance.now() - navigationStart
+  const readyRequests = [...requests.values()].map(request => ({ ...request }))
   await page.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: icon.identifier })
+  const build = await currentBuild()
+  const network = { build, readyMs, bytes: readyRequests.reduce((total, request) => total + request.bytes, 0), requests: readyRequests }
   session = { ...session, url: target.href, network, console: consoleEntries }
   save(sessionFile, session)
   report('boot', { url: target.href, readyMs: network.readyMs, ...await observe() })
@@ -347,8 +361,9 @@ async function perf(seconds = 2) {
   report('perf', summary)
 }
 
-function net() {
+async function net() {
   assert(session.network?.bytes > 0, 'No ready-time network measurement; boot first')
+  assert.equal(session.network.build, await currentBuild(), 'Stale ready-time network measurement; boot again')
   const result = { url: session.url, ...session.network }
   save(join(out, 'net.json'), result)
   report('net', { build: result.build, bytes: result.bytes, requests: result.requests.length, file: join(out, 'net.json') })
@@ -572,7 +587,7 @@ async function run(file) {
         case 'blur': await blur(step.ms); break
         case 'console': await consoleSample(step.ms ?? 0, step.expectEmpty ?? false); break
         case 'perf': await perf(step.seconds); break
-        case 'net': net(); break
+        case 'net': await net(); break
         default: throw new Error(`Unknown step: ${step.op}`)
       }
     } catch (error) { throw new Error(`Step ${index + 1} (${step.op}): ${error.message}`, { cause: error }) }
@@ -610,7 +625,7 @@ try {
     if (command === 'shot') await shot(...positional)
     if (command === 'console') await consoleSample(positional[0] ?? 0)
     if (command === 'perf') await perf(positional[0] ?? 2)
-    if (command === 'net') net()
+    if (command === 'net') await net()
     if (command === 'cmd') await cmd(positional[0])
     if (command === 'observe') report('observe', await observe())
   } else throw new Error('Usage: play.mjs boot|run|cmd <json>|observe|shot|sheet|console|perf|net|stop [args] [--out-dir directory]')
