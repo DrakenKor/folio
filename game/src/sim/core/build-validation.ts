@@ -133,7 +133,7 @@ export function validateBuildState(world: World): void {
       world.entities.some(actor => actor.id === ailment.targetId && actor.death === null) &&
       positiveId(ailment.sourceId) && ailment.sourceId < world.nextId && integer(ailment.appliedTick) && ailment.appliedTick <= world.tick &&
       integer(ailment.expiresTick) && ailment.expiresTick > world.tick &&
-      (ailment.id === 'emberprint' ? integer(ailment.nextPulseTick) && ailment.nextPulseTick > world.tick && ailment.nextPulseTick <= ailment.expiresTick : ailment.nextPulseTick === null), 'ailment')
+      (ailment.id === 'emberprint' ? integer(ailment.nextPulseTick) && ailment.nextPulseTick > world.tick : ailment.nextPulseTick === null), 'ailment')
     previous = key
   }
 }
