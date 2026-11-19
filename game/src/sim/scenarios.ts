@@ -8,6 +8,7 @@ import { createWorld, spawnEntity } from './core/store'
 import { M2_SCENARIO_NAMES, SCENARIO_NAMES } from './core/types'
 import type { CharacterState, Entity, Loadout, M3World, RolledItem, SimEvent, Vec2, World } from './core/types'
 import { UnsupportedError } from './core/unsupported'
+import { buildM3Clearing } from './m3-clearing'
 
 export { SCENARIO_NAMES, SIM_BUILD } from './core/types'
 
@@ -95,7 +96,7 @@ function buildM2Clearing(seed: number): World {
 }
 
 export type M3ScenarioRegistry = Readonly<Partial<Record<'m3a-clearing' | 'm3-act1', (seed: number) => M3World>>>
-export const m3Scenarios: M3ScenarioRegistry = {}
+export const m3Scenarios: M3ScenarioRegistry = { 'm3a-clearing': buildM3Clearing }
 
 /** Build a fresh deterministic fixture without ambient state or presentation data. */
 export function buildScenario(name: string, seed: number, registry = m3Scenarios): World {
