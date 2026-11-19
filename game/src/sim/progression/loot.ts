@@ -15,7 +15,8 @@ function rollDrop(world: World, rank: number, pos: Vec2) {
   const table = content.lootTables.find(t => t.id === 'creaseback') ?? content.lootTables[0]
   if (world.groundDrops.length >= 60 || !table || rngFloat(world, 'loot') >= table.dropChance) return
   const { role } = weighted(world, table.roles)
-  const base = content.itemBases.find(b => b.role === role && b.starter)!
+  const weapons = world.content.m3 && role === 'weapon' ? content.itemBases.filter(b => b.role === 'weapon') : null
+  const base = weapons ? weapons[rngInt(world, 'loot', weapons.length)]! : content.itemBases.find(b => b.role === role && b.starter)!
   const item: RolledItem = { id: world.nextItemId++, role, baseId: base.id, affixes: [] }
   const rarity = weighted(world, table.rarities)
   const tiers = table.tiers.filter(t => t.unlockRank <= rank)

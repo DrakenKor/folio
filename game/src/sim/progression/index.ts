@@ -4,7 +4,7 @@ import { spawnEntity } from '../core/store'
 import type { BuildPreview, Operation, OperationReason, OperationResult, QueryResult, World } from '../core/types'
 import { beginEncounter, healAtRest, returnToShelter } from './encounter'
 import { editGraph } from './graph'
-import { changeEquipment, moveItem, pickup } from './items'
+import { changeEquipment, moveItem, pickup, refitWeapon } from './items'
 
 export { processProgression } from './encounter'
 export { graphTopology, type GraphTopology } from './graph'
@@ -28,6 +28,9 @@ function apply(world: World, operation: Operation): OperationReason | null {
       reason = editGraph(character, profile, operation)
       break
     }
+    case 'refitWeapon':
+      reason = refitWeapon(world, character, operation.familyId)
+      break
     case 'equip': case 'unequip':
       reason = changeEquipment(world, player, operation)
       break
