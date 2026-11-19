@@ -175,7 +175,9 @@ export class Input {
   /** Restore a recorded hold until the next DOM edge or suspension. */
   reset(world?: World): void {
     const player = world?.entities.find(entity => entity.id === world.playerId)
-    this.held.release((player?.mechanics?.held?.button ?? 0) & (player?.previousButtons ?? 0))
+    const mechanics = player?.mechanics
+    const held = (mechanics?.held?.button ?? 0) | (mechanics?.rearmButtons ?? 0)
+    this.held.release(held & (player?.previousButtons ?? 0))
     this.cancelHeld = false
     this.pointer = null
     this.queued = null

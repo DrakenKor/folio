@@ -99,7 +99,7 @@ renderer.onDeviceLost = async () => {
   cancelAnimationFrame(animation)
   await saves.suspendForRecovery()
   const { code, generation } = saves.status()
-  storeSession(url, clock.world, clock.userPaused, playerSession, true, { code, generation })
+  storeSession(url, clock.world, clock.userPaused, playerSession, { code, generation, playerEntry: initial.playerEntry })
   graphicsStopped()
 }
 
