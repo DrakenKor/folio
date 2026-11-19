@@ -1,12 +1,14 @@
-import type { CharacterData, CharacterLoad, CombatContent, LegacySaveEnvelope, SaveEnvelope, SaveResult, SaveStatus, SaveStatusCode, World } from '../../sim/core/types'
+import type { CharacterData, CharacterLoad, CombatContent, SaveResult, SaveStatus, SaveStatusCode, World } from '../../sim/core/types'
+import { M3_SAVE_SCHEMA, SAVE_SCHEMA } from '../../sim/core/types'
 import { UnsupportedError } from '../../sim/core/unsupported'
+import { refundRemovedContent } from '../../sim/progression/refunds'
 import { buildScenario } from '../../sim/scenarios'
 import { characterData, checkSaveSize, encodeSave, parseEnvelope, SaveError } from './envelope'
-import { refundRemovedContent } from './refunds'
+import type { PlayerEnvelope } from './envelope'
 import { Writer } from './writer'
 
-export { SAVE_FORMAT, SAVE_MAX_BYTES, SAVE_SCHEMA } from '../../sim/core/types'
-export type { LegacySaveEnvelope, SaveEnvelope, SaveResult, SaveStatus, SaveStatusCode } from '../../sim/core/types'
+export { M3_SAVE_SCHEMA, SAVE_FORMAT, SAVE_MAX_BYTES, SAVE_SCHEMA } from '../../sim/core/types'
+export type { LegacySaveEnvelope, M3SaveEnvelope, SaveEnvelope, SaveResult, SaveStatus, SaveStatusCode } from '../../sim/core/types'
 export { COMMIT_LOCK, WRITER_LOCK } from './writer'
 export const SAVE_KEY = 'folio.arpg.save'
 
@@ -78,18 +80,26 @@ export class SaveController {
   }
 
   private encode(world: World, generation: number): string {
-    return encodeSave(this.options.exportCharacter(world), this.options.build, generation)
+    return encodeSave(this.options.exportCharacter(world), this.options.build, generation, this.schema)
   }
 
-  private decode(save: SaveEnvelope | LegacySaveEnvelope): CharacterLoad {
-    const data = characterData(save, this.options.content)
-    const refunds = this.options.content.m2 ? refundRemovedContent(data, this.options.content.m2) : []
-    const loaded = this.options.loadCharacter(data, this.options.content)
-    return { world: loaded.world, refunds: [...refunds, ...loaded.refunds] }
+  private get schema(): number { return this.options.content.m3 ? M3_SAVE_SCHEMA : SAVE_SCHEMA }
+
+  private decode(save: PlayerEnvelope): CharacterLoad {
+    const { content, loadCharacter } = this.options
+    const data = characterData(save, content)
+    // Legacy fixture loaders accept a projection already repaired to their own tables.
+    if (content.m2 && data.contentVersion !== content.m2.version) {
+      const refunds = refundRemovedContent(data, content.m2)
+      const loaded = loadCharacter(data, content)
+      return { world: loaded.world, refunds: [...refunds, ...loaded.refunds] }
+    }
+    return loadCharacter(data, content)
   }
 
   private fresh(): CharacterLoad {
-    return { world: this.options.createFreshWorld?.() ?? buildScenario('m2-clearing', this.options.getWorld().seed), refunds: [] }
+    const scenario = this.options.content.m3 ? 'm3a-clearing' : 'm2-clearing'
+    return { world: this.options.createFreshWorld?.() ?? buildScenario(scenario, this.options.getWorld().seed), refunds: [] }
   }
 
   private setCode(code: SaveStatusCode): void {
@@ -127,18 +137,18 @@ export class SaveController {
     const text = this.read()
     // Exact equality also protects unparseable bytes during explicit import/reset.
     if (text !== this.observed || (text !== null && !this.unreadableEnvelope &&
-        parseEnvelope(text).generation !== this.state.generation)) {
+        parseEnvelope(text, this.schema).generation !== this.state.generation)) {
       this.writer?.revoke()
       throw new SaveError('generation-mismatch')
     }
   }
 
-  private observe(text: string | null): SaveEnvelope | LegacySaveEnvelope | null {
+  private observe(text: string | null): PlayerEnvelope | null {
     this.observed = text
     this.state.text = text
     this.state.generation = 0
     this.unreadableEnvelope = text !== null
-    const save = text === null ? null : parseEnvelope(text)
+    const save = text === null ? null : parseEnvelope(text, this.schema)
     if (save) this.state.generation = save.generation
     this.unreadableEnvelope = false
     return save
@@ -153,7 +163,7 @@ export class SaveController {
     const save = this.observe(this.read())
     if (save) {
       const loaded = this.decode(save)
-      if (code === 'ready' && this.options.isPlayerSession?.() !== false && (save.schema === 0 || loaded.refunds.length > 0)) {
+      if (code === 'ready' && this.options.isPlayerSession?.() !== false && (save.schema !== this.schema || loaded.refunds.length > 0)) {
         return this.write(loaded)
       }
       this.install(loaded)
@@ -244,7 +254,7 @@ export class SaveController {
     })
   }
 
-  import(text: string): Promise<SaveResult> { return this.replace(() => this.decode(parseEnvelope(text))) }
+  import(text: string): Promise<SaveResult> { return this.replace(() => this.decode(parseEnvelope(text, this.schema))) }
   reset(): Promise<SaveResult> { return this.replace(() => this.fresh()) }
 
   takeOver(): Promise<SaveResult> {
