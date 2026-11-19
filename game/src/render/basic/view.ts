@@ -2,12 +2,14 @@ import { BoxGeometry, CapsuleGeometry, Color, DirectionalLight, GridHelper, Grou
   HemisphereLight, Mesh, MeshStandardNodeMaterial, PlaneGeometry, Scene } from 'three/webgpu'
 import type { WebGPURenderer } from 'three/webgpu'
 import type { Frame, RenderView } from '../view'
+import { GroundDropMarkers } from '../ground-drops'
 import { CameraRig } from './camera'
 
 /** Replaceable ground grid and capsule view; never mutates the simulation. */
 export class BasicView implements RenderView {
   readonly camera: CameraRig
   private scene = new Scene()
+  private readonly drops = new GroundDropMarkers()
   private entities = new Map<number, Group>()
   private capsule = new CapsuleGeometry(0.4, 0.8, 4, 8)
   private tick = new BoxGeometry(0.65, 0.07, 0.07)
@@ -28,10 +30,11 @@ export class BasicView implements RenderView {
     const ground = new Mesh(this.groundGeometry, this.groundMaterial)
     ground.rotation.x = -Math.PI / 2
     this.grid.position.y = 0.01
-    this.scene.add(ground, this.grid)
+    this.scene.add(ground, this.grid, this.drops.object)
   }
 
   sync(frame: Frame): void {
+    this.drops.sync(frame.world.groundDrops, () => 0)
     const present = new Set<number>()
     for (const entity of frame.world.entities) {
       present.add(entity.id)
@@ -74,6 +77,7 @@ export class BasicView implements RenderView {
     this.capsule.dispose(); this.tick.dispose(); this.groundGeometry.dispose()
     this.playerMaterial.dispose(); this.dummyMaterial.dispose(); this.facingMaterial.dispose(); this.groundMaterial.dispose()
     this.grid.dispose()
+    this.drops.dispose()
     this.scene.clear()
     this.entities.clear()
   }

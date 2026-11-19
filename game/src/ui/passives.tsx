@@ -117,14 +117,15 @@ export function Passives({ world, character, content, api, report }: FieldProps)
           <b>{hit.before.damage.calculated} → {hit.after.damage.calculated}</b></p></>}
         {result.delta.maxHealth !== 0 && <p>Maximum health <b>{result.before.maxHealth} → {result.after.maxHealth}</b></p>}
       </div>}
-      {refund && <div className="notice"><strong>Refund {result?.delta.points} points</strong><p>Connected removal · {[...removed].join(' / ')}</p>
+      {refund && <div className="notice"><strong>Refund preview</strong><p>Connected removal · {[...removed].join(' / ')}</p>
         {deactivated.length > 0 && <p>Deactivate {deactivated.map(words).join(', ')}</p>}</div>}
       {selection !== root && <div className="operations">{edit.type === 'refund' && !refund ?
-        <button className="primary" onClick={() => setRefund(true)}>Refund</button> : <button className="primary" disabled={!result?.result.accepted} onClick={() => {
+        <button className="primary" onClick={() => { setRefund(true); report('') }}>Refund</button> : <button className="primary" disabled={!result?.result.accepted} onClick={() => {
           const r = edit.type === 'activateShape' ? api.character.activateShape(edit.shapeId, edit.active) :
             edit.type === 'refund' ? api.character.refund(selection) : api.character.allocate(selection)
           setRefund(false); report(r.accepted ? 'Lattice updated' : words(r.reason))
-        }}>{edit.type === 'activateShape' ? (edit.active ? 'Activate ' : 'Deactivate ') + name(edit.shapeId) : 'Confirm'}</button>}{result && !result.result.accepted && <p>{words(result.result.reason)}</p>}</div>}
+        }}>{edit.type === 'activateShape' ? (edit.active ? 'Activate ' : 'Deactivate ') + name(edit.shapeId) :
+          refund ? `Refund ${result?.delta.points} ${result?.delta.points === 1 ? 'point' : 'points'}` : 'Confirm'}</button>}{result && !result.result.accepted && <p>{words(result.result.reason)}</p>}</div>}
       <hr/><label className="stack">Inspect a perimeter<select value={shape?.id ?? ''} onChange={e => pick(e.target.value, true)}>
         <option disabled value="">Choose a shape</option>{shapes.map(s => <option key={s.id} value={s.id}>{words(s.id)}{complete(s) ? ' · complete' : ''}</option>)}</select></label>
     </aside></div>

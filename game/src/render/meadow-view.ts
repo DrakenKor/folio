@@ -1,14 +1,15 @@
 import { Mesh, NeutralToneMapping, PCFShadowMap, type Group, type WebGPURenderer } from 'three/webgpu'
 import { bookmark, type BookmarkName } from '../look/bookmarks'
 import { createEnemy, poseEnemy } from './combat/creaseback'
-import { TICK_DT, type Entity, type World } from '../sim/core/types'
+import { TICK_DT, type World } from '../sim/core/types'
 import { CombatFeedback } from './combat/feedback'
 import { CameraRig } from './basic/camera'
 import { CharacterView, loadCharacter, type CharacterAsset } from './characters/character'
-import { actorPoseState } from './characters/pose'
+import { actorPoseState, sampleActorPose } from './characters/pose'
 import { AimIndicator } from './characters/aim'
 import { createMeadow } from './meadow'
 import { createPost } from './post/pipeline'
+import { GroundDropMarkers } from './ground-drops'
 import type { Frame, RenderView } from './view'
 
 /** Tick-driven meadow presentation; simulation coordinates start at the meadow's player clearing. */
@@ -19,8 +20,9 @@ export class MeadowView implements RenderView {
   private knight: CharacterView
   private dummies = new Map<number, Group>()
   private readonly aim = new AimIndicator()
-  private currentActor: Entity | undefined
-  private previousActor: Entity | undefined
+  private readonly drops = new GroundDropMarkers()
+  private currentActor: ReturnType<typeof sampleActorPose> | undefined
+  private previousActor: ReturnType<typeof sampleActorPose> | undefined
   private world: Readonly<World> | null = null
   private feedback: CombatFeedback
   private renderTime = 0
@@ -47,7 +49,7 @@ export class MeadowView implements RenderView {
     this.feedback = new CombatFeedback(this.meadow.field)
     this.meadow.scene.add(this.feedback.object)
     this.knight = new CharacterView(asset, { env: this.meadow.env })
-    this.meadow.scene.add(this.knight.object, this.aim.object)
+    this.meadow.scene.add(this.knight.object, this.aim.object, this.drops.object)
     this.post = createPost(renderer, this.meadow.scene, this.camera.camera)
     this.registerBookmarks()
     this.advance(world)
@@ -64,7 +66,7 @@ export class MeadowView implements RenderView {
     if (world.tick !== this.tick || !this.currentActor) {
       this.previousActor = world.tick === this.tick + 1 ? this.currentActor : undefined
       const actor = world.entities.find(entity => entity.id === world.playerId)
-      this.currentActor = actor ? structuredClone(actor) : undefined
+      this.currentActor = actor ? sampleActorPose(actor) : undefined
     }
     this.tick = world.tick
   }
@@ -83,7 +85,7 @@ export class MeadowView implements RenderView {
       this.feedback = new CombatFeedback(this.meadow.field)
       this.meadow.scene.add(this.feedback.object)
       this.knight.setEnvironment(this.meadow.env)
-      this.meadow.scene.add(this.knight.object, this.aim.object)
+      this.meadow.scene.add(this.knight.object, this.aim.object, this.drops.object)
       this.post = createPost(this.renderer, this.meadow.scene, this.camera.camera)
       this.registerBookmarks()
       this.framing = undefined
@@ -94,6 +96,7 @@ export class MeadowView implements RenderView {
     const dt = Math.max(0, Math.min(0.1, time - this.renderTime))
     this.renderTime = time
     this.feedback.sync(frame)
+    this.drops.sync(frame.world.groundDrops, this.meadow.field.heightAt, this.meadow.field.player)
     this.knight.object.visible = false
     this.aim.object.visible = false
     for (const entity of frame.world.entities) {
@@ -162,7 +165,7 @@ export class MeadowView implements RenderView {
     this.camera.camera.updateProjectionMatrix()
   }
 
-  dispose(): void { this.disposeScene(); this.knight.dispose(); this.aim.dispose(); this.camera.dispose() }
+  dispose(): void { this.disposeScene(); this.knight.dispose(); this.aim.dispose(); this.drops.dispose(); this.camera.dispose() }
 
   private registerBookmarks(): void {
     for (const name of ['wide', 'player', 'monolith'] as const) {
@@ -186,6 +189,7 @@ export class MeadowView implements RenderView {
     this.feedback.dispose()
     this.knight.object.removeFromParent()
     this.aim.object.removeFromParent()
+    this.drops.object.removeFromParent()
     this.meadow.scene.traverse(node => {
       if (!(node instanceof Mesh)) return
       node.geometry.dispose()

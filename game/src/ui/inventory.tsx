@@ -47,7 +47,6 @@ export function Inventory({ world, character: c, content, api, report }: FieldPr
           <p key={a.skillId}>{words(a.skillId)} <b>{a.before.damage.calculated} → {a.after.damage.calculated}</b></p>)}
           {comparison.delta.maxHealth !== 0 && <p>Health <b>{comparison.before.maxHealth} → {comparison.after.maxHealth}</b></p>}
           {comparison.delta.movementSpeed !== 0 && <p>Speed <b>{num(comparison.before.movementSpeed)} → {num(comparison.after.movementSpeed)} m/s</b></p>}</div>}</>}
-      {full && store && <p className="store-warning">Both stores are full. Discard an item to make room.</p>}
       <div className="operations">
         {store && discarding ? <><button className="primary" disabled={!editable} onClick={() => {
           const r = api.character.discard(item.id, store); discard(false); report(r.accepted ? 'Item discarded' : words(r.reason))
@@ -59,7 +58,8 @@ export function Inventory({ world, character: c, content, api, report }: FieldPr
         <button disabled={!editable || c[store === 'inventory' ? 'stash' : 'inventory'].length === 30} onClick={() => {
           const r = api.character.stash(item.id, store); report(r.accepted ? 'Item moved' : words(r.reason))
         }}>{store === 'inventory' ? 'Move to stash' : 'Move to inventory'}</button>
-        <button disabled={!editable} onClick={() => discard(true)}>Discard</button></> :
+        <button disabled={!editable} onClick={() => discard(true)}>Discard</button>
+        {full && <p className="store-warning">Both stores are full. {editable ? 'Discard an item to make room.' : 'Return to the marker to discard an item.'}</p>}</> :
         <button disabled={!editable || item.role === 'weapon' || c.inventory.length === 30} onClick={() => {
           const r = api.character.unequip(item.role); report(r.accepted ? 'Moved to inventory' : words(r.reason))
         }}>Unequip</button>}</div></aside></div>

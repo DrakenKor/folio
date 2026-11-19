@@ -30,6 +30,9 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
   const visible = blocked ? 'Save' : page
   const player = world.entities.find(e => e.id === world.playerId)!
   const character = player.character!, content = world.content.m2!
+  const inventoryFull = character.inventory.length === 30
+  const clearedNotice = world.encounter?.phase === 'active' && cleared !== null ?
+    cleared + ' uncollected ' + (cleared === 1 ? 'drop' : 'drops') + ' cleared' : ''
   const open = useCallback((next: Page | null, slot = 0) => {
     input.release()
     clock.suspend('inspection', next !== null)
@@ -105,7 +108,8 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
       <button className="save-status" onClick={() => goRecord('status')}>{recordTitle(status.code)}</button>
       <div className="save-links"><button onClick={() => goRecord('export')}>Copy save</button><button onClick={() => goRecord('import')}>Paste save</button><button onClick={() => goRecord('reset')}>Reset</button></div></div>
     <div className="clearing-control">{world.encounter?.phase !== 'active' ? <button className="primary" onClick={play}>{world.encounter?.phase === 'defeat' ? 'Return to marker' :
-      'Start clearing · ' + world.groundDrops.length + ' uncollected'}</button> : cleared !== null && <span role="status">{cleared} uncollected {cleared === 1 ? 'drop' : 'drops'} cleared</span>}
+      'Start clearing · ' + world.groundDrops.length + ' uncollected'}</button> : null}
+      {(clearedNotice || inventoryFull) && <span role="status">{[clearedNotice, inventoryFull ? 'Inventory full' : ''].filter(Boolean).join(' · ')}</span>}
       {notice && <p role="status">{notice}</p>}</div>
     <div className="loadout" role="group" aria-label="Inspect action slots">{character.loadout.map((id,i) => {
       const cooldown = id ? player.skillCooldowns[id] ?? 0 : 0
@@ -113,6 +117,6 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
         action?.id === id && phase ? words(phase) : action || player.impactPauseTicks || player.knockback ? 'Waiting' : 'Ready'
       return <button key={i} type="button" data-ready={state === 'Ready'} onClick={() => open('Drawings', i)}>
         <kbd>{keys[i]}</kbd><b>{id ? content.actions.find(a => a.id === id)?.name : 'Unassigned'}</b><span>{state}</span></button>
-    })}</div><div className="field-help">WASD move · Mouse aim · Space dodge{player.cooldowns.dodge > 0 && ' (' + (player.cooldowns.dodge / 60).toFixed(1) + ' s)'} · {character.inventory.length === 30 ? 'Inventory full' : 'F collect'}</div></>}
+    })}</div><div className="field-help">WASD move · Mouse aim · Space dodge{player.cooldowns.dodge > 0 && ' (' + (player.cooldowns.dodge / 60).toFixed(1) + ' s)'}{!inventoryFull && ' · F collect'}</div></>}
   </div>
 }
