@@ -1,8 +1,9 @@
-import { driveEnemies } from '../ai/creaseback'
-import { selectAction } from '../combat/actions'
+import { driveM3Enemies, moveRushes } from '../ai/m3-combat/intents'
+import { selectDrawings } from '../combat/m3/actions'
+import { drawingContacts } from '../combat/m3/effects'
+import { shotContacts } from '../combat/m3/projectiles'
+import { clearFinished } from '../combat/m3/records'
 import { applyCombatOperation, processAilments } from '../combat/build'
-import { gatherContacts, launchProjectiles } from '../combat/contacts'
-import { resolveContacts } from '../combat/damage'
 import { applyProgressionOperation, processProgression } from '../progression'
 import { advanceActors, beginActors } from '../systems/actors'
 import { finalizeGait, moveEntities } from '../systems/movement'
@@ -94,42 +95,25 @@ export const m3Systems: M3Systems = {
   operation: applyOperation,
   interaction: () => null,
   timers(world, states, events) {
+    clearFinished(world)
     withSharedBuildRules(world, view => {
       advanceActors(view, states, events)
       processAilments(view, events)
     })
   },
-  ai: (world, states) => driveEnemies(sharedBuildView(world), states),
-  actions(world, states, events) {
-    const view = sharedBuildView(world)
-    for (const actor of world.entities) {
-      const state = states.get(actor.id)!
-      const command = state.command
-      let buttons = command.buttons & ~(actor.mechanics?.rearmButtons ?? 0)
-      for (const [i, id] of (actor.character?.loadout ?? []).entries()) {
-        const card = world.content.m3.actions.find(a => a.id === id)
-        if (card && lockedReason(world, actor, card)) buttons &= ~slotButtons[i]!
-      }
-      selectAction(view, actor, { ...state, command: { ...command, buttons } }, events)
-    }
-  },
+  ai: driveM3Enemies,
+  actions: (world, states, events) => selectDrawings(world, states, events, lockedReason),
   movement(world, states) {
-    moveEntities(sharedBuildView(world), states)
+    withSharedBuildRules(world, view => moveEntities(view, states))
+    moveRushes(world)
     finalizeGait(world, states)
   },
   contacts(world, states, events) {
-    const launched = withSharedBuildRules(world, view => launchProjectiles(view, states))
-    const contacts = withSharedBuildRules(world, view => gatherContacts(view, states, launched))
-    if (!contacts.length) resolveContacts(world, [], launched, events)
-    return contacts.map(c => ({
-      ...c, effectId: c.projectileId ?? 0, childOrdinal: 0,
-      commit() { withSharedBuildRules(world, view => resolveContacts(view, [c], launched, events)) }
-    }))
+    return [...drawingContacts(world, states, events), ...shotContacts(world, states, events)]
   },
   rewards: (world, events) => withSharedBuildRules(world, view => processProgression(view, events)),
   quest() {}
 }
-const slotButtons = [Button.Primary, Button.Secondary, Button.Skill1, Button.Skill2, Button.Skill3, Button.Skill4]
 
 export function stepM3(world: M3World, input: Command, systems: M3Systems): SimEvent[] {
   const events: SimEvent[] = []

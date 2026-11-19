@@ -61,7 +61,8 @@ export function resolveRecipe(world: World, actor: Entity, action: ActionDefinit
     reach *= fold.reachFactor
     arcRadians *= fold.arcFactor
     radius *= fold.radiusFactor
-    if (fold.projectileAngles.length > 1 || fold.projectileAngles[0] !== 0) projectileAngles = [...fold.projectileAngles]
+    if (world.content.m3 && 'mechanic' in fold && fold.mechanic.kind === 'splay') projectileAngles = [...fold.mechanic.angles]
+    else if (!world.content.m3 && (fold.projectileAngles.length > 1 || fold.projectileAngles[0] !== 0)) projectileAngles = [...fold.projectileAngles]
     windup += fold.windupDelta
     recoveryDelta += fold.recoveryDelta
     modifiers.push(...modifierSource('fold/' + fold.id, fold.name, fold.modifiers).modifiers.filter(eligible))
@@ -72,6 +73,14 @@ export function resolveRecipe(world: World, actor: Entity, action: ActionDefinit
   const speed = action.kind === 'projectile' ? action.speed : 0
   const lifetimeTicks = speed ? Math.ceil(TICK_HZ * reach / speed) : 0
   const timing = { ...recoveryTiming(action.timing, recoveryDelta), windupTicks: roundAtLeastOne(windup) }
+  if (world.content.m3 && 'mechanic' in action) {
+    const m = action.mechanic
+    if (m.kind === 'rill-fan') timing.activeTicks = 1 + (m.maxPulses - 1) * m.pulseTicks
+    if (m.kind === 'open-hem') {
+      const hinge = folds.flatMap(fold => 'mechanic' in fold ? [fold.mechanic] : []).find(fold => fold.kind === 'hinge')
+      timing.activeTicks = m.stepTicks + (hinge?.kind === 'hinge' ? Math.ceil(m.stepTicks * hinge.retraceFraction) : 0)
+    }
+  }
   if (!DAMAGE_TYPES.every(type => Number.isFinite(sourceDamage[type])) || reach <= 0 || !Number.isFinite(reach) || !Number.isFinite(radius) || !Number.isSafeInteger(lifetimeTicks) ||
     !Number.isSafeInteger(timing.windupTicks + timing.activeTicks + timing.recoveryTicks)) return { ok: false, reason: 'invalid-recipe' }
   return { ok: true, value: { skillId: action.id, tags: [...action.tags], folds: folds.map(fold => fold.id),

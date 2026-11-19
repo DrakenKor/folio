@@ -1,3 +1,4 @@
+import type { StepSweep } from '../combat/m3/movement'
 import { actionTiming } from '../combat/actions'
 import { fmath } from '../core/fmath'
 import { removeEntity } from '../core/store'
@@ -8,6 +9,7 @@ import type { Command, Entity, EntityId, SimEvent, Vec2, World } from '../core/t
 /** Disposable per-tick intent and integration history; continuation stays in World. */
 export interface ActorTick {
   command: Command
+  sweep?: StepSweep
   paused: boolean
   previousButtons: number
   dodgePressed: boolean
@@ -62,7 +64,7 @@ export function advanceActors(world: World, states: Map<EntityId, ActorTick>, ev
       }
     } else if (actor.action && !states.get(actor.id)!.paused) {
       actor.action.ageTicks++
-      if (actionPhase(actionTiming(world, actor)!, actor.action.ageTicks) === 'complete') actor.action = null
+      if (!actor.mechanics?.held && actionPhase(actionTiming(world, actor)!, actor.action.ageTicks) === 'complete') actor.action = null
     }
   }
 }
