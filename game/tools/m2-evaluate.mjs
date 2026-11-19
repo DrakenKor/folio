@@ -4,6 +4,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFile
 import { basename, join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
+import { gunzipSync } from 'node:zlib'
 import { build as bundle } from 'esbuild'
 import sharp from 'sharp'
 
@@ -28,10 +29,10 @@ const nodeBalance = read(join(out, 'balance.json'))
 const nodeBench = read(join(out, 'bench.json'))
 const evalStep = (expression, ...expected) => ({ op: 'eval', expression, ...(expected.length && { expect: expected[0] }) })
 
-// Give Node and Brave the same measurement modules, independent of Vite's dev transform.
+// Share fixture preparation and standalone measurements across environments.
 const code = (await bundle({ stdin: { resolveDir: process.cwd(), contents: `
   import { buildScenario } from './game/src/sim/scenarios';
-  import { hashWorld, serialize, step } from './game/src/sim/core';
+  import { hashWorld, IDLE_COMMAND, serialize, step } from './game/src/sim/core';
   import { balanceWorld } from './game/tools/m2-balance';
   import { balanceFixtures, balanceCommand } from './game/tools/m2-fixtures';
   export { runBench, summarize } from './game/tools/m2-bench';
@@ -41,13 +42,27 @@ const code = (await bundle({ stdin: { resolveDir: process.cwd(), contents: `
     const fixture = balanceFixtures[0];
     return { snapshot: serialize(balanceWorld(fixture, seed)), command: world => balanceCommand(world, fixture) };
   }
-  export function checkpoints(script,ticks) {
-    const world=buildScenario('m1-fight',7), hashes=[[0,hashWorld(world)]];
-    let index=0;
-    for(let tick=0;tick<ticks;tick++) {
-      while(script[index+1]?.tick<=tick)index++;
-      step(world,script[index].command);
-      if(world.tick%60===0)hashes.push([world.tick,hashWorld(world)]);
+  export function balanceScript(build, seed, ticks) {
+    const fixture = balanceFixtures.find(fixture => fixture.id === build);
+    const world = balanceWorld(fixture, seed);
+    const { character, health, maxHealth, skills } = world.entities.find(actor => actor.id === world.playerId);
+    const setup = { player: { character: structuredClone(character), health, maxHealth, skills: { ...skills } },
+      lootRng: [...world.rng.loot], nextItemId: world.nextItemId };
+    const script = [];
+    for (let tick = 0; tick < ticks; tick++) {
+      const command = balanceCommand(world, fixture);
+      script.push({ tick, command });
+      step(world, command);
+    }
+    return { setup, script };
+  }
+  export function checkpoints(scenario, seed, ticks, script = [{ tick: 0, command: IDLE_COMMAND }]) {
+    const world = buildScenario(scenario, seed), hashes = [[0, hashWorld(world)]];
+    let index = 0;
+    for (let tick = 0; tick < ticks; tick++) {
+      while (script[index + 1]?.tick <= tick) index++;
+      step(world, script[index].command);
+      if (world.tick % 60 === 0 || world.tick === ticks) hashes.push([world.tick, hashWorld(world)]);
     }
     return hashes;
   }
@@ -55,9 +70,12 @@ const code = (await bundle({ stdin: { resolveDir: process.cwd(), contents: `
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
 const attachTools = evalStep(`import(${json(moduleUrl)}).then(module => { window.__m2Tools = module; return true })`, true)
 const bench = await import(moduleUrl)
-const nodeM1 = bench.checkpoints(m1Commands, m1Expected.ticks)
+const nodeM1 = bench.checkpoints('m1-fight', 7, m1Expected.ticks, m1Commands)
 assert.deepEqual(nodeM1, m1Expected.checkpoints)
 write(join(out, 'm1-node-checkpoints.json'), nodeM1)
+const balanceScripts = () => nodeBalance.runs.map(({ build, seed, ticks }) => bench.balanceScript(build, seed, ticks))
+
+const dummyTicks = nodeBench.warmupTicks + nodeBench.dummies.samples
 
 function child(file, args, directory, overrides = {}) {
   mkdirSync(directory, { recursive: true })
@@ -148,6 +166,41 @@ async function withPage(run) {
 
 const resize = (send, width, height, deviceScaleFactor) =>
   send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor, mobile: false })
+
+async function servedBalance(seed, { setup, script }) {
+  const game = window.__game
+  game.pause()
+  game.scenario('m2-balance', seed)
+  const snapshot = JSON.parse(game.snapshot()), world = snapshot.world
+  Object.assign(world.entities.find(actor => actor.id === world.playerId), setup.player)
+  world.rng.loot = setup.lootRng
+  world.nextItemId = setup.nextItemId
+  game.restore(JSON.stringify(snapshot))
+
+  const checkpoints = [[0, game.hash()]]
+  for (let start = 0; start < script.length; start += 60) {
+    const batch = script.slice(start, start + 60)
+    checkpoints.push([start + batch.length, game.simulate(batch, batch.length)])
+  }
+  const text = await game.exportReplay()
+  return { checkpoints, text, verified: await game.loadReplay(text), replayHash: game.hash() }
+}
+
+function servedDummies(seed, ticks) {
+  const game = window.__game
+  game.pause()
+  const previous = game.snapshot()
+  try {
+    game.scenario('dummies-1000', seed)
+    const actors = game.state('entities').filter(actor => actor.kind === 'dummy').length
+    const checkpoints = [[0, game.hash()]]
+    for (let start = 0; start < ticks; start += 60) {
+      const batch = Math.min(60, ticks - start)
+      checkpoints.push([start + batch, game.simulate([], batch)])
+    }
+    return { actors, checkpoints }
+  } finally { game.restore(previous) }
+}
 
 async function captureUI(game, name) {
   await withPage(async send => {
@@ -373,6 +426,8 @@ async function warmFight(seed) {
   }
 }
 
+const scripts = only === 'warm' ? [] : balanceScripts()
+const nodeDummies = only === 'warm' ? [] : bench.checkpoints('dummies-1000', nodeBench.seed, dummyTicks)
 for (const [build, url] of builds.filter(([label]) => !only || label === only)) {
   const group = join(out, build + '-m1')
   for (const [name, file] of [['DOM combat input', 'game/src/debug/combat-input-check.mjs'], ['Graphics recovery modes', 'game/tools/t110-check.mjs']]) {
@@ -447,21 +502,45 @@ for (const [build, url] of builds.filter(([label]) => !only || label === only)) 
       })
       await check(context, 'Graphics loss retains M1 snapshot and releases held, pending and queued input', () => graphicsInput(game))
       if (hmrPath) await check(context, 'Hot update latency', () => hotUpdate(game, hmrPath))
-      await check(context, 'Brave balance parity and 20 rotated replays', async () => {
+      await check(context, 'Served balance parity and 20 rotated replays', async () => {
+        const served = []
+        for (const [index, expected] of nodeBalance.runs.entries()) {
+          const { text, ...result } = await game.evaluate(`(${servedBalance.toString()})(${expected.seed},${json(scripts[index])})`)
+          const replay = JSON.parse(gunzipSync(Buffer.from(text, 'base64url')).toString('utf8'))
+          served.push({ build: expected.build, seed: expected.seed, ...result,
+            replay: { start: replay.start.world.tick, ticks: replay.commands.length, hashes: replay.hashes } })
+        }
+        write(join(directory, 'served-balance.json'), served)
+        for (const [index, run] of served.entries()) {
+          const expected = nodeBalance.runs[index]
+          const label = `${run.build} seed ${run.seed}`
+          assert.deepEqual(run.checkpoints, expected.checkpoints, label)
+          assert.deepEqual({ ...run.verified, start: run.replay.start, ticks: run.replay.ticks }, expected.replay, label)
+          assert.deepEqual(run.replay.hashes, expected.checkpoints.filter(([tick]) => tick >= expected.replay.start), label)
+          assert.equal(run.replayHash, expected.hash, label)
+        }
+        // Keep the standalone damage attribution and gate comparisons.
         await game.run([attachTools,
           { op: 'artifact', expression: '__m2Tools.runBalance()', out: 'balance.json' }])
         const runs = read(join(directory, 'balance.json'))
         assert.deepEqual(runs, nodeBalance.runs)
-        return { runs: runs.length, checkpointsPerRun: runs[0].checkpoints.length, replays: runs.filter(run => run.replay.ok).length }
+        return { runs: served.length, checkpointsPerRun: served[0].checkpoints.length, replays: served.filter(run => run.verified.ok).length }
       })
-      await check(context, 'Brave stress and 1,000-dummy performance', async () => {
-        await game.run([{ op: 'artifact', expression: '__m2Tools.runBench()', out: 'bench.json' }])
+      await check(context, 'Served 1,000-dummy parity and standalone Brave benchmark', async () => {
+        const served = await game.evaluate(`(${servedDummies.toString()})(${nodeBench.seed},${dummyTicks})`)
+        write(join(directory, 'served-dummies.json'), served)
+        assert.equal(served.actors, nodeBench.dummies.actors)
+        assert.deepEqual(served.checkpoints, nodeDummies)
+        assert.deepEqual(served.checkpoints.at(-1), [dummyTicks, nodeBench.dummies.hash])
+        // The public API cannot refill projectiles or refresh the 200-actor stress workload between ticks.
+        await game.run([attachTools, { op: 'artifact', expression: '__m2Tools.runBench()', out: 'bench.json' }])
         const { stress, dummies } = read(join(directory, 'bench.json'))
         const fields = ['hash', 'samples', 'actorPeak', 'projectilePeak', 'postTickProjectileMin', 'contacts', 'damageEvaluations']
         for (const field of fields) assert.equal(stress[field], nodeBench.stress[field], field)
         assert.equal(dummies.hash, nodeBench.dummies.hash)
         const summary = ({ intervals: _intervals, ...measurement }) => measurement
-        return { stress: summary(stress), dummies: summary(dummies) }
+        return { servedDummies: { hash: served.checkpoints.at(-1)[1], checkpoints: served.checkpoints.length },
+          standaloneStress: summary(stress), standaloneDummies: summary(dummies) }
       })
       await check(context, 'Runtime console', async () => {
         const { entries } = (await game.run([{ op: 'console', ms: 250 }])).find(row => row.command === 'console')
