@@ -1,3 +1,9 @@
+import type {
+  ActorMechanics, CampaignProgress, InteractableId, M3ActionDefinition, M3Content, M3FoldDefinition,
+  M3ItemBase, OwnedEffect, TraitId, WarningCard, WeaponFamily, ZoneId
+} from './m3-types'
+export * from './m3-types'
+
 // Shared simulation types. Owned by the orchestrator: workers code against
 // these and propose changes rather than editing them.
 
@@ -12,7 +18,7 @@ export const LEGACY_SIM_BUILD = 'm2-sim-v1'
 
 export const SCENARIO_NAMES = ['empty', 'meadow-start', 'dummies-1000', 'm1-arena', 'm1-fight', 'm1-stress'] as const
 export const M2_SCENARIO_NAMES = ['m2-clearing', 'm2-balance', 'm2-stress'] as const
-export type ScenarioName = typeof SCENARIO_NAMES[number] | typeof M2_SCENARIO_NAMES[number]
+export type ScenarioName = typeof SCENARIO_NAMES[number] | typeof M2_SCENARIO_NAMES[number] | 'm3a-clearing' | 'm3-act1'
 
 /** Fixed clip measurements at 1.8 m height; see game/ASSETS.md. */
 export const GAIT = Object.freeze({ walkSpeed: 0.561, runSpeed: 2.521, walkStride: 0.599, runStride: 2.017 })
@@ -70,6 +76,9 @@ export interface DodgeDefinition {
 }
 
 export interface EnemyDefinition {
+  warnings?: WarningCard[]
+  traits?: TraitId[]
+  boss?: boolean
   id: string
   maxHealth: number
   radius: number
@@ -89,6 +98,7 @@ export interface CombatContent {
   dodge: DodgeDefinition
   /** Absent for legacy M1 fixed-damage fixtures. */
   m2?: M2Content
+  m3?: M2Content & Pick<M3Content, 'zones' | 'effects' | 'repairOrder'>
 }
 
 /** Age is the last processed action age, including zero on the starting tick. */
@@ -121,6 +131,9 @@ export interface DeathState {
 }
 
 export interface AIState {
+  trait?: TraitId
+  bossPhase?: 1 | 2
+  committedEffectIds?: EntityId[]
   enemyId: string
   phase: 'idle' | 'acquire' | 'chase' | 'telegraph' | 'strike' | 'recover' | 'die'
   ageTicks: number
@@ -148,6 +161,7 @@ export interface Projectile {
 }
 
 export interface Entity {
+  mechanics?: ActorMechanics
   id: EntityId
   /** Content id, for example `player` or `dummy`. */
   kind: string
@@ -179,6 +193,9 @@ export interface Entity {
 
 /** The whole simulation state. Plain data: it serialises to canonical JSON. */
 export interface World {
+  effects?: OwnedEffect[]
+  zoneId?: ZoneId | null
+  progress?: CampaignProgress
   schema: number
   build: string
   /** Persisted encounter identity; selects scenario-specific continuation such as fight waves. */
@@ -226,6 +243,11 @@ export interface Command {
   buttons: number
   /** Atomic edits applied in array order before actor processing; omission means empty. */
   operations?: Operation[]
+  /** A sampler emits at most one edge per button per tick, retaining later edges for following ticks. */
+  pressedButtons?: number
+  releasedButtons?: number
+  /** Physical cancellation from focus or device loss supersedes an ordinary release. */
+  cancelHeld?: boolean
 }
 
 export const IDLE_COMMAND: Readonly<Command> = Object.freeze({
@@ -289,7 +311,8 @@ export type StatModifier = { id: string; requiredTags: ActionTag[]; types: Damag
 )
 
 /** M2 sectors retain the melee collision kind; delivery is determined only by tags. */
-export type ActionDefinition = SkillDefinition & {
+export type ActionDefinition = M2ActionDefinition | M3ActionDefinition
+export type M2ActionDefinition = SkillDefinition & {
   name: string
   tags: ActionTag[]
   baseDamage: DamageValues
@@ -298,7 +321,8 @@ export type ActionDefinition = SkillDefinition & {
   reach: number
 }
 
-export interface FoldDefinition {
+export type FoldDefinition = M2FoldDefinition | M3FoldDefinition
+export interface M2FoldDefinition {
   id: string
   name: string
   handle: 'reach' | 'spread' | 'material'
@@ -328,7 +352,8 @@ export interface GraphProfile {
   bargains: ShapeBargain[]
 }
 
-export interface ItemBase {
+export type ItemBase = M2ItemBase | M3ItemBase
+export interface M2ItemBase {
   id: string
   name: string
   role: EquipmentRole
@@ -417,14 +442,18 @@ export type Operation =
   | { type: 'pickup'; itemId: ItemId }
   | { type: 'stash'; itemId: ItemId; from: ItemStore }
   | { type: 'discard'; itemId: ItemId; from: ItemStore }
-  | { type: 'beginEncounter' | 'returnToShelter' }
+  | { type: 'refitWeapon'; familyId: WeaponFamily }
+  | { type: 'interact'; id: InteractableId }
+  | { type: 'travel'; waypointId: InteractableId }
+  | { type: 'beginEncounter' | 'returnToShelter' | 'restAtMarker' }
 
 export const OPERATION_REASONS = [
   'unsupported', 'no-player', 'dead', 'requires-rest', 'unknown-node', 'already-allocated', 'not-connected',
   'insufficient-points', 'unknown-shape', 'incomplete-shape', 'shape-limit', 'shape-overlap', 'unknown-item',
   'wrong-role', 'weapon-required', 'inventory-full', 'stash-full', 'unknown-skill', 'duplicate-skill',
   'unknown-fold', 'incompatible-fold', 'duplicate-handle', 'tension-limit', 'invalid-recipe', 'out-of-range',
-  'encounter-active', 'encounter-inactive'
+  'encounter-active', 'encounter-inactive', 'wrong-family', 'tally-required', 'guard-active', 'route-locked',
+  'wrong-scenario', 'travel-committed', 'unknown-interactable', 'unknown-waypoint'
 ] as const
 export type OperationReason = typeof OPERATION_REASONS[number]
 export type OperationResult = { accepted: true; reason: 'ok' } | { accepted: false; reason: OperationReason }
