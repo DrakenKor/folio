@@ -1,0 +1,12 @@
+{
+  "rank": 5, "xp": 0, "points": 0, "graphSeed": 7,
+  "bases": {"weapon":"shortblade","offhand":"field-shield","coat":"shelter-coat","boots":"way-boots","survey-tally":"survey-tally"},
+  "rolls": [
+    {"role":"weapon","familyId":"weapon-weight-flat","tier":1,"roll":5},
+    {"role":"survey-tally","familyId":"cast-gale-flat","tier":1,"roll":3}
+  ],
+  "builds": [
+    {"family":"hemblade","allocations":["1,0","1,1","0,1","2,0","3,0","4,0","5,0","6,0"],"shape":"rhombus-0","rotation":["span-cut","open-hem"]},
+    {"family":"verge-reel","allocations":["0,1","-1,2","-1,1","0,2","0,3","0,4","0,5","0,6"],"shape":"rhombus-1","rotation":["rill-fan","cast-loop","gather-line"]}
+  ]
+}
