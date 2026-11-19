@@ -1,5 +1,7 @@
 import { validateRetainedFolds } from '../combat/build'
-import type { CharacterState, Entity, Operation, OperationReason, World } from '../core/types'
+import { isM3 } from '../core/profile'
+import type { CharacterState, Entity, Operation, OperationReason, WeaponFamily, World } from '../core/types'
+import { repairLoadout, weaponFamily } from './loadout'
 
 const CAPACITY = 30
 const PICKUP_RANGE_SQUARED = 1.5 * 1.5
@@ -76,6 +78,24 @@ export function changeEquipment(world: World, player: Entity, edit: Extract<Oper
     source?.splice(index, 1)
     if (previous !== null) inventory.push(previous)
   }
+  const content = isM3(world) ? world.content.m3 : undefined
+  const previousFamily = content && weaponFamily(character, content)
   character.equipment = equipment
+  if (content && previousFamily !== weaponFamily(character, content)) character.loadout = repairLoadout(character, content, 'family')
+  else if (content && role === 'survey-tally' && next === null) character.loadout = repairLoadout(character, content, 'tally')
+  return null
+}
+
+export function refitWeapon(world: World, character: CharacterState, family: WeaponFamily): OperationReason | null {
+  if (!isM3(world)) return 'unsupported'
+  const content = world.content.m3
+  const base = content.itemBases.find(b => b.role === 'weapon' && b.familyId === family)
+  if (!base) return 'wrong-family'
+  const item = character.items.find(i => i.id === character.equipment.weapon)
+  if (!item) return 'weapon-required'
+  if (weaponFamily(character, content) !== family) {
+    item.baseId = base.id
+    character.loadout = repairLoadout(character, content, 'family')
+  }
   return null
 }

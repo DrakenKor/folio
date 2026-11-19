@@ -3,7 +3,7 @@ import { selectAction } from '../combat/actions'
 import { applyCombatOperation, processAilments } from '../combat/build'
 import { gatherContacts, launchProjectiles } from '../combat/contacts'
 import { resolveContacts } from '../combat/damage'
-import { applyProgressionOperation } from '../progression'
+import { applyProgressionOperation, processProgression } from '../progression'
 import { advanceActors, beginActors } from '../systems/actors'
 import { finalizeGait, moveEntities } from '../systems/movement'
 import { clearOwnedEffects, retainEffects } from './m3-state'
@@ -74,11 +74,6 @@ function applyOperation(world: M3World, edit: Operation): OperationResult {
   if (edit.type === 'interact' || edit.type === 'travel' || edit.type === 'restAtMarker') return unsupported
   if (edit.type === 'beginEncounter' && world.scenario === 'm3-act1') return { accepted: false, reason: 'wrong-scenario' }
   const player = world.entities.find(a => a.id === world.playerId)
-  if (edit.type === 'refitWeapon') {
-    if (!player?.character) return { accepted: false, reason: 'no-player' }
-    if (player.death) return { accepted: false, reason: 'dead' }
-    return world.encounter?.phase === 'rest' ? unsupported : { accepted: false, reason: 'requires-rest' }
-  }
   if (player?.character && !player.death && world.encounter?.phase === 'rest') {
     if (edit.type === 'setLoadout') for (const id of edit.slots) {
       const action = world.content.m3.actions.find(a => a.id === id)
@@ -131,7 +126,7 @@ export const m3Systems: M3Systems = {
       commit() { withSharedBuildRules(world, view => resolveContacts(view, [c], launched, events)) }
     }))
   },
-  rewards() {},
+  rewards: (world, events) => withSharedBuildRules(world, view => processProgression(view, events)),
   quest() {}
 }
 const slotButtons = [Button.Primary, Button.Secondary, Button.Skill1, Button.Skill2, Button.Skill3, Button.Skill4]

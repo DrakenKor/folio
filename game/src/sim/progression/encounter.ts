@@ -1,8 +1,10 @@
 import { WINDSTEP_CLEARING } from '../../content/m1'
 import { spawnBalanceWave } from '../build-scenarios'
 import { actorStats } from '../combat/stats'
+import { isM3 } from '../core/profile'
 import { Button } from '../core/types'
 import type { Entity, OperationReason, QueryResult, SimEvent, World } from '../core/types'
+import { spawnPressurePack } from '../m3-clearing'
 import { spawnCreaseback } from '../scenarios'
 import { pickupNearest } from './items'
 import { rewardKill } from './loot'
@@ -39,7 +41,10 @@ export function beginEncounter(world: World, player: Entity): OperationReason | 
   encounter.attempt++
   encounter.rewardedIds = []
   world.groundDrops = []
-  if (world.scenario === 'm2-clearing') {
+  if (isM3(world) && world.scenario === 'm3a-clearing') {
+    player.pos = { ...WINDSTEP_CLEARING.player.pos }
+    spawnPressurePack(world)
+  } else if (world.scenario === 'm2-clearing') {
     player.pos = { ...WINDSTEP_CLEARING.player.pos }
     for (const pos of WINDSTEP_CLEARING.enemies) spawnCreaseback(world, pos).faction = 'enemy'
   }
@@ -63,15 +68,16 @@ export function processProgression(world: World, events: SimEvent[]): QueryResul
   for (const event of events) {
     if (event.type !== 'death' || event.actorId !== player.id || encounter.rewardedIds.includes(event.targetId)) continue
     const target = world.entities.find(e => e.id === event.targetId)
-    if (target?.ai?.enemyId !== 'creaseback') continue
+    if (!target?.ai || !(world.content.m3 ? world.content.enemies.some(e => e.id === target.ai!.enemyId) :
+      target.ai.enemyId === 'creaseback')) continue
     encounter.rewardedIds.push(target.id)
     rewardKill(world, player.character, event.position)
   }
   if (player.death) encounter.phase = 'defeat'
   else {
     if (player.previousButtons & Button.Interact) pickupNearest(world, player)
-    if (encounter.phase === 'active' && world.scenario === 'm2-clearing' &&
-      !world.entities.some(e => e.ai?.enemyId === 'creaseback' && !e.death)) enterRest(world, player)
+    if (encounter.phase === 'active' && (world.scenario === 'm2-clearing' || world.scenario === 'm3a-clearing') &&
+      !world.entities.some(e => e.ai && !e.death && (world.content.m3 || e.ai.enemyId === 'creaseback'))) enterRest(world, player)
   }
   if (world.scenario === 'm2-balance') events.push(...spawnBalanceWave(world))
   return { ok: true, value: null }
