@@ -1,6 +1,6 @@
 import { contentSchema } from '../../content/schema'
 import { simulationStamp } from './profile'
-import { M3_BUILD } from './types'
+import { LEGACY_SIM_BUILD, M3_BUILD, SIM_BUILD } from './types'
 import type { CombatContent, Entity, EntityId, M3World, World } from './types'
 
 /** Create an empty world; named RNG streams are derived lazily from its seed. */
@@ -13,7 +13,9 @@ export function createWorld(seed: number, build?: string, content?: CombatConten
     distance: 3, cooldownTicks: 30, invulnerableFrom: 2, invulnerableUntil: 8
   } })
   const stamp = simulationStamp(checkedContent)
-  if ((checkedContent.m3 || build === M3_BUILD) && build !== undefined && build !== stamp.build) throw new TypeError('Unsupported simulation build for profile')
+  if (build !== undefined && build !== stamp.build && (checkedContent.m3 || [LEGACY_SIM_BUILD, SIM_BUILD, M3_BUILD].includes(build))) {
+    throw new TypeError('Unsupported simulation build for profile')
+  }
   return {
     ...stamp, build: build ?? stamp.build,
     ...(checkedContent.m3 && { effects: [], zoneId: null, progress: { generatorVersion: 1, stage: 'unstarted' as const,

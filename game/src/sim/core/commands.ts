@@ -6,6 +6,10 @@ import type { Command, Operation, Replay, World } from './types'
 export type { Command } from './types'
 export { Button, IDLE_COMMAND } from './types'
 
+export function requiresM3(operation: Operation): boolean {
+  return operation.type === 'refitWeapon' || operation.type === 'interact' || operation.type === 'travel' || operation.type === 'restAtMarker'
+}
+
 /** Check structure only; semantic rejection is a recorded operation result. */
 export function validateOperation(operation: Operation): void {
   const text = (value: unknown) => typeof value === 'string' && value.length > 0

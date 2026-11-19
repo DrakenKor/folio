@@ -3,8 +3,8 @@ import { calculateDamage } from '../combat/damage-model'
 import { resolveRecipe } from '../combat/recipe'
 import { actorStats } from '../combat/stats'
 import { exportCharacter as projectCharacter, previewBuild as previewLegacyBuild } from '../progression'
-import { validateOperation } from './commands'
-import { lockedReason, m3Systems } from './m3-loop'
+import { requiresM3, validateOperation } from './commands'
+import { lockedReason, m3Systems, type M3Systems } from './m3-loop'
 import { inspectM3Zone } from './m3-state'
 import { isM3, sharedBuildView } from './profile'
 import { spawnEntity } from './store'
@@ -82,15 +82,15 @@ export function previewAction(world: World, actorId: EntityId, skillId: string, 
   return { ok: true, value }
 }
 
-export function previewBuild(world: M3World, edit: Operation): QueryResult<M3BuildPreview>
-export function previewBuild(world: World, edit: Operation): QueryResult<BuildPreview>
-export function previewBuild(world: World, edit: Operation): QueryResult<BuildPreview> {
-  if (!isM3(world)) return previewLegacyBuild(world, edit)
+export function previewBuild(world: M3World, edit: Operation, systems?: M3Systems): QueryResult<M3BuildPreview>
+export function previewBuild(world: World, edit: Operation, systems?: M3Systems): QueryResult<BuildPreview>
+export function previewBuild(world: World, edit: Operation, systems = m3Systems): QueryResult<BuildPreview> {
   validateOperation(edit)
+  if (!isM3(world)) return requiresM3(edit) ? { ok: false, reason: 'unsupported' } : previewLegacyBuild(world, edit)
   const player = world.entities.find(a => a.id === world.playerId)
   if (!player?.character) return { ok: false, reason: 'no-player' }
   const next = structuredClone(world)
-  const result = m3Systems.operation(next, structuredClone(edit))
+  const result = systems.operation(next, structuredClone(edit))
   const current = player.character, changed = next.entities.find(a => a.id === player.id)!.character!
   const before = actorStats(sharedBuildView(world), player)
   const after = actorStats(sharedBuildView(next), next.entities.find(a => a.id === player.id)!)
