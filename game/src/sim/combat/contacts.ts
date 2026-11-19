@@ -26,11 +26,11 @@ function hostile(source: Entity, target: Entity, faction = source.faction): bool
 }
 
 /** Allocate in actor order and capture immutable impact payloads before sweeping. */
-export function launchProjectiles(world: World, states: Map<EntityId, ActorTick>): Set<EntityId> {
+export function launchProjectiles(world: World, states: Map<EntityId, ActorTick>, eligible?: (actor: Entity) => boolean): Set<EntityId> {
   const launched = new Set<EntityId>()
   for (const actor of world.entities) {
     const action = actor.action
-    if (actor.death || states.get(actor.id)!.paused || !action || action.kind !== 'projectile' || action.projectileSpawned) continue
+    if ((eligible && !eligible(actor)) || actor.death || states.get(actor.id)!.paused || !action || action.kind !== 'projectile' || action.projectileSpawned) continue
     const skill = skillDefinition(world, action.id)
     if (skill.kind !== 'projectile' || actionPhase(action.recipe?.timing ?? skill.timing, action.ageTicks) !== 'active') continue
     action.projectileSpawned = true

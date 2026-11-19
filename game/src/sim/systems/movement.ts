@@ -1,4 +1,7 @@
 import { actionTiming, movementInput } from '../combat/actions'
+import { isM3 } from '../core/profile'
+import { clip } from '../combat/m3/geometry'
+import { stepStroke } from '../combat/m3/movement'
 import { actorStats, baseMovementSpeed } from '../combat/stats'
 import { fmath } from '../core/fmath'
 import { actionPhase } from '../core/timing'
@@ -42,16 +45,21 @@ export function moveEntities(world: World, states: Map<EntityId, ActorTick>): vo
         const speed = world.content.dodge.distance * TICK_HZ / world.content.dodge.timing.activeTicks
         actor.vel = { x: fmath.cos(actor.action.direction) * speed, z: fmath.sin(actor.action.direction) * speed }
       }
-    } else if (magnitude > 0) {
+      if (isM3(world)) stepStroke(world, actor, state)
+    } else if (magnitude > 0 && !(actor.mechanics && actor.mechanics.rootedUntil >= world.tick)) {
       const speed = actor.character || world.ailments.length ? actorStats(world, actor).movementSpeed : baseMovementSpeed(world, actor)
       actor.vel = { x: fmath.cos(actor.facing) * speed * magnitude, z: fmath.sin(actor.facing) * speed * magnitude }
       state.ordinary = { x: actor.vel.x * TICK_DT, z: actor.vel.z * TICK_DT }
     }
     actor.pos.x += actor.vel.x * TICK_DT
     actor.pos.z += actor.vel.z * TICK_DT
+    if (world.zoneId) actor.pos = clip(world, state.entryPosition, actor.pos)
     applyBounds(world, actor)
   }
-  resolveCircles(world.entities.filter(actor => !actor.death), actor => applyBounds(world, actor))
+  resolveCircles(world.entities.filter(actor => !actor.death && !states.get(actor.id)?.sweep), actor => {
+    if (world.zoneId) actor.pos = clip(world, states.get(actor.id)!.entryPosition, actor.pos)
+    applyBounds(world, actor)
+  })
 }
 
 /** Derive stride travel from the resolved projection, excluding external displacement. */
