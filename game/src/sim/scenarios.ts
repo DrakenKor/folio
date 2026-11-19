@@ -1,11 +1,12 @@
 import { m1Content, WINDSTEP_CLEARING } from '../content/m1'
 import { m2Content } from '../content/m2'
 import { buildBalanceScenario } from './build-scenarios'
+import { isM3 } from './core/profile'
 import { fmath } from './core/fmath'
 import { rngFloat } from './core/rng'
 import { createWorld, spawnEntity } from './core/store'
 import { M2_SCENARIO_NAMES, SCENARIO_NAMES } from './core/types'
-import type { CharacterState, Entity, Loadout, RolledItem, SimEvent, Vec2, World } from './core/types'
+import type { CharacterState, Entity, Loadout, M3World, RolledItem, SimEvent, Vec2, World } from './core/types'
 import { UnsupportedError } from './core/unsupported'
 
 export { SCENARIO_NAMES, SIM_BUILD } from './core/types'
@@ -93,8 +94,18 @@ function buildM2Clearing(seed: number): World {
   return world
 }
 
+export type M3ScenarioRegistry = Readonly<Partial<Record<'m3a-clearing' | 'm3-act1', (seed: number) => M3World>>>
+export const m3Scenarios: M3ScenarioRegistry = {}
+
 /** Build a fresh deterministic fixture without ambient state or presentation data. */
-export function buildScenario(name: string, seed: number): World {
+export function buildScenario(name: string, seed: number, registry = m3Scenarios): World {
+  if (name === 'm3a-clearing' || name === 'm3-act1') {
+    const build = registry[name]
+    if (!build) throw new UnsupportedError(name)
+    const world = build(seed)
+    if (!isM3(world) || world.scenario !== name || world.seed !== seed) throw new TypeError('Invalid M3 scenario factory')
+    return world
+  }
   if (name === 'm2-clearing') return buildM2Clearing(seed)
   if (name === 'm2-balance') return buildBalanceScenario(seed)
   if (M2_SCENARIO_NAMES.some(scenario => scenario === name)) throw new UnsupportedError('M2 scenarios (T2.3)')

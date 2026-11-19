@@ -1,7 +1,25 @@
 # Simulation contract
 
-Schema **4**, M2 simulation build **`m2-sim-v2`** (M0/M1 retain `m2-sim-v1`), fixed **60 Hz**. Shared types live in `core/types.ts`.
-The core loop drives movement, combat, AI and scheduled fight waves for headless, replay and browser callers.
+All profiles step at 60 Hz. The public entry point is `core/index.ts`.
+
+| Gameplay content | Canonical schema | Simulation build |
+| --- | --- | --- |
+| M0/M1 skills and dodge | 4 | `m2-sim-v1` |
+| `content.m2` | 4 | `m2-sim-v2` |
+| `content.m3`, version `m3-v1` | 5 | `m3-sim-v1` |
+
+## M3 integration
+
+- **Content and scenarios.** Author `M3Content` against `core/m3-types.ts`. Construction validates and detaches the tables. Supply T3.3’s `(seed) => M3World` clearing factory through `M3ScenarioRegistry` in `scenarios.ts`. The default registry returns `UnsupportedError` until integration supplies that factory.
+- **Schema checks.** Mechanics select their legal family, delivery and bounded parameters. Folds reference compatible drawings. Effect cards reference at most three terminal children. Warning shapes use metres and radians. Zone templates use row-major walkability, locally addressed interactables, campaign-wide socket and waypoint ids, and explicit portal landings.
+- **World fixtures.** A neutral template can supply a wall mask smaller than 32×32. Every interactable and socket must occupy a connected floor cell. A portal names a destination zone and arrival interactable. The authored repair order and guard socket ids establish prerequisites independently of template order.
+- **Input.** Each command carries final held `buttons`, optional `pressedButtons` and `releasedButtons`, and an independent `cancelHeld`. The sampler drains release and re-press on consecutive ticks. A release bit requires the button up. A press bit requires it down. A paused hold retains `releasePending` through restore.
+- **Step and replay.** `M3Systems` in `core/m3-loop.ts` supplies typed operations, interaction selection, timers/pulses, AI, actions, movement, contacts, rewards and quest observations in that order. The interaction selector reads tick-entry state. For neutral integration tests, pass the same systems to `step` and `verifyReplay`.
+- **Operations.** `refitWeapon(familyId)`, `interact(id)`, `travel(waypointId)` and `restAtMarker` enter the recorded operation list. Travel, interaction and marker rest return `unsupported` until B1. A committed crossing clears owned effects, consumes physical input and rejects remaining edits with `travel-committed`.
+- **Contacts.** Gather `PendingContact` records. The dispatcher orders them by swept fraction, target, source, effect/projectile id and child ordinal. Commit receives live actors and current dodge immunity. Return one generation of children for ordered resolution immediately after their parent.
+- **Continuation.** `spawnEffect` allocates from `nextId` after validation. Effects capture recipes, committed footprints and endpoints, due/expiry ticks and per-leg target history. Actor records retain held input, rearm bits, seams and roots. AI records retain trait, phase and warning ids. Historical target ids survive despawn. Active owners must live.
+- **Queries.** Narrow with `isM3(world)` for typed `M3ActionPreview` and `M3BuildPreview`. Inspect required items, lock reasons, timing, primary/secondary paths, costs, clean/prepared damage and resulting loadout. Plinth’s conditional comparison uses full charge. Clearing `inspectZone` returns detached committed warnings. Act I zone inspection returns `unsupported` pending B1.
+- **Player data.** `M3CharacterData` projects build, RNG, item allocator and campaign progress. `M3SaveEnvelope` adds schema 2, generation and application build. `MigrateCharacter` gives T3.4 one pure projection and refund receipt for direct and platform loads. New progress starts at `hem-rest` with empty repairs, credits and drops. Storage and migration belong to T3.4.
 
 ## State and ownership
 
