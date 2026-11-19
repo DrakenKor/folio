@@ -1,5 +1,6 @@
-import { actionPhase, canonical, copyCommand, exportCharacter, hashWorld, IDLE_COMMAND, inspectStats, loadCharacter, previewAction, previewBuild, restore, serialize, verifyReplay } from '../sim/core/index'
-import type { Command, EquipmentRole, ItemId, ItemStore, Loadout, Operation, OperationResult, Replay, World } from '../sim/core/index'
+import { actionPhase, canonical, copyCommand, exportCharacter, hashWorld, IDLE_COMMAND, inspectStats, inspectZone, loadCharacter, previewAction, previewBuild, restore, serialize, verifyReplay } from '../sim/core/index'
+import type { Command, EquipmentRole, ItemId, ItemStore, Loadout, Operation, OperationResult, Replay, WeaponFamily, World } from '../sim/core/index'
+import { sharedBuildView } from '../sim/core/profile'
 import { actionTiming } from '../sim/combat/actions'
 import { buildScenario } from '../sim/scenarios'
 import type { CameraRig } from '../render/basic/camera'
@@ -10,27 +11,34 @@ import { SaveController } from '../platform/saves'
 
 export interface ScriptEntry { tick: number; command: Command }
 
-export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: Promise<void>, loseDevice: () => void, saves?: SaveController,
+export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: Promise<void>, loseDevice: () => void, saves?: SaveController | (() => SaveController),
   onDebugWorld: (world: World) => void = () => {}) {
   const replace = (text: string) => {
     const world = restore(text)
     onDebugWorld(world)
-    input.release()
+    input.reset(world)
     clock.replace(world)
   }
-  const save = saves ?? new SaveController({ build: __BUILD_ID__, content: clock.world.content,
+  const controller = saves ?? new SaveController({ build: __BUILD_ID__, content: clock.world.content,
     getWorld: () => clock.world, replaceWorld: world => replace(serialize(world)), exportCharacter, loadCharacter })
+  const save = typeof controller === 'function' ? controller : () => controller
   const edit = (operation: Operation): OperationResult => {
     const command = copyCommand({ ...IDLE_COMMAND, operations: [operation] })
     input.release()
-    const event = clock.advance(1, command).find(event =>
+    const event = clock.advance(1, input.command(clock.world, command)).find(event =>
       event.type === 'operationAccepted' || event.type === 'operationRejected')
     if (!event) throw new Error(`No result for operation ${operation.type}`)
     return event.type === 'operationAccepted' ? { accepted: true, reason: event.reason } : { accepted: false, reason: event.reason }
   }
   return {
     ready,
+    zone: () => inspectZone(clock.world),
     character: {
+      operation: edit,
+      interact: (id: string) => edit({ type: 'interact', id }),
+      travel: (waypointId: string) => edit({ type: 'travel', waypointId }),
+      restAtMarker: () => edit({ type: 'restAtMarker' }),
+      refitWeapon: (familyId: WeaponFamily) => edit({ type: 'refitWeapon', familyId }),
       allocate: (nodeId: string) => edit({ type: 'allocate', nodeId }),
       refund: (nodeId: string) => edit({ type: 'refund', nodeId }),
       activateShape: (shapeId: string, active = true) => edit({ type: 'activateShape', shapeId, active }),
@@ -47,9 +55,9 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
     },
     stats: (actorId = clock.world.playerId!) => inspectStats(clock.world, actorId),
     damage: (skillId: string, targetId: number, actorId = clock.world.playerId!) => previewAction(clock.world, actorId, skillId, targetId),
-    save: { status: () => save.status(), export: () => save.export(), import: (text: string) => save.import(text),
-      flush: () => save.flush(), load: () => save.load(), reset: () => save.reset(), takeOver: () => save.takeOver(),
-      commitBarrier: (action: 'arm' | 'reached' | 'release') => save.commitBarrier(action) },
+    save: { status: () => save().status(), export: () => save().export(), import: (text: string) => save().import(text),
+      flush: () => save().flush(), load: () => save().load(), reset: () => save().reset(), takeOver: () => save().takeOver(),
+      commitBarrier: (action: 'arm' | 'reached' | 'release') => save().commitBarrier(action) },
     describe(): string {
       const world = clock.world
       const player = world.entities.find(entity => entity.id === world.playerId)
@@ -75,12 +83,13 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
     },
     observe() {
       const world = clock.world
-      const command = clock.recorder.exportReplay().commands.at(-1) ?? null
+      const view = sharedBuildView(world)
+      const command = clock.recorder.lastCommand
       return structuredClone({ tick: world.tick, hash: hashWorld(world), paused: clock.paused,
         playerId: world.playerId, commandTick: command ? world.tick : null, command,
         actors: world.entities.map(actor => {
           const action = actor.action
-          return { ...actor, action: action ? { ...action, phase: actionPhase(actionTiming(world, actor)!, action.ageTicks) } : null }
+          return { ...actor, action: action ? { ...action, phase: actionPhase(actionTiming(view, actor)!, action.ageTicks) } : null }
         }), projectiles: world.projectiles })
     },
     cmd: (command: Command) => input.queue(command),
@@ -126,6 +135,7 @@ export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: 
       replace(JSON.stringify(replay.start))
       clock.pause()
       for (const command of replay.commands) clock.advance(1, command)
+      input.reset(clock.world)
       return result
     },
     agent: { moveTo: (x: number, z: number) => input.moveTo(x, z) },

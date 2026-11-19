@@ -12,6 +12,8 @@ interface Saved {
   paused: boolean
   playerSession: boolean
   save?: SaveIdentity
+  snapshotEntry?: boolean
+  cancelHeld?: boolean
 }
 
 function entryKey(url: URL): string {
@@ -22,7 +24,8 @@ function entryKey(url: URL): string {
 }
 
 export function storeSession(url: URL, world: World, paused: boolean, playerSession: boolean, graphics = false, save?: SaveIdentity): void {
-  const saved: Saved = { entry: entryKey(url), snapshot: serialize(world), paused, playerSession, save }
+  const saved: Saved = { entry: entryKey(url), snapshot: serialize(world), paused, playerSession, save, cancelHeld: graphics,
+    snapshotEntry: new URLSearchParams(url.hash.slice(1)).has('snap') }
   try { sessionStorage.setItem(graphics ? GRAPHICS_KEY : RELOAD_KEY, JSON.stringify(saved)) }
   catch { /* Recovery storage can be unavailable. */ }
 }
@@ -44,8 +47,8 @@ export async function initialWorld(url: URL) {
   const graphics = takeSession(GRAPHICS_KEY, url)
   const reload = import.meta.env.DEV ? takeSession(RELOAD_KEY, url) : undefined
   const paused = url.searchParams.get('paused') === '1'
-  const playerEntry = !fragment && scenario === null
-  const world = fragment ? restore(await decode(fragment)) : buildScenario(scenario ?? 'm2-clearing', Number(url.searchParams.get('seed') ?? 1))
+  const playerEntry = !fragment && scenario === null && !graphics?.snapshotEntry
+  const world = fragment ? restore(await decode(fragment)) : buildScenario(scenario ?? 'm3a-clearing', Number(url.searchParams.get('seed') ?? 1))
   return { world, paused, playerEntry, recovery: fragment ? undefined : graphics ?? (!playerEntry && url.searchParams.get('fresh') !== '1' ? reload : undefined) }
 }
 
@@ -54,6 +57,6 @@ export function recoverSession(saved: Saved | undefined, playerEntry: boolean, s
   if (!saved) return
   if (playerEntry && (!saved.save || saved.save.generation !== status.generation ||
     !(saved.save.code === 'ready' && status.writable || saved.save.code === 'read-only' && status.code === 'read-only'))) return
-  try { return { world: restore(saved.snapshot), paused: saved.paused, playerSession: saved.playerSession } }
+  try { return { world: restore(saved.snapshot), paused: saved.paused, playerSession: saved.playerSession, cancelHeld: saved.cancelHeld } }
   catch { /* The snapshot may use an incompatible schema after a reload. */ }
 }

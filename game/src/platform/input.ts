@@ -1,4 +1,4 @@
-import { Button, copyCommand, IDLE_COMMAND } from '../sim/core/index'
+import { Button, copyCommand, IDLE_COMMAND, isM3 } from '../sim/core/index'
 import type { Command, Vec2, World } from '../sim/core/index'
 
 interface Basis { forward: Vec2; right: Vec2 }
@@ -15,27 +15,71 @@ export class HeldInput {
   mouseButtons = 0
   pointer: Vec2 | null = null
   private pendingKeys = new Set<string>()
-  private pendingButtons = 0
+  private transitions = new Map<number, number>()
+  private restoredButtons = 0
 
-  keyDown(code: string): void { if (!this.keys.has(code)) this.pendingKeys.add(code); this.keys.add(code) }
-  keyUp(code: string): void { this.keys.delete(code) }
-  pointerDown(button: number): void { this.mouseButtons |= button; this.pendingButtons |= button }
-  pointerUp(button: number): void { this.mouseButtons &= ~button }
-
-  release(): void {
-    this.keys.clear(); this.pendingKeys.clear()
-    this.mouseButtons = 0; this.pendingButtons = 0; this.pointer = null
+  private buttons(): number {
+    let buttons = this.mouseButtons | this.restoredButtons
+    for (const key of this.keys) buttons |= KEY_BUTTONS[key] ?? 0
+    return buttons
   }
 
-  command(basis: Basis): Command {
+  private changed(bit: number, before: number): void {
+    this.restoredButtons &= ~bit
+    if ((this.buttons() ^ before) & bit) this.transitions.set(bit, (this.transitions.get(bit) ?? 0) + 1)
+  }
+
+  keyDown(code: string): void {
+    const before = this.buttons()
+    if (!this.keys.has(code)) this.pendingKeys.add(code)
+    this.keys.add(code)
+    this.changed(KEY_BUTTONS[code] ?? 0, before)
+  }
+
+  keyUp(code: string): void {
+    const before = this.buttons()
+    this.keys.delete(code)
+    this.changed(KEY_BUTTONS[code] ?? 0, before)
+  }
+
+  pointerDown(bit: number): void {
+    const before = this.buttons()
+    this.mouseButtons |= bit
+    this.changed(bit, before)
+  }
+
+  pointerUp(bit: number): void {
+    const before = this.buttons()
+    this.mouseButtons &= ~bit
+    this.changed(bit, before)
+  }
+
+  release(restoredButtons = 0): void {
+    this.keys.clear()
+    this.pendingKeys.clear()
+    this.transitions.clear()
+    this.restoredButtons = restoredButtons
+    this.mouseButtons = 0
+    this.pointer = null
+  }
+
+  command(basis: Basis, edges = false): Command {
     const keys = new Set([...this.keys, ...this.pendingKeys])
     const forward = Number(keys.has('KeyW')) - Number(keys.has('KeyS'))
     const right = Number(keys.has('KeyD')) - Number(keys.has('KeyA'))
     const length = Math.max(1, Math.hypot(forward, right))
-    let buttons = this.mouseButtons | this.pendingButtons
-    for (const key of keys) buttons |= KEY_BUTTONS[key] ?? 0
-    this.pendingKeys.clear(); this.pendingButtons = 0
+    let buttons = this.buttons()
+    let changed = 0
+    // Emit one transition per slot per tick. Independent slots can change together.
+    for (const [bit, count] of this.transitions) {
+      if (count % 2 === 0) buttons ^= bit
+      changed |= bit
+      if (count === 1) this.transitions.delete(bit)
+      else this.transitions.set(bit, count - 1)
+    }
+    this.pendingKeys.clear()
     return {
+      ...(edges && { pressedButtons: buttons & changed, releasedButtons: ~buttons & changed }),
       move: { x: (forward * basis.forward.x + right * basis.right.x) / length,
         z: (forward * basis.forward.z + right * basis.right.z) / length },
       aim: this.pointer ? { ...this.pointer } : null, buttons
@@ -48,6 +92,7 @@ export class Input {
   readonly held = new HeldInput()
   private listeners = new AbortController()
   private pointer: { x: number; y: number } | null = null
+  private cancelHeld = false
   private queued: Command | null = null
   private target: { x: number; z: number; ticks: number; resolve: (arrived: boolean) => void } | null = null
 
@@ -58,7 +103,7 @@ export class Input {
       if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, button')) return
       if (MOVEMENT_KEYS.includes(event.code) || event.code in KEY_BUTTONS) {
         event.preventDefault()
-        this.held.keyDown(event.code)
+        if (!event.repeat) this.held.keyDown(event.code)
       }
     }, options)
     window.addEventListener('keyup', event => this.held.keyUp(event.code), options)
@@ -83,11 +128,17 @@ export class Input {
   command(world: World, fallback?: Command): Command {
     if (world.entities.find(entity => entity.id === world.playerId)?.death) {
       const command = this.queued ?? fallback ?? IDLE_COMMAND
-      this.release()
+      this.reset()
       return copyCommand(command)
     }
+    if (this.cancelHeld && isM3(world)) {
+      this.cancelHeld = false
+      const command = this.queued ?? fallback ?? IDLE_COMMAND
+      this.queued = null
+      return { ...copyCommand(command), cancelHeld: true }
+    }
     this.held.pointer = this.pointer ? this.groundPoint(this.pointer.x, this.pointer.y) : null
-    const live = this.held.command(this.basis())
+    const live = this.held.command(this.basis(), isM3(world))
     const command = this.queued ?? (fallback ? copyCommand(fallback) : live)
     const overridden = this.queued !== null || fallback !== undefined
     this.queued = null
@@ -121,7 +172,20 @@ export class Input {
     return new Promise(resolve => { this.target = { x, z, ticks: 0, resolve } })
   }
 
-  release(): void { this.held.release(); this.pointer = null; this.queued = null; this.finish(false) }
+  /** Restore a recorded hold until the next DOM edge or suspension. */
+  reset(world?: World): void {
+    const player = world?.entities.find(entity => entity.id === world.playerId)
+    this.held.release((player?.mechanics?.held?.button ?? 0) & (player?.previousButtons ?? 0))
+    this.cancelHeld = false
+    this.pointer = null
+    this.queued = null
+    this.finish(false)
+  }
+
+  release(): void {
+    this.reset()
+    this.cancelHeld = true
+  }
   dispose(): void { this.release(); this.listeners.abort() }
 
   private finish(arrived: boolean): void {

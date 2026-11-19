@@ -104,6 +104,11 @@ export class Recorder {
     }
   }
 
+  get lastCommand(): Command | null {
+    const command = this.commands.at(-1)
+    return command ? copyCommand(command) : null
+  }
+
   exportReplay(): Replay {
     if (this.world.tick !== this.lastTick) throw new Error('Record the current tick before exporting')
     const checkpoint = this.checkpoints.findLast(point => point.tick <= this.lastTick - 3600) ?? this.checkpoints[0]!

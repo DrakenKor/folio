@@ -1,8 +1,8 @@
 import { WebGPURenderer } from 'three/webgpu'
-import { m2Content } from './content/m2'
-import { exportCharacter, loadCharacter } from './sim/core'
+import { exportCharacter, loadCharacter, type World } from './sim/core'
 import { SaveController } from './platform/saves'
 import { createHUD } from './ui/hud'
+import { locked } from './ui/records'
 import { Clock } from './platform/clock'
 import { Input } from './platform/input'
 import { initialWorld, recoverSession, storeSession } from './platform/session'
@@ -15,7 +15,10 @@ const canvas = document.getElementById('stage') as HTMLCanvasElement
 const url = new URL(location.href)
 const initial = await initialWorld(url)
 let playerSession = initial.playerEntry
-let phase = initial.world.encounter?.phase
+function saveBoundary(world: World): string {
+  return [world.encounter?.phase, world.zoneId, world.progress?.repairs.length, world.progress?.stage].join('/')
+}
+let boundary = saveBoundary(initial.world)
 let releaseInput = () => {}
 const clock: Clock = new Clock(initial.world, world => {
   if (view instanceof MeadowView) view.advance(world)
@@ -23,36 +26,53 @@ const clock: Clock = new Clock(initial.world, world => {
 }, world => {
   input.afterStep(world)
   if (view instanceof MeadowView) view.advance(world)
-  if (phase !== world.encounter?.phase) {
-    phase = world.encounter?.phase
-    input.release()
+  const next = saveBoundary(world)
+  if (boundary !== next) {
+    boundary = next
+    input.reset()
     if (playerSession) void saves.flush()
   }
 })
-const replaceWorld = (world: typeof initial.world) => {
+const replaceWorld = (world: World) => {
   releaseInput()
-  phase = world.encounter?.phase
+  boundary = saveBoundary(world)
   clock.replace(world)
 }
-const saves = new SaveController({
-  build: __BUILD_ID__, content: initial.playerEntry ? initial.world.content : m2Content(), getWorld: () => clock.world,
-  isPlayerSession: () => playerSession,
-  replaceWorld: world => { playerSession = initial.playerEntry; replaceWorld(world) }, exportCharacter, loadCharacter
-})
-if (initial.playerEntry) await saves.load()
-const recovered = recoverSession(initial.recovery, initial.playerEntry, saves.status())
-if (recovered) {
-  playerSession = recovered.playerSession
-  replaceWorld(recovered.world)
+function controller(world: World, player: boolean): SaveController {
+  return new SaveController({
+    build: __BUILD_ID__, content: world.content, getWorld: () => clock.world,
+    isPlayerSession: () => player && playerSession,
+    replaceWorld, exportCharacter, loadCharacter
+  })
 }
-if (initial.paused || recovered?.paused) clock.pause()
-
+const saves = controller(initial.world, initial.playerEntry)
+let activeSaves = saves
+function enterDebug(world: World): void {
+  playerSession = false
+  boundary = saveBoundary(world)
+  if (activeSaves !== saves) activeSaves.dispose()
+  activeSaves = controller(world, false)
+}
+if (initial.playerEntry) await saves.load()
 const renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: url.searchParams.get('backend') === 'webgl' })
 await renderer.init()
 document.body.dataset.backend = 'isWebGPUBackend' in renderer.backend ? 'webgpu' : 'webgl2'
-const view = url.searchParams.get('view') === 'basic' ? new BasicView(renderer) : await MeadowView.create(renderer, clock.world)
+let recovered = recoverSession(initial.recovery, initial.playerEntry, saves.status())
+const view = url.searchParams.get('view') === 'basic' ? new BasicView(renderer) : await MeadowView.create(renderer, recovered?.world ?? clock.world)
+if (initial.recovery && initial.playerEntry) {
+  // A takeover may commit while the renderer is loading its assets.
+  await saves.load()
+  recovered = recoverSession(initial.recovery, true, saves.status())
+}
+if (recovered) {
+  if (!recovered.playerSession) enterDebug(recovered.world)
+  replaceWorld(recovered.world)
+}
+if (initial.paused || recovered?.paused) clock.pause()
 const input = new Input(canvas, () => view.camera.basis(), (x, y) => view instanceof MeadowView ? view.groundPoint(x, y) : view.camera.groundPoint(x, y))
-releaseInput = () => input.release()
+releaseInput = () => input.reset()
+if (recovered?.cancelHeld) input.release()
+else input.reset(clock.world)
 if (url.searchParams.has('bookmark')) view.camera.bookmark(url.searchParams.get('bookmark')!)
 
 let lost = false
@@ -65,7 +85,6 @@ const options = { signal: listeners.signal }
 function suspension(): void {
   clock.suspend('hidden', document.hidden)
   clock.suspend('blur', !document.hasFocus())
-  if (clock.paused) input.release()
 }
 window.addEventListener('blur', suspension, options)
 window.addEventListener('focus', suspension, options)
@@ -98,10 +117,7 @@ function loseDevice(): void {
   }
 }
 
-const api = createAPI(clock, input, view.camera, ready, loseDevice, saves, world => {
-  playerSession = false
-  phase = world.encounter?.phase
-})
+const api = createAPI(clock, input, view.camera, ready, loseDevice, () => activeSaves, enterDebug)
 Object.assign(api.debug, { view })
 Object.assign(api, {
   async sheet(entity: string, clip: string): Promise<string> {
@@ -111,7 +127,7 @@ Object.assign(api, {
     return renderCharacterSheet(view instanceof MeadowView ? view.asset : undefined, clip, url.searchParams.get('backend') === 'webgl')
   }
 })
-const hud = createHUD({ clock, input, api, saves })
+const hud = createHUD({ clock, input, api, get saves() { return activeSaves } })
 if (import.meta.env.DEV || url.searchParams.get('debug') === '1') window.__game = api
 
 window.addEventListener('keydown', async event => {
@@ -133,6 +149,7 @@ resize()
 
 function draw(now: number): void {
   if (lost) return
+  clock.suspend('writer', locked(activeSaves.status().code))
   view.sync(clock.frame(now))
   hud.sync(clock.world)
   view.render()
@@ -147,6 +164,7 @@ if (import.meta.hot) import.meta.hot.dispose(() => {
   listeners.abort()
   input.dispose()
   hud.dispose()
+  if (activeSaves !== saves) activeSaves.dispose()
   saves.dispose()
   view.dispose()
   void renderer.dispose()
