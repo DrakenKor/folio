@@ -48,7 +48,8 @@ export function validateCommand(command: Command): void {
 /** Detach an input before keeping it as replay data. */
 export function copyCommand(command: Command): Command {
   validateCommand(command)
-  return { move: { x: command.move.x, z: command.move.z }, aim: command.aim ? { x: command.aim.x, z: command.aim.z } : null,
+  // JSON erases signed zero, which otherwise changes atan2 on the west axis.
+  return { move: { x: command.move.x || 0, z: command.move.z || 0 }, aim: command.aim ? { x: command.aim.x || 0, z: command.aim.z || 0 } : null,
     buttons: command.buttons, ...(command.operations === undefined ? {} : { operations: structuredClone(command.operations) }) }
 }
 

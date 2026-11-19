@@ -1,16 +1,16 @@
 import { contentSchema } from '../../content/schema'
-import { SCHEMA_VERSION, SIM_BUILD } from './types'
+import { LEGACY_SIM_BUILD, SCHEMA_VERSION, SIM_BUILD } from './types'
 import type { CombatContent, Entity, EntityId, World } from './types'
 
 /** Create an empty world; named RNG streams are derived lazily from its seed. */
-export function createWorld(seed: number, build = SIM_BUILD, content?: CombatContent): World {
+export function createWorld(seed: number, build?: string, content?: CombatContent): World {
   if (!Number.isSafeInteger(seed)) throw new RangeError('Seed must be a safe integer')
   const checkedContent = contentSchema.parse(content ?? { skills: [], enemies: [], dodge: {
     timing: { windupTicks: 0, activeTicks: 10, recoveryTicks: 8, moveCancelTicks: 8 },
     distance: 3, cooldownTicks: 30, invulnerableFrom: 2, invulnerableUntil: 8
   } })
   return {
-    schema: SCHEMA_VERSION, build, scenario: 'empty', seed, tick: 0, nextId: 1, rng: {}, entities: [], projectiles: [], playerId: null,
+    schema: SCHEMA_VERSION, build: build ?? (checkedContent.m2 ? SIM_BUILD : LEGACY_SIM_BUILD), scenario: 'empty', seed, tick: 0, nextId: 1, rng: {}, entities: [], projectiles: [], playerId: null,
     arena: null, content: checkedContent, nextItemId: 1, encounter: null, groundDrops: [], ailments: [], actionGroups: []
   }
 }

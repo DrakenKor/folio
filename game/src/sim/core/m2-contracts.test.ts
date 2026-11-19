@@ -187,3 +187,24 @@ describe('content schemas before world construction', () => {
     expect(() => createWorld(7, undefined, source)).toThrow(/Invalid content/)
   })
 })
+
+it('rejects illegal, disconnected and incomplete active graphs on snapshot restore', () => {
+  for (const [allocations, activeShapes] of [
+    [['0,0'], []], [['7,0'], []], [['2,0'], []], [['1,0'], ['rhombus-0']]
+  ] as const) {
+    const { world, actor } = populated()
+    const character = actor.character!
+    character.graph.allocations = [...allocations]
+    character.graph.activeShapes = [...activeShapes]
+    character.points = 4 - allocations.length
+    expect(() => restore(serialize(world))).toThrow(/graph|shape/i)
+  }
+})
+
+it('rejects previous M2 behavior while the schema-four M1 fixture still restores', () => {
+  const envelope = JSON.parse(serialize(buildScenario('m2-clearing', 7)))
+  envelope.build = envelope.world.build = 'm2-sim-v1'
+  expect(() => restore(JSON.stringify(envelope))).toThrow(/Unsupported simulation build/)
+  const fight = buildScenario('m1-fight', 7)
+  expect(restore(serialize(fight)).build).toBe('m2-sim-v1')
+})

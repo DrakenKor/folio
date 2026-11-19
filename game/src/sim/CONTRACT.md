@@ -1,6 +1,6 @@
 # Simulation contract
 
-Schema **4**, simulation build **`m2-sim-v1`**, fixed **60 Hz**. Shared types live in `core/types.ts`.
+Schema **4**, M2 simulation build **`m2-sim-v2`** (M0/M1 retain `m2-sim-v1`), fixed **60 Hz**. Shared types live in `core/types.ts`.
 The core loop drives movement, combat, AI and scheduled fight waves for headless, replay and browser callers.
 
 ## State and ownership
@@ -221,12 +221,33 @@ Historical reports retain their recorded values; acceptance replays derive curre
 Run `fnm exec --using=24 npm run game:test`, `npm run game:build` and `npx --no-install eslint game` with the same Node prefix.
 
 
+### M2 recorded final hashes
+
+The M2 balance and stress fixtures use schema 4 and build `m2-sim-v2`. For all 21 final states,
+substituting the previous build stamp reproduces the corresponding T2.8 final hash.
+
+| Seed | Weight/melee | Gale/cast |
+| --- | --- | --- |
+| 1 | `9931fe0e` | `f9516945` |
+| 2 | `ab594f40` | `51d2b55d` |
+| 3 | `8ad920cf` | `1be77114` |
+| 4 | `898b00d7` | `5d51b668` |
+| 5 | `62cb9be5` | `82e921e1` |
+| 6 | `5e10d046` | `67ec8084` |
+| 7 | `c37b4de4` | `ca7352f4` |
+| 8 | `80e1e901` | `bbb1863b` |
+| 9 | `4d77a642` | `6d470115` |
+| 10 | `0d904816` | `df1f416c` |
+
+The seed-7 M2 stress fixture finishes at `119d2e0e`.
+
 ## M2 continuation and boundaries
 
 T2.0 defines contracts only. M0/M1 use null characters/encounters, empty M2 tables and no additional RNG draws.
 Build content lives in `world.content.m2`: version, actions, folds, graph profiles, item bases, affixes and loot tables.
 Actions extend the legacy collision definition with names, immutable tags, typed bases, weapon coefficient and nominal reach.
 The legacy `damage` field remains for M1 compatibility; M2 resolves typed bases and weapon coefficients through T2.2.
+Creaseback strikes in M2 capture a melee weight recipe at telegraph start and read target reductions at contact.
 Sector casts use collision kind `melee` with cast/area tags; tags determine modifier eligibility, independently of collision kind.
 M2 action lookup takes priority over legacy skills. Content schemas validate geometry, finite values, legal conversions and nonnegative factors.
 Folds declare one handle, tension, compatibility, modifiers, geometry factors, phase deltas and relative projectile angles in degrees.

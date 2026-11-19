@@ -4,7 +4,7 @@ import { buildBalanceScenario } from './build-scenarios'
 import { fmath } from './core/fmath'
 import { rngFloat } from './core/rng'
 import { createWorld, spawnEntity } from './core/store'
-import { M2_SCENARIO_NAMES, SCENARIO_NAMES, SIM_BUILD } from './core/types'
+import { M2_SCENARIO_NAMES, SCENARIO_NAMES } from './core/types'
 import type { CharacterState, Entity, Loadout, RolledItem, SimEvent, Vec2, World } from './core/types'
 import { UnsupportedError } from './core/unsupported'
 
@@ -67,7 +67,7 @@ function buildM1(world: World, name: string): World {
 }
 
 function buildM2Clearing(seed: number): World {
-  const world = createWorld(seed, SIM_BUILD, m2Content())
+  const world = createWorld(seed, undefined, m2Content())
   const content = world.content.m2!
   const profile = content.graphProfiles[0]!
   const starterBases = content.itemBases.filter(base => base.starter)
@@ -100,7 +100,7 @@ export function buildScenario(name: string, seed: number): World {
   if (M2_SCENARIO_NAMES.some(scenario => scenario === name)) throw new UnsupportedError('M2 scenarios (T2.3)')
   const scenario = SCENARIO_NAMES.find(candidate => candidate === name)
   if (!scenario) throw new RangeError(`Unknown scenario: ${name}`)
-  const world = createWorld(seed, SIM_BUILD, name.startsWith('m1-') ? m1Content() : undefined)
+  const world = createWorld(seed, undefined, name.startsWith('m1-') ? m1Content() : undefined)
   world.scenario = scenario
   if (name.startsWith('m1-')) return buildM1(world, name)
   if (name === 'empty') return world

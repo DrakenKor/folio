@@ -3,13 +3,13 @@ import { actionPhase } from '../core/timing'
 import { Button } from '../core/types'
 import type { ActionDefinition, ActionTiming, Entity, SimEvent, SkillDefinition, Vec2, World } from '../core/types'
 import type { ActorTick } from '../systems/actors'
-import { resolveRecipe } from './recipe'
+import { buildAction, resolveRecipe } from './recipe'
 import { actorStats, byId } from './stats'
 
 const slotButtons = [Button.Primary, Button.Secondary, Button.Skill1, Button.Skill2, Button.Skill3, Button.Skill4]
 
 export function skillDefinition(world: World, id: string) {
-  return world.content.m2?.actions.find(action => action.id === id) ?? world.content.skills.find(skill => skill.id === id)!
+  return buildAction(world, id) ?? world.content.skills.find(skill => skill.id === id)!
 }
 
 /** Normalize finite input without overflowing on large command components. */

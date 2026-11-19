@@ -32,10 +32,16 @@ function reason(error: unknown): SaveStatusCode {
   return 'invalid-character'
 }
 
+function storageFailed(code: SaveStatusCode): boolean {
+  return code === 'quota' || code === 'security' || code === 'read-failed'
+}
+
 export class SaveController {
   private state: SaveStatus = { code: 'read-only', writable: false, generation: 0, text: null, refunds: [] }
   private readonly writer?: Writer
   private timer?: number
+  private readonly isolated: boolean
+  private recovering = false
   private disposed = false
   private queue = Promise.resolve()
   /** Exact bytes also let an explicit reset/import recover a corrupt slot safely. */
@@ -44,6 +50,8 @@ export class SaveController {
   private barrier?: { reached: boolean; wait: Promise<void>; release: () => void }
 
   constructor(readonly options: SaveControllerOptions) {
+    this.isolated = options.isPlayerSession?.() === false
+    if (this.isolated) return
     const locks = options.locks ?? globalThis.navigator?.locks
     if (locks) {
       this.state.code = 'blocked'
@@ -51,10 +59,18 @@ export class SaveController {
     }
   }
 
-  status(): SaveStatus { return structuredClone(this.state) }
+  status(): SaveStatus {
+    const status = structuredClone(this.state)
+    if (storageFailed(status.code)) status.text = this.observed ?? null
+    if (this.writer && !this.writer.ownsLock && status.code !== 'lost-writer' && status.code !== 'generation-mismatch') {
+      status.code = 'blocked'
+      status.writable = false
+    }
+    return status
+  }
 
   export(): string {
-    if (this.state.text !== null) {
+    if (this.state.text !== null && this.state.text === this.observed) {
       checkSaveSize(this.state.text)
       return this.state.text
     }
@@ -86,15 +102,14 @@ export class SaveController {
   }
 
   private run(action: () => Promise<void>): Promise<SaveResult> {
+    if (this.recovering) return Promise.resolve(this.failure('read-only'))
     const result = this.queue.then(async (): Promise<SaveResult> => {
       if (this.disposed) return this.failure('lost-writer')
       try { await action(); return { ok: true, status: this.status() } }
       catch (error) {
         const code = reason(error)
         if (error instanceof SaveError && error.text !== undefined) this.state.text = error.text
-        if (this.state.text === null && (code === 'security' || code === 'read-failed')) {
-          try { this.state.text = this.encode(this.options.getWorld(), this.state.generation) } catch { /* No exportable character yet. */ }
-        }
+        if (storageFailed(code)) this.state.text = null
         this.setCode(code)
         return this.failure(code)
       }
@@ -148,6 +163,7 @@ export class SaveController {
   }
 
   load(): Promise<SaveResult> {
+    if (this.isolated) return Promise.resolve(this.failure('read-only'))
     return this.run(async () => {
       if (!this.writer) return this.readWorld('read-only')
       this.listen()
@@ -180,14 +196,13 @@ export class SaveController {
   private async write(loaded?: CharacterLoad): Promise<void> {
     const generation = this.state.generation + 1
     const text = this.encode(loaded?.world ?? this.options.getWorld(), generation)
-    if (import.meta.env.DEV && this.barrier) {
+    if (this.barrier) {
       this.barrier.reached = true
       await this.barrier.wait
     }
     if (this.disposed) throw new SaveError('lost-writer')
     try { (this.options.storage ?? globalThis.localStorage).setItem(SAVE_KEY, text) }
     catch (error) {
-      this.state.text = text
       throw new SaveError(reason(error) === 'security' ? 'security' : 'quota')
     }
     this.observed = text
@@ -245,8 +260,13 @@ export class SaveController {
     })
   }
 
+  /** Stop new transactions while previously requested commits finish before snapshotting. */
+  suspendForRecovery(): Promise<void> {
+    this.recovering = true
+    return this.queue
+  }
+
   commitBarrier(action: 'arm' | 'reached' | 'release'): boolean {
-    if (!import.meta.env.DEV) return false
     if (action === 'arm' && !this.barrier) {
       let release!: () => void
       const wait = new Promise<void>(resolve => { release = resolve })
