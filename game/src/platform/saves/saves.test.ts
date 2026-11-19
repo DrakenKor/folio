@@ -136,6 +136,7 @@ it('preserves unreadable bytes until an explicit reset installs a fresh save', a
     expect(await save.load()).toMatchObject({ ok: false, reason: 'corrupt' })
     expect((await save.flush()).ok).toBe(false)
     expect(bytes()).toBe('{')
+    expect(save.export()).toBe('{')
     expect(await save.reset()).toMatchObject({ ok: true, status: { writable: true, generation: 1 } })
     expect(JSON.parse(bytes()!).character.points).toBe(4)
   } finally { save.dispose() }

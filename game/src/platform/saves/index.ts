@@ -1,7 +1,7 @@
 import type { CharacterData, CharacterLoad, CombatContent, LegacySaveEnvelope, SaveEnvelope, SaveResult, SaveStatus, SaveStatusCode, World } from '../../sim/core/types'
 import { UnsupportedError } from '../../sim/core/unsupported'
 import { buildScenario } from '../../sim/scenarios'
-import { characterData, encodeSave, parseEnvelope, SaveError } from './envelope'
+import { characterData, checkSaveSize, encodeSave, parseEnvelope, SaveError } from './envelope'
 import { refundRemovedContent } from './refunds'
 import { Writer } from './writer'
 
@@ -32,6 +32,10 @@ function reason(error: unknown): SaveStatusCode {
   return 'invalid-character'
 }
 
+function storageFailed(code: SaveStatusCode): boolean {
+  return code === 'quota' || code === 'security' || code === 'read-failed'
+}
+
 export class SaveController {
   private state: SaveStatus = { code: 'read-only', writable: false, generation: 0, text: null, refunds: [] }
   private readonly writer?: Writer
@@ -57,6 +61,7 @@ export class SaveController {
 
   status(): SaveStatus {
     const status = structuredClone(this.state)
+    if (storageFailed(status.code)) status.text = this.observed ?? null
     if (this.writer && !this.writer.ownsLock && status.code !== 'lost-writer' && status.code !== 'generation-mismatch') {
       status.code = 'blocked'
       status.writable = false
@@ -65,6 +70,10 @@ export class SaveController {
   }
 
   export(): string {
+    if (this.state.text !== null && this.state.text === this.observed) {
+      checkSaveSize(this.state.text)
+      return this.state.text
+    }
     return this.encode(this.options.getWorld(), this.state.generation)
   }
 
@@ -100,7 +109,7 @@ export class SaveController {
       catch (error) {
         const code = reason(error)
         if (error instanceof SaveError && error.text !== undefined) this.state.text = error.text
-        if (code === 'quota' || code === 'security' || code === 'read-failed') this.state.text = this.observed ?? null
+        if (storageFailed(code)) this.state.text = null
         this.setCode(code)
         return this.failure(code)
       }
