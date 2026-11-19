@@ -1,5 +1,5 @@
 import { GAIT, TICK_DT, type ActionState, type ActionTiming, type Entity, type World } from '../../sim/core/types'
-import { inspectStats } from '../../sim/core'
+import { inspectStats, isM3 } from '../../sim/core'
 import { CLIP_MARKERS, type ClipName } from './markers'
 
 const clamp = (n: number) => Math.max(0, Math.min(1, n))
@@ -7,6 +7,11 @@ const mix = (a: number, b: number, alpha: number) => a + (b - a) * alpha
 const wrap = (n: number, period: number) => n - Math.floor(n / period) * period
 const MELEE = ['attack', 'attack_slice', 'attack_stab'] as const
 const CAST = ['cast', 'cast_long'] as const
+const M3_CLIPS: Partial<Record<string, ClipName>> = {
+  'span-cut': 'attack_slice', 'open-hem': 'attack_stab', 'plinth-blow': 'attack',
+  'brace-mark': 'block', 'cast-loop': 'cast', 'gather-line': 'cast_long',
+  'lay-bed': 'attack', 'lift-print': 'cast', 'rill-fan': 'cast_long'
+}
 
 interface PoseSample {
   id: number
@@ -30,6 +35,8 @@ export interface PoseState {
   previous?: Readonly<PoseSample>
   /** Debug preview only, including block and otherwise unused variants. */
   clip?: ClipName
+  drawingClip?: ClipName
+  charge?: number
 }
 
 export interface CharacterPose {
@@ -65,7 +72,11 @@ export function actorPoseState(actor: Readonly<Entity>, world: Readonly<World>, 
     const stats = inspectStats(world, actor.id)
     timing = stats.ok ? stats.value.dodge.timing : world.content.dodge.timing
   }
-  return { actor, tick: world.tick, timing,
+  const card = isM3(world) ? world.content.m3.actions.find(a => a.id === actor.action?.id)?.mechanic : undefined
+  const clip = card && M3_CLIPS[card.kind]
+  const charge = card?.kind === 'plinth-blow' && actor.mechanics?.held
+    ? clamp(actor.mechanics.held.eligibleTicks / card.chargedAt) : undefined
+  return { actor, tick: world.tick, timing, drawingClip: clip, charge,
     flashTicks: Math.max(1, ...world.content.skills.map(skill => skill.hitFlashTicks)), previous }
 }
 
@@ -89,16 +100,20 @@ export function characterPose(state: Readonly<PoseState>, alpha = 0): CharacterP
       mix(previous.death.ageTicks, actor.death.ageTicks, fraction) : actor.death.ageTicks
     return { ...result, clips: { death: [1, Math.min(age * TICK_DT, CLIP_MARKERS.death.end)] } }
   }
+  if (state.charge !== undefined) {
+    const windup = CLIP_MARKERS.attack.contact
+    return { ...result, clips: { attack: [1, mix(windup * .28, windup * .9, state.charge)] } }
+  }
   if (override === 'block') return { ...result, clips: { block: [1, wrap(tick * TICK_DT, CLIP_MARKERS.block.end)] } }
   if (actor.action && timing) {
     const action = actor.action
     const same = previous?.action?.id === action.id && previous.action.startTick === action.startTick
     const age = same ? mix(previous.action!.ageTicks, action.ageTicks, fraction) : action.ageTicks
-    const clip = override ?? actionClip(actor.id, action)
+    const clip = override ?? state.drawingClip ?? actionClip(actor.id, action)
     const total = timing.windupTicks + timing.activeTicks + timing.recoveryTicks
     const weight = Math.min(clamp((age + 1) / 2), timing.recoveryTicks ? clamp((total - age) / Math.min(4, timing.recoveryTicks)) : 1)
     for (const name of ['idle', 'walk', 'run'] as const) clips[name] = [clips[name]![0] * (1 - weight), clips[name]![1]]
-    clips[clip] = [weight, actionTime(clip, timing, age)]
+    clips[clip] = [weight, clip === 'block' ? mix(.13, .54, clamp(age / total)) : actionTime(clip, timing, age)]
   }
   if (actor.hitFlashTicks > 0 || override === 'hit') {
     const age = Math.max(0, state.flashTicks - actor.hitFlashTicks)

@@ -1,7 +1,9 @@
-import { Mesh, NeutralToneMapping, PCFShadowMap, type Group, type WebGPURenderer } from 'three/webgpu'
+import { Mesh, NeutralToneMapping, PCFShadowMap, Vector3, type Group, type WebGPURenderer } from 'three/webgpu'
 import { bookmark, type BookmarkName } from '../look/bookmarks'
 import { createEnemy, poseEnemy } from './combat/creaseback'
 import { TICK_DT, type World } from '../sim/core/types'
+import { isM3 } from '../sim/core'
+import { M3Feedback } from './combat/m3-feedback'
 import { CombatFeedback } from './combat/feedback'
 import { CameraRig } from './basic/camera'
 import { CharacterView, loadCharacter, type CharacterAsset } from './characters/character'
@@ -25,6 +27,8 @@ export class MeadowView implements RenderView {
   private previousActor: ReturnType<typeof sampleActorPose> | undefined
   private world: Readonly<World> | null = null
   private feedback: CombatFeedback
+  private m3Feedback: M3Feedback
+  private readonly hand = new Vector3()
   private renderTime = 0
   private tick = -1
   private framing: string | null | undefined
@@ -47,7 +51,8 @@ export class MeadowView implements RenderView {
     this.camera.camera.far = 4000
     this.meadow = createMeadow(world.seed, world.arena)
     this.feedback = new CombatFeedback(this.meadow.field)
-    this.meadow.scene.add(this.feedback.object)
+    this.m3Feedback = new M3Feedback(this.meadow.field)
+    this.meadow.scene.add(this.feedback.object, this.m3Feedback.object)
     this.knight = new CharacterView(asset, { env: this.meadow.env })
     this.meadow.scene.add(this.knight.object, this.aim.object, this.drops.object)
     this.post = createPost(renderer, this.meadow.scene, this.camera.camera)
@@ -83,7 +88,8 @@ export class MeadowView implements RenderView {
       this.disposeScene()
       this.meadow = createMeadow(frame.world.seed, frame.world.arena)
       this.feedback = new CombatFeedback(this.meadow.field)
-      this.meadow.scene.add(this.feedback.object)
+      this.m3Feedback = new M3Feedback(this.meadow.field)
+      this.meadow.scene.add(this.feedback.object, this.m3Feedback.object)
       this.knight.setEnvironment(this.meadow.env)
       this.meadow.scene.add(this.knight.object, this.aim.object, this.drops.object)
       this.post = createPost(this.renderer, this.meadow.scene, this.camera.camera)
@@ -96,6 +102,9 @@ export class MeadowView implements RenderView {
     const dt = Math.max(0, Math.min(0.1, time - this.renderTime))
     this.renderTime = time
     this.feedback.sync(frame)
+    const m3 = isM3(frame.world) ? frame.world : null
+    this.m3Feedback.object.visible = !!m3
+    if (!m3) this.m3Feedback.clear()
     this.drops.sync(frame.world.groundDrops, this.meadow.field.heightAt, this.meadow.field.player)
     this.knight.object.visible = false
     this.aim.object.visible = false
@@ -109,10 +118,14 @@ export class MeadowView implements RenderView {
       const facing = previous.facing + turn * frame.alpha
       if (entity.id === frame.world.playerId) {
         this.knight.object.visible = true
+        const weapon = entity.character?.items.find(item => item.id === entity.character?.equipment.weapon)
+        const base = m3?.content.m3.itemBases.find(base => base.id === weapon?.baseId)
+        this.knight.tool(base && 'familyId' in base ? base.familyId : undefined)
         this.knight.object.position.set(x, y, z)
         const characterPose = this.knight.poseActor({ ...actorPoseState(entity, frame.world, this.previousActor),
           actor: { ...entity, facing } }, frame.alpha)
         this.feedback.flash(this.knight.object, entity)
+        if (m3) this.m3Feedback.sync(frame, m3, entity, this.knight.handPosition(this.hand))
         this.aim.object.visible = entity.death === null
         this.aim.object.position.set(x, y, z)
         this.aim.point(characterPose.aim)
@@ -187,6 +200,7 @@ export class MeadowView implements RenderView {
 
   private disposeScene(): void {
     this.feedback.dispose()
+    this.m3Feedback.dispose()
     this.knight.object.removeFromParent()
     this.aim.object.removeFromParent()
     this.drops.object.removeFromParent()
