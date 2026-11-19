@@ -1,5 +1,7 @@
-import type { CharacterData, CharacterState, GraphProfile, M2Content } from '../core/types'
+import { EQUIPMENT_ROLES } from '../core/types'
+import type { CharacterData, CharacterState, GraphProfile, M2Content, M3Content } from '../core/types'
 import { connectedNodes, markedShapes } from './graph'
+import { repairLoadout } from './loadout'
 
 function validIds(values: string[]): boolean {
   return Array.isArray(values) && values.every(id => typeof id === 'string' && id.length > 0) &&
@@ -28,15 +30,7 @@ function refundGraph(character: CharacterState, profile: GraphProfile, refunds: 
   graph.version = profile.version
 }
 
-/** Update a detached older projection before validating it against current content. */
-export function refundRemovedContent(data: CharacterData, content: M2Content): string[] {
-  if (data.contentVersion === content.version) return []
-  const refunds: string[] = []
-  const character = data.character
-  const profile = content.graphProfiles.find(profile => profile.id === character.graph.profileId)
-  if (!profile) throw new TypeError('Unknown graph profile')
-  refundGraph(character, profile, refunds)
-
+function refundLegacyDrawings(character: CharacterState, content: M2Content, refunds: string[]) {
   if (character.loadout.length !== 6 || !validIds(character.loadout.filter(id => id !== null))) {
     throw new TypeError('Invalid saved loadout')
   }
@@ -61,14 +55,42 @@ export function refundRemovedContent(data: CharacterData, content: M2Content): s
       return false
     })
   }
+}
 
+export function validateSourceItems(data: CharacterData, content: M2Content) {
+  const c = data.character
+  const owned = new Set(c.items.map(i => i.id))
+  const placed = [...c.inventory, ...c.stash, ...Object.values(c.equipment).filter(id => id !== null)]
+  if (Object.keys(c.equipment).length !== EQUIPMENT_ROLES.length || owned.size !== c.items.length ||
+      placed.length !== owned.size || placed.length !== new Set(placed).size ||
+      placed.some(id => !owned.has(id) || !Number.isSafeInteger(id) || id < 1 || id >= data.nextItemId) ||
+      EQUIPMENT_ROLES.some(role => c.equipment[role] !== null && !c.items.some(i => i.id === c.equipment[role] && i.role === role))) {
+    throw new TypeError('Invalid saved item ownership')
+  }
+  for (const item of c.items) {
+    if (new Set(item.affixes.map(a => a.familyId)).size !== item.affixes.length) throw new TypeError('Duplicate affix family')
+    for (const affix of item.affixes) {
+      const known = content.affixes.find(f => f.id === affix.familyId)
+      const pool = known ? [known] : content.affixes
+      if (!Number.isSafeInteger(affix.roll) || affix.roll < 0) throw new TypeError('Invalid saved affix roll')
+      if (!pool.some(f => f.category === affix.category &&
+          f.roles.includes(item.role) && f.tiers.some(t => t.tier === affix.tier && t.unlockRank <= c.rank &&
+            affix.roll >= t.min && affix.roll <= t.max))) throw new TypeError('Invalid saved affix tier or roll')
+    }
+  }
+}
+
+export function refundGraphAndItems(character: CharacterState, content: M2Content, refunds: string[]) {
+  const profile = content.graphProfiles.find(profile => profile.id === character.graph.profileId)
+  if (!profile || !Number.isSafeInteger(character.graph.version) || character.graph.version < 1) throw new TypeError('Invalid graph profile')
+  refundGraph(character, profile, refunds)
   const families = [...content.affixes].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
   for (const item of character.items) {
     if (typeof item.baseId !== 'string' || !item.baseId) throw new TypeError('Invalid saved item base')
     if (!content.itemBases.some(base => base.id === item.baseId)) {
       const starter = content.itemBases.find(base => base.starter && base.role === item.role)
       if (!starter) throw new TypeError('Missing starter base')
-      refunds.push(`Replaced ${item.baseId} with ${starter.name}.`)
+      refunds.push(`Replaced ${item.baseId} on item ${item.id} with ${starter.name}.`)
       item.baseId = starter.id
     }
     for (const affix of item.affixes) {
@@ -78,10 +100,48 @@ export function refundRemovedContent(data: CharacterData, content: M2Content): s
       const family = families.find(family => family.category === affix.category && family.roles.includes(item.role))
       const tier = family?.tiers.find(tier => tier.tier === 1)
       if (!family || !tier) throw new TypeError('Missing replacement affix')
-      refunds.push(`Replaced ${affix.familyId} with ${family.name}.`)
+      refunds.push(`Replaced ${affix.familyId} on item ${item.id} with ${family.name}.`)
       Object.assign(affix, { familyId: family.id, tier: 1, roll: tier.min })
     }
   }
+}
+
+/** Update a detached older M2 projection for a legacy controller. */
+export function refundRemovedContent(data: CharacterData, content: M2Content): string[] {
+  if (data.contentVersion === content.version) return []
+  if (/^m\d+-v\d+$/.test(data.contentVersion) && data.contentVersion !== 'm2-v1') throw new TypeError('Invalid source content version')
+  const refunds: string[] = []
+  refundGraphAndItems(data.character, content, refunds)
+  refundLegacyDrawings(data.character, content, refunds)
   data.contentVersion = content.version
   return refunds
+}
+
+const changedDrawings: Record<string, string> = {
+  'span-cut': 'build seams with successive hits',
+  'plinth-blow': 'hold and release to charge the stamp',
+  'fold-dart': 'apply Burden with a tally dart',
+  'rill-fan': 'hold to channel steerable pulses'
+}
+
+/** M2 drawings and folds cost no points. Keep their receipt separate from graph refunds. */
+export function migrateDrawings(character: CharacterState, content: M3Content, refunds: string[]) {
+  const loadout = repairLoadout(character, content, 'migration')
+  for (const [i, skill] of character.loadout.entries()) {
+    if (!skill) continue
+    const action = content.actions.find(a => a.id === skill)
+    if (!action) refunds.push(`Retired drawing ${skill}.`)
+    else if (loadout[i] !== skill) refunds.push(`Cleared ${skill}, which requires ${action.familyId}.`)
+    else refunds.push(`Kept ${skill}. Its new drawing lets you ${changedDrawings[skill]}.`)
+  }
+  character.loadout = loadout
+  for (const [skill, folds] of Object.entries(character.folds)) {
+    const retained = folds.filter(id => {
+      if (id === 'splay-pleat' && skill === 'fold-dart' && content.folds.some(f => f.id === id && f.whitelist.includes(skill))) return true
+      refunds.push(`Removed ${id} from ${skill}, releasing its tension.`)
+      return false
+    })
+    if (content.actions.some(a => a.id === skill)) character.folds[skill] = retained
+    else delete character.folds[skill]
+  }
 }
