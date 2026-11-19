@@ -10,7 +10,7 @@ fnm exec --using=24 node game/src/debug/combat-input-check.mjs
 ```
 
 The script drives `game/tools/play.mjs`, defaults to isolated headless Brave on CDP 9576, and stops Brave in `finally`.
-Stop Vite afterward. Override `PLAY_ORIGIN`, `PLAY_CDP_PORT`, or `PLAY_HEADLESS` when needed.
+Stop Vite afterward. Override `PLAY_ORIGIN` or `PLAY_CDP_PORT` when needed; Brave runs headless unless `PLAY_HEADED=1`.
 Headless mode avoids desktop focus changes clearing pending input between separate CLI calls.
 Boot loads `buildScenario('m1-arena', 7)` through the scenario URL parameter.
 Snapshots isolate the player by removing enemies; skill slots, content, stats and arena retain their scenario values.

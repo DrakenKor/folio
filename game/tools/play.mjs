@@ -150,7 +150,7 @@ async function launch() {
     '--disable-extensions', '--disable-component-update', '--disable-background-networking',
     // Keep the window visible when other apps cover it, so only tab switches hide the game.
     '--disable-backgrounding-occluded-windows',
-    ...(process.env.PLAY_HEADLESS === '1' ? ['--headless=new'] : []),
+    ...(process.env.PLAY_HEADED === '1' ? [] : ['--headless=new']),
     '--window-size=1280,800', 'about:blank'
   ], { detached: true, stdio: ['ignore', log, log] })
   closeSync(log)

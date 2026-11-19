@@ -57,7 +57,7 @@ async function launch() {
   child = spawn(process.env.BRAVE_BIN ?? '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser', [
     '--remote-debugging-address=127.0.0.1', `--remote-debugging-port=${port}`, '--remote-allow-origins=*', `--user-data-dir=${profile}`,
     '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-component-update', '--disable-background-networking',
-    '--disable-backgrounding-occluded-windows', '--window-size=1440,900', ...(process.env.PLAY_HEADLESS === '1' ? ['--headless=new'] : []), 'about:blank'
+    '--disable-backgrounding-occluded-windows', '--window-size=1440,900', ...(process.env.PLAY_HEADED === '1' ? [] : ['--headless=new']), 'about:blank'
   ], { stdio: 'ignore' })
   let launchedError
   child.on('error', error => { launchedError = error })
