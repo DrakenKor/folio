@@ -1,10 +1,11 @@
 import { hashWorld } from './hash'
+import { m3Systems } from './m3-loop'
 import { step } from './loop'
 import { restore } from './snapshot'
 import type { Replay } from './types'
 
 /** Re-simulate without mutating the replay, returning the first mismatching hash tick. */
-export function verifyReplay(replay: Replay): { ok: boolean; divergedAt?: number } {
+export function verifyReplay(replay: Replay, systems = m3Systems): { ok: boolean; divergedAt?: number } {
   if (replay.format !== 'folio.arpg.replay' || !Array.isArray(replay.commands) || !Array.isArray(replay.hashes)) throw new TypeError('Invalid replay')
   const world = restore(JSON.stringify(replay.start))
   const end = world.tick + replay.commands.length
@@ -19,7 +20,7 @@ export function verifyReplay(replay: Replay): { ok: boolean; divergedAt?: number
       if (hashWorld(world) !== replay.hashes[index]![1]) return { ok: false, divergedAt: world.tick }
       index++
     }
-    if (command < replay.commands.length) step(world, replay.commands[command]!)
+    if (command < replay.commands.length) step(world, replay.commands[command]!, systems)
   }
   return { ok: true }
 }

@@ -15,15 +15,16 @@ const unique = <T>(values: T[]) => new Set(values).size === values.length
 const texts = (values: string[]) => Array.isArray(values) && Array.from(values).every(text) && unique(values)
 const ids = (values: number[]) => Array.isArray(values) && Array.from(values).every(positiveId) && unique(values)
 
-function recipe(value: ResolvedAction, world: World): void {
-  const definition = value && buildAction(world, value.skillId)
+export function validateCapturedRecipe(value: ResolvedAction, world: World): void {
+  const action = value && buildAction(world, value.skillId)
+  const definition = action ?? (value && world.content.m3 && world.content.skills.find(skill => skill.id === value.skillId))
   check(record(value) && definition &&
     Array.isArray(value.tags) && unique(value.tags) && value.tags.every(tag => ACTION_TAGS.includes(tag)) &&
     texts(value.folds) && value.folds.length <= 2 && value.folds.every(id => world.content.m2!.folds.some(fold => fold.id === id)), 'recipe')
   validateDamage(value.sourceDamage)
   validateModifiers(value.modifiers)
   validateTiming(value.timing)
-  check(value.tags.length === definition.tags.length && value.tags.every(tag => definition.tags.includes(tag)), 'immutable recipe tags')
+  if (action) check(value.tags.length === action.tags.length && value.tags.every(tag => action.tags.includes(tag)), 'immutable recipe tags')
   const shape = value.footprint
   check(record(shape) && shape.kind === definition.kind &&
     [shape.reach, shape.arcRadians, shape.radius, shape.speed].every(number => Number.isFinite(number) && number >= 0) &&
@@ -32,7 +33,7 @@ function recipe(value: ResolvedAction, world: World): void {
     Array.isArray(shape.projectileAngles) && shape.projectileAngles.length > 0 && shape.projectileAngles.every(Number.isFinite), 'recipe footprint')
 }
 
-function item(value: RolledItem, world: World): void {
+export function validateItem(value: RolledItem, world: World): void {
   check(record(value) && positiveId(value.id) && value.id < world.nextItemId && EQUIPMENT_ROLES.includes(value.role) &&
     world.content.m2?.itemBases.some(base => base.id === value.baseId && base.role === value.role) &&
     Array.isArray(value.affixes) && value.affixes.length <= 2, 'item')
@@ -62,7 +63,7 @@ function character(value: CharacterState, world: World): void {
   check(Array.isArray(value.items) && ids(value.inventory) && value.inventory.length <= 30 && ids(value.stash) && value.stash.length <= 30 &&
     record(value.equipment) && EQUIPMENT_ROLES.every(role => value.equipment[role] === null || positiveId(value.equipment[role]!)) &&
     value.equipment.weapon !== null, 'item stores')
-  for (const entry of value.items) item(entry, world)
+  for (const entry of value.items) validateItem(entry, world)
   const owned = value.items.map(item => item.id)
   const placed = [...value.inventory, ...value.stash, ...EQUIPMENT_ROLES.flatMap(role => value.equipment[role] === null ? [] : [value.equipment[role]!])]
   check(unique(owned) && unique(placed) && owned.length === placed.length && placed.every(id => owned.includes(id)) &&
@@ -73,6 +74,7 @@ function character(value: CharacterState, world: World): void {
     check(world.content.m2?.actions.some(action => action.id === skillId) && texts(folds) && folds.length <= 2 &&
       folds.every(id => world.content.m2!.folds.some(fold => fold.id === id)), 'folds')
     const definitions = folds.map(id => world.content.m2!.folds.find(fold => fold.id === id)!)
+    if (world.content.m3) check(definitions.every(f => 'whitelist' in f && Array.isArray(f.whitelist) && f.whitelist.includes(skillId)), 'fold whitelist')
     check(unique(definitions.map(fold => fold.handle)) && definitions.reduce((sum, fold) => sum + fold.tension, 0) <= 3, 'fold budget')
   }
 }
@@ -95,14 +97,14 @@ export function validateBuildState(world: World): void {
       check(actor.action.recipe !== undefined, 'captured action recipe')
     }
     if (actor.action?.recipe !== undefined) {
-      recipe(actor.action.recipe, world)
+      validateCapturedRecipe(actor.action.recipe, world)
       check(actor.action.recipe.skillId === actor.action.id, 'action recipe identity')
       if (actor.action.recipe.footprint.projectileAngles.length > 1) check(actor.action.groupId !== undefined, 'fan action group')
     }
   }
   for (const drop of world.groundDrops) {
     check(record(drop) && record(drop.pos) && Number.isFinite(drop.pos.x) && Number.isFinite(drop.pos.z), 'drop')
-    item(drop.item, world)
+    validateItem(drop.item, world)
     claimed.push(drop.item.id)
   }
   check(unique(claimed), 'global item ids')
@@ -122,7 +124,7 @@ export function validateBuildState(world: World): void {
   for (const projectile of world.projectiles) {
     if (world.content.m2?.actions.some(action => action.id === projectile.skillId)) check(projectile.recipe !== undefined, 'captured projectile recipe')
     if (projectile.recipe !== undefined) {
-      recipe(projectile.recipe, world)
+      validateCapturedRecipe(projectile.recipe, world)
       check(projectile.recipe.skillId === projectile.skillId, 'projectile recipe identity')
       if (projectile.recipe.footprint.projectileAngles.length > 1) check(projectile.groupId !== undefined, 'fan projectile group')
     }

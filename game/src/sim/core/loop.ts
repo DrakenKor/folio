@@ -8,16 +8,23 @@ import { applyProgressionOperation, processProgression } from '../progression'
 import { advanceActors, beginActors } from '../systems/actors'
 import { finalizeGait, moveEntities } from '../systems/movement'
 import { wanderDummies } from '../systems/wandering-dummy'
-import { copyCommand } from './commands'
+import { m3Systems, stepM3 } from './m3-loop'
+import { isM3 } from './profile'
+import { copyCommand, requiresM3 } from './commands'
 import type { Command, SimEvent, World } from './types'
 import { UnsupportedError } from './unsupported'
 
 /** Consume one command and advance exactly one 60 Hz tick. */
-export function step(world: World, command: Command): SimEvent[] {
+export function step(world: World, command: Command, systems = m3Systems): SimEvent[] {
   const input = copyCommand(command)
+  if (isM3(world)) return stepM3(world, input, systems)
   world.tick++
   const events: SimEvent[] = []
   for (const [index, operation] of (input.operations ?? []).entries()) {
+    if (requiresM3(operation)) {
+      events.push({ type: 'operationRejected', tick: world.tick, index, operation, reason: 'unsupported' })
+      continue
+    }
     const result = operation.type === 'setLoadout' || operation.type === 'setFolds' ?
       applyCombatOperation(world, operation) : applyProgressionOperation(world, operation)
     events.push(result.accepted ? { type: 'operationAccepted', tick: world.tick, index, operation, reason: result.reason } :

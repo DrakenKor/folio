@@ -1,4 +1,6 @@
 import { validateContent } from '../../content/schema'
+import { isM3, sharedBuildView } from './profile'
+import { validateM3State } from './m3-state'
 import { validateBuildState } from './build-validation'
 import { BUTTON_MASK, M2_SCENARIO_NAMES, SCENARIO_NAMES } from './types'
 import type { KnockbackSpec, World } from './types'
@@ -24,10 +26,11 @@ function knockback(value: KnockbackSpec): boolean {
 export function validateWorld(world: World): void {
   check(record(world) && Number.isSafeInteger(world.seed) && integer(world.tick) && positiveInteger(world.nextId) &&
     Array.isArray(world.entities) && Array.isArray(world.projectiles) && record(world.rng), 'world')
-  check([...SCENARIO_NAMES, ...M2_SCENARIO_NAMES].includes(world.scenario), 'scenario')
+  check(isM3(world) ? ['empty', 'm3a-clearing', 'm3-act1'].includes(world.scenario) :
+    [...SCENARIO_NAMES, ...M2_SCENARIO_NAMES].some(id => id === world.scenario), 'scenario')
   const content = world.content
   try { validateContent(content) } catch (error) { throw new TypeError(`Invalid snapshot content: ${String(error)}`) }
-  const skills = [...(content.m2?.actions ?? []), ...content.skills]
+  const skills = [...((content.m3 ?? content.m2)?.actions ?? []), ...content.skills]
   const dodge = content.dodge
   check(world.arena === null || (record(world.arena) && vector(world.arena.center) && positive(world.arena.radius)), 'arena')
 
@@ -60,7 +63,7 @@ export function validateWorld(world: World): void {
       const definition = skills.find(skill => skill.id === action.id)
       check(action.kind === 'dodge' ? action.id === 'dodge' : definition && definition.kind === action.kind, 'action definition')
       const phases = action.kind === 'dodge' ? dodge.timing : action.recipe?.timing ?? definition!.timing
-      check(action.ageTicks < phases.windupTicks + phases.activeTicks + phases.recoveryTicks, 'action age')
+      check((isM3(world) && entity.mechanics?.held?.skillId === action.id) || action.ageTicks < phases.windupTicks + phases.activeTicks + phases.recoveryTicks, 'action age')
       check(action.kind === 'projectile' || !action.projectileSpawned, 'projectile launch flag')
       let lastTarget = 0
       for (const id of action.hitTargetIds) {
@@ -93,7 +96,10 @@ export function validateWorld(world: World): void {
       knockback(projectile.knockback) && integer(projectile.impactPauseTicks) && integer(projectile.hitFlashTicks), 'projectile data')
     previousId = projectile.id
   }
-  try { validateBuildState(world) } catch (error) { throw new TypeError(`Invalid snapshot build state: ${String(error)}`) }
+  try { validateBuildState(sharedBuildView(world)) } catch (error) { throw new TypeError(`Invalid snapshot build state: ${String(error)}`) }
+  if (isM3(world)) validateM3State(world)
+  else check(world.effects === undefined && world.zoneId === undefined && world.progress === undefined &&
+    world.entities.every(a => a.mechanics === undefined), 'profile continuation')
   for (const state of Object.values(world.rng)) {
     check(Array.isArray(state) && state.length === 4 && state.every(word => integer(word) && word <= 0xffffffff) &&
       state.some(word => word !== 0), 'RNG stream')

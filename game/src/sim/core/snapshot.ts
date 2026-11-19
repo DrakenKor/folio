@@ -1,4 +1,5 @@
-import { LEGACY_SIM_BUILD, SCHEMA_VERSION, SIM_BUILD } from './types'
+import { simulationStamp } from './profile'
+import { M3_SCHEMA, SCHEMA_VERSION } from './types'
 import type { SnapshotEnvelope, World } from './types'
 import { validateWorld } from './validation'
 
@@ -27,9 +28,10 @@ export function serialize(world: World): string {
 /** Restore a detached world, rejecting incompatible or malformed snapshots. */
 export function restore(text: string): World {
   const envelope: SnapshotEnvelope = JSON.parse(text)
-  if (envelope?.format !== 'folio.arpg.snapshot' || envelope.schema !== SCHEMA_VERSION) throw new TypeError('Unsupported snapshot format or schema')
+  if (envelope?.format !== 'folio.arpg.snapshot' || ![SCHEMA_VERSION, M3_SCHEMA].includes(envelope.schema)) throw new TypeError('Unsupported snapshot format or schema')
   const world = envelope.world
-  const expectedBuild = world?.content?.m2 ? SIM_BUILD : LEGACY_SIM_BUILD
+  const { schema, build: expectedBuild } = simulationStamp(world?.content ?? {})
+  if (envelope.schema !== schema) throw new TypeError('Unsupported snapshot format or schema for content profile')
   if (envelope.build !== expectedBuild || world?.build !== envelope.build) throw new TypeError(`Unsupported simulation build; expected ${expectedBuild}`)
   if (world.schema !== envelope.schema) throw new TypeError('Unsupported snapshot world schema')
   canonical(envelope)
