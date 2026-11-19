@@ -111,8 +111,8 @@ it.each(['duplicate ownership', 'bad point budget', 'invalid tier', 'negative re
   if (kind === 'negative retired roll') Object.assign(data.character.items.find(i => i.role === 'weapon')!.affixes[0]!, { familyId: 'retired-roll', roll: -1 })
   if (kind === 'future content') data.contentVersion = 'm3-v999'
   if (kind === 'unknown progress') Object.assign(data, { contentVersion: 'm3-v1', progress: { lastSafeMarker: 'unearned', repairs: [], creditedSockets: [], uncollectedDrops: [] } })
-  const bytes = canonical(data)
-  expect(() => loadCharacter(data, clearing().content)).toThrow()
+  const bytes = canonical(data), content = clearing().content
+  expect(() => loadCharacter(data, content)).toThrow()
   expect(canonical(data)).toBe(bytes)
 })
 

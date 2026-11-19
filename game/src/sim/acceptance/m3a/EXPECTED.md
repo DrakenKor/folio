@@ -98,7 +98,7 @@ Both backends produced identical results. The suite uses CDP input into the serv
 | S01, S06 | Native same-origin steal while A is inside commit, queued autosave/pagehide, importing old data under contention, B reloads A's latest character, stale A cannot overwrite | Two reds on destination schema |
 | S02–04 | Fresh copyable live character after quota/read faults, invalid/future/oversize import preserves bytes and world, player replay/explicit launch isolation and stale recovery | Four greens |
 | S05 | Strip Web Locks before bootstrap in both tabs. Import, reset, migration, autosave and pagehide leave original storage bytes and mutation log intact | Two reds. Schema 0 and 1 export schema 1 |
-| S07–08 | Inclusive UTF-8 and UTF-16 envelope limits and first excess, boot/import/direct migration receipt equivalence, stored generation and repeat load | S07 green, S08 red on schema |
+| S07–08 | Inclusive UTF-8 and UTF-16 envelope limits and first excess, boot/import/direct migration receipt equivalence, stored generation and repeat load | S07 six reds until the clearing exists, S08 red on schema |
 
 ## Frozen pressure inputs
 
@@ -142,6 +142,12 @@ a4bc8cb764ccdc5803a0c39bd7665a561e923ea550f7487f7cfdd708cc03c52e  game/tools/m3a
 2e4af7cff24eb8d75b531b18038be89ee72edbb1c1ff046a7c5c2f786067b7b5  game/tools/m3a-browser.mjs
 e506b5773871273c70e521be1ffe10189fb30e0c8990b4e21251c4c6c5348484  game/src/sim/acceptance/m3a/01-combat.test.ts
 f736fb64ba1fe4d87c4a21cfe59983c89e55a887f2ff39ab94c62ecdeb47e53e  game/src/sim/acceptance/m3a/02-cards.test.ts
-f97957422b1531a0d7abdc58e9053410c411e20d534a86198100cf9dc30a456a  game/src/sim/acceptance/m3a/03-save.test.ts
+324a229a76730b9b1ec5e434732bcea5d9229e6fd3f26d36127ef1a085224123  game/src/sim/acceptance/m3a/03-save.test.ts
 e1324280f90ec1784784b7b7d0d316415688598396c0fe80c78db186a3597704  game/src/sim/acceptance/m3a/fixtures.ts
 ```
+
+## Harness changes
+
+| Date | Change | Demonstrated defect |
+| --- | --- | --- |
+| 2026-11-19 | S07 resolves `clearing().content` before the `toThrow` assertion. Digest above updated. | T3.1 found that `clearing()` threw inside the asserted lambda, so all six S07 variants passed without reaching `loadCharacter`. They now fail by the clearing assertion until T3.3 supplies it. |
