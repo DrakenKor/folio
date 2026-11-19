@@ -121,10 +121,11 @@ export function Drawings({ world, character: c, content, api, report, initialSlo
       })}</ul>
       <hr/><small>Applied folds</small><p>{installed.map(words).join(', ') || 'Unfolded'}</p></> :
     fold ? <><p>{words(fold.handle)} handle · {words(fold.compatibility)}</p>
-      <div className="counters"><div><b>{tension} / 3</b><small>Tension</small></div><div><b>{ids.length} / 2</b><small>Folds</small></div></div>
+      <div className="counters">{tension <= 3 && <div><b>{tension} / 3</b><small>Tension</small></div>}<div><b>{ids.length} / 2</b><small>Folds</small></div></div>
       <ul className="fold-effects" aria-label={removing ? 'Effects to remove' : 'Fold effects'}>{effects(fold).map(t => <li key={t}>{t}</li>)}</ul>
       {legal ? <p className="fold-hint">Drag {words(fold.handle)} to trace the pattern.</p> :
-        <div className="notice warning"><strong>Cannot apply fold</strong><p>
+        <div className="notice warning"><strong>Cannot apply fold</strong>
+          {tension > 3 && <p>Would use {tension} of 3 tension</p>}<p>
           {(proposal.ok ? words(proposal.value.result.reason) : words(proposal.reason)) + ' · ' +
             (tension > 3 ? 'Remove a fold to free tension.' : 'Choose a compatible pattern at rest.')}</p></div>}
       <div className="fold-decision">{legal && <><small>{removing ? 'If unfolded' : 'Compatible · If applied'}</small>

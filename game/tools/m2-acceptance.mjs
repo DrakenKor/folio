@@ -119,7 +119,9 @@ async function click(page, name) {
   await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...location })
 }
 async function key(page, code, key = code.replace(/^Key/, '').toLowerCase()) {
-  await page.send('Input.dispatchKeyEvent', { type: 'keyDown', code, key }); await page.send('Input.dispatchKeyEvent', { type: 'keyUp', code, key })
+  const event = { code, key, ...(code === 'Enter' && { windowsVirtualKeyCode: 13 }) }
+  await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...event, ...(code === 'Enter' && { text: '\r' }) })
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...event })
 }
 async function screenshot(page, name) {
   for (const [width, height] of [[1440, 900], [1024, 768]]) {
@@ -178,6 +180,8 @@ try {
     const full = await evaluate(page, `(() => {const save=JSON.parse(__game.save.export()),c=save.character;const source=c.items.find(i=>i.id===c.equipment.weapon);for(let n=0;n<60;n++){const item={...structuredClone(source),id:save.nextItemId++};c.items.push(item);c[n<30?'inventory':'stash'].push(item.id)}return JSON.stringify(save)})()`)
     assert((await evaluate(page, `__game.save.import(${JSON.stringify(full)})`)).ok)
     await key(page, 'KeyI')
+    await until(() => evaluate(page, `[...document.querySelectorAll('.store .section-title')].filter(row =>
+      row.innerText.includes('30 / 30')).length === 2`), 'both rendered 30 / 30 counters')
     assert.match(await evaluate(page, 'document.body.innerText'), /inventory[\s\S]*stash/i)
     assert.match(await evaluate(page, 'document.body.innerText'), /compare|equipped/i)
     assert.match(await evaluate(page, 'document.body.innerText'), /30\s*\/\s*30|full/i)
@@ -192,24 +196,44 @@ try {
     const shown = await evaluate(page, '__game.character.preview({type:"refund",nodeId:"1,0"})')
     assert(shown.ok); await click(page, '1,0'); await click(page, '^Refund$')
     assert.match(await evaluate(page, 'document.body.innerText'), /refund|connected/i)
-    await click(page, '^Confirm$')
+    await click(page, '^Refund \\d+ points?$')
     assert.equal(m2(await state(page)).points, m2(before).points)
   })
   await check('B04 drawing handles, click/keyboard/drag preview, illegal folds and Confirm show identical recipe/query numbers', async () => {
     const results = []
     for (const method of ['click', 'keyboard', 'drag']) {
-      const page = await newWriter(); await key(page, 'KeyK'); await click(page, 'Fold Dart'); await click(page, 'Long Pleat')
+      const page = await newWriter(); await key(page, 'KeyK'); await click(page, 'Fold Dart')
       const before = m2(await state(page))
       assert.match(await evaluate(page, 'document.body.innerText'), /reach[\s\S]*spread[\s\S]*material/i)
+      const footprint = () => evaluate(page, `document.querySelector('.blueprint svg')?.getAttribute('aria-label')`)
+      await until(async () => (await footprint()) === 'Projectile footprint', 'unfolded drawing')
       assert.match(await evaluate(page, 'document.body.innerText'), /tension|recovery/i)
-      if (method === 'keyboard') await key(page, 'Enter', 'Enter')
+      const preview = await evaluate(page, '__game.character.preview({type:"setFolds",skillId:"fold-dart",foldIds:["long-pleat"]})')
+      assert(preview.ok && preview.value.result.accepted)
+      const comparison = preview.value.actions.find(action => action.skillId === 'fold-dart')
+      assert(comparison, 'Fold Dart query exposes the proposed recipe')
+      const reach = recipe => Number(recipe.footprint.reach.toFixed(5))
+      const proposed = `Projectile footprint, current reach ${reach(comparison.before.recipe)} m, proposed reach ${reach(comparison.after.recipe)} m`
+      if (method === 'click' || method === 'drag') await click(page, '^Long Pleat$')
+      if (method === 'keyboard') {
+        assert(await evaluate(page, `(() => {const pattern=[...document.querySelectorAll('.patterns button')].find(b=>b.textContent==='Long Pleat');
+          pattern?.focus();return !!pattern && document.activeElement===pattern})()`), 'Long Pleat has keyboard focus')
+        await key(page, 'Enter', 'Enter')
+      }
       if (method === 'drag') {
+        await until(async () => (await footprint()) === proposed, 'selected fold before dragging')
         const handle = await evaluate(page, `(() => {const e=[...document.querySelectorAll('[aria-label],button')].find(e=>/^Reach(?: handle)?$/i.test(e.getAttribute('aria-label')||e.textContent));if(!e)return null;const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`)
         assert(handle, 'accessible Reach handle')
+        await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...handle })
         await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', buttons: 1, clickCount: 1, ...handle })
-        await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', buttons: 1, x: handle.x + 80, y: handle.y })
+        await until(async () => (await footprint()) === 'Projectile footprint', 'Reach pointer down reveals the current footprint')
+        await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', button: 'left', buttons: 1, x: handle.x + 80, y: handle.y })
+        await until(async () => (await footprint()) === proposed, 'Reach drag reveals the proposed footprint before release')
         await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, x: handle.x + 80, y: handle.y })
       }
+      await until(async () => (await footprint()) === proposed, `${method} renders the queried footprint`)
+      assert.match(await evaluate(page, 'document.querySelector(".phase-labels").innerText'),
+        new RegExp(`Recovery ${comparison.before.recipe.timing.recoveryTicks} → ${comparison.after.recipe.timing.recoveryTicks}`))
       assert.deepEqual(m2(await state(page)), before, 'preview has no build mutation')
       await click(page, '^Confirm$')
       assert.deepEqual(m2(await state(page)).folds['fold-dart'], ['long-pleat']); results.push(m2(await state(page)).folds)
@@ -248,11 +272,19 @@ try {
   })
   await check('B07 real UI text export/import/reset and populated save survive reload', async () => {
     const page = await newWriter(); await key(page, 'KeyP'); await click(page, '1,0'); await click(page, '^Confirm$'); await key(page, 'KeyP')
-    await click(page, 'Copy save|Export'); seedText = await evaluate(page, '__game.save.export()')
+    await click(page, 'Copy save|Export')
+    await until(() => evaluate(page, '!!document.querySelector("textarea[readonly]")'), 'rendered export text')
+    seedText = await evaluate(page, 'document.querySelector("textarea[readonly]").value')
     assert.equal(JSON.parse(seedText).schema, 1)
-    const before = m2(await state(page)); await click(page, 'Paste save|Import')
-    assert(await evaluate(page, `(() => {const e=document.querySelector('textarea');if(!e)return false;e.value=${JSON.stringify(seedText)};e.dispatchEvent(new Event('input',{bubbles:true}));return true})()`), 'paste save text control')
-    await click(page, '^Import$|^Confirm$'); assert.deepEqual(m2(await state(page)), before)
+    const before = m2(await state(page))
+    assert((await evaluate(page, '__game.character.allocate("2,0")')).accepted)
+    assert.notDeepEqual(m2(await state(page)), before, 'live character differs from the exported one')
+    await click(page, 'Paste save|Import')
+    await until(() => evaluate(page, '!!document.querySelector("textarea:not([readonly])")'), 'rendered import field')
+    assert(await evaluate(page, `(() => {const e=document.querySelector('textarea:not([readonly])');if(!e)return false;e.value=${JSON.stringify(seedText)};e.dispatchEvent(new Event('input',{bubbles:true}));return true})()`), 'paste save text control')
+    await click(page, '^Import$|^Confirm$')
+    await until(() => evaluate(page, 'document.querySelector(".record-copy [role=status]")?.textContent === "Character imported"'), 'UI import completion')
+    assert.deepEqual(m2(await state(page)), before)
     await evaluate(page, '__game.save.flush()'); await reload(page)
     assert.deepEqual(m2(await state(page)), before)
   })
@@ -378,7 +410,13 @@ try {
   })
   if (lockMode !== 'missing') await check('B11 real Reset restores a fresh character and later save remains valid', async () => {
     const page = await newWriter(); assert((await evaluate(page, '__game.character.allocate("1,0")')).accepted)
+    const generation = (await status(page)).generation
     await click(page, '^Reset$'); await click(page, '^Confirm$|^Reset$')
+    await until(async () => {
+      const text = await bytes(page)
+      const current = (await status(page)).generation
+      return current > generation && text && JSON.parse(text).generation === current
+    }, 'committed Reset generation')
     const fresh = m2(await state(page)); assert.equal(fresh.rank, 1); assert.equal(fresh.points, 4); assert.deepEqual(fresh.graph.allocations, [])
     assert((await evaluate(page, '__game.save.flush()')).ok); assert.deepEqual((await saved(page)).character, fresh)
   })
@@ -388,7 +426,9 @@ try {
       const snapshot = await evaluate(page, `(() => {const e=JSON.parse(__game.snapshot()),w=e.world,p=w.entities.find(a=>a.id===w.playerId);p.pos={x:0,z:0};p.action=null;p.previousButtons=0;const enemies=w.entities.filter(a=>a.ai&&a.health>0);if(!${wholeTrio})w.entities=w.entities.filter(a=>!a.ai||a.id===enemies[0].id);for(const [i,a] of enemies.entries()){a.health=1;a.pos=[{x:1,z:0},{x:1.1,z:.7},{x:1.1,z:-.7}][i];a.action=null}w.content.m2.lootTables.forEach(t=>t.dropChance=1);return JSON.stringify(e)})()`)
       await evaluate(page, `__game.restore(${JSON.stringify(snapshot)});__game.cmd({move:{x:0,z:0},aim:{x:10,z:0},buttons:1});__game.step(10)`)
       const rested = await state(page); assert.equal(rested.encounter.phase, 'rest'); assert.equal(rested.groundDrops.length, wholeTrio ? 3 : 1)
-      const label = await evaluate(page, '[...document.querySelectorAll("button")].find(b=>/^Start/i.test(b.textContent))?.textContent')
+      const startLabel = () => evaluate(page, '[...document.querySelectorAll("button")].find(b=>/^Start/i.test(b.textContent))?.textContent')
+      await until(async () => (await startLabel())?.includes(`${rested.groundDrops.length} uncollected`), 'rendered Start drop count')
+      const label = await startLabel()
       assert(label?.includes(String(rested.groundDrops.length)), 'Start exposes uncollected drop count')
       await evaluate(page, 'document.querySelector("canvas").focus()'); await key(page, 'KeyF'); await evaluate(page, '__game.step(1)')
       assert.equal(m2(await state(page)).inventory.length, 1)

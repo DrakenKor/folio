@@ -6,7 +6,7 @@ const messages: Record<SaveStatusCode, [string, string]> = {
   blocked: ['Open in another tab', 'Play here to load the latest local character and move play to this tab.'],
   'lost-writer': ['Play moved to another tab', 'This clearing is paused. Play here to resume from the latest save.'],
   'generation-mismatch': ['A newer save is available', 'Play here to resume from the latest local character.'],
-  'read-only': ['Read-only session', 'Web Locks are unavailable. You can play in this tab for now. Copy save text before leaving, then paste it to resume.'],
+  'read-only': ['Read-only session', 'Copy save text before leaving, then paste it to resume.'],
   quota: ['Save failed · storage full', 'Your previous save is intact. Copy save text to keep this character.'],
   security: ['Browser storage denied', 'Copy save text to keep your progress outside this browser.'],
   'read-failed': ['Local save unavailable', 'The browser could not read your save. Copy save text or retry loading.'],
@@ -41,7 +41,8 @@ export function Records({ saves, status, mode, change, updated }: {
   return <div className="record-layout"><div className="record-mark" aria-hidden="true"><svg viewBox="0 0 160 200">
     <path d="M80 12L106 49L80 88L54 49ZM80 12V88M54 49H106M48 108L80 87L112 108L119 157L80 182L41 157ZM48 108L80 128L112 108M80 128V182M56 141L69 150M91 150L104 141M32 166L80 194L128 166"/></svg></div>
     <div className="record-copy"><small>Character record · Generation {status.generation}</small>
-      <h2>{mode === 'import' ? 'Import character' : mode === 'reset' ? 'Reset character?' : mode === 'export' ? 'Copy save text' : title}</h2>
+      <h2>{mode === 'import' ? 'Import character' : mode === 'reset' ? 'Reset character?' : mode === 'export' ? 'Copy save text' :
+        status.code === 'read-only' ? "Progress won't save automatically in this tab." : title}</h2>
       <p>{mode === 'reset' ? 'Replace this character with a fresh rank 1 build. Copy save text first to keep a backup.' :
         mode === 'import' ? 'Paste the complete save text. Import replaces your current character.' : mode === 'export' ? 'Keep this text to restore your equipment, folds and passive lattice.' : advice}</p>
       {status.code === 'read-only' && (mode === 'reset' || mode === 'import') && <p>Applies to this tab only.</p>}

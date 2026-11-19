@@ -1,4 +1,5 @@
 import { GAIT, TICK_DT, type ActionState, type ActionTiming, type Entity, type World } from '../../sim/core/types'
+import { inspectStats } from '../../sim/core'
 import { CLIP_MARKERS, type ClipName } from './markers'
 
 const clamp = (n: number) => Math.max(0, Math.min(1, n))
@@ -7,13 +8,26 @@ const wrap = (n: number, period: number) => n - Math.floor(n / period) * period
 const MELEE = ['attack', 'attack_slice', 'attack_stab'] as const
 const CAST = ['cast', 'cast_long'] as const
 
+interface PoseSample {
+  id: number
+  gait: Pick<Entity['gait'], 'phase'>
+  action: Pick<ActionState, 'id' | 'startTick' | 'ageTicks'> | null
+  death: Pick<NonNullable<Entity['death']>, 'startTick' | 'ageTicks'> | null
+}
+
+export function sampleActorPose({ id, gait, action, death }: Readonly<Entity>): PoseSample {
+  return { id, gait: { phase: gait.phase },
+    action: action && { id: action.id, startTick: action.startTick, ageTicks: action.ageTicks },
+    death: death && { startTick: death.startTick, ageTicks: death.ageTicks } }
+}
+
 export interface PoseState {
   actor: Readonly<Entity>
   tick: number
   timing: Readonly<ActionTiming> | null
   flashTicks: number
   /** Adjacent samples are disposable; absent after replacement or manual stepping. */
-  previous?: Readonly<Entity>
+  previous?: Readonly<PoseSample>
   /** Debug preview only, including block and otherwise unused variants. */
   clip?: ClipName
 }
@@ -44,9 +58,14 @@ export function actionTime(clip: ClipName, timing: Readonly<ActionTiming>, age: 
   return mix(m.recovery, m.end, r ? clamp((age - w - a) / r) : 1)
 }
 
-export function actorPoseState(actor: Readonly<Entity>, world: Readonly<World>, previous?: Readonly<Entity>): PoseState {
+export function actorPoseState(actor: Readonly<Entity>, world: Readonly<World>, previous?: Readonly<PoseSample>): PoseState {
   const skill = world.content.skills.find(skill => skill.id === actor.action?.id)
-  return { actor, tick: world.tick, timing: actor.action?.kind === 'dodge' ? world.content.dodge.timing : actor.action?.recipe?.timing ?? skill?.timing ?? null,
+  let timing = actor.action?.recipe?.timing ?? skill?.timing ?? null
+  if (actor.action?.kind === 'dodge') {
+    const stats = inspectStats(world, actor.id)
+    timing = stats.ok ? stats.value.dodge.timing : world.content.dodge.timing
+  }
+  return { actor, tick: world.tick, timing,
     flashTicks: Math.max(1, ...world.content.skills.map(skill => skill.hitFlashTicks)), previous }
 }
 
