@@ -1,0 +1,20 @@
+{
+  "pack": ["creaseback","furrow-skater","silt-bell"],
+  "origins": [[1.4,0],[3.7,0.7],[-3.4,1]],
+  "offsetUnit": 0.1,
+  "offsets": {
+    "1":[[1,0],[0,2],[-1,1]],"2":[[-1,1],[1,-2],[2,1]],
+    "3":[[0,-2],[1,0],[-2,1]],"4":[[1,2],[-2,2],[0,-1]],
+    "5":[[-1,0],[2,1],[1,-2]],"6":[[0,1],[-1,-1],[2,0]],
+    "7":[[1,-1],[1,2],[-2,0]],"8":[[-1,-2],[-2,1],[0,2]],
+    "9":[[0,2],[2,-1],[-1,-2]],"10":[[1,1],[-1,0],[2,-1]]
+  },
+  "delay":6,"timeout":1800,"idleLimit":720,
+  "wins":8,"damagedStarts":8,"greedyDeaths":5,"clearTicks":[360,840],"damageFraction":[0.2,0.65],
+  "traces": [
+    {"name":"rake","actors":[["creaseback",1,0]],"windup":24,"recovery":30,"stand":[{"at":0,"move":[0,0],"buttons":0}],"escape":[{"at":0,"move":[0,0],"buttons":0},{"at":6,"move":[-1,0],"buttons":4},{"at":7,"move":[-1,0],"buttons":0}]},
+    {"name":"rush","actors":[["furrow-skater",3,0]],"windup":36,"recovery":36,"stand":[{"at":0,"move":[0,0],"buttons":0}],"escape":[{"at":0,"move":[0,0],"buttons":0},{"at":6,"move":[0,1],"buttons":0}]},
+    {"name":"disc","actors":[["silt-bell",-3,0]],"windup":48,"recovery":42,"stand":[{"at":0,"move":[0,0],"buttons":0}],"escape":[{"at":0,"move":[0,0],"buttons":0},{"at":6,"move":[0,1],"buttons":0}]},
+    {"name":"overlap","actors":[["furrow-skater",3,0],["silt-bell",-3,0]],"windup":48,"recovery":36,"stand":[{"at":0,"move":[0,0],"buttons":0},{"at":6,"move":[0,0],"buttons":1},{"at":64,"move":[0,0],"buttons":2}],"escape":[{"at":0,"move":[0,0],"buttons":0},{"at":6,"move":[0,1],"buttons":0}]}
+  ]
+}
