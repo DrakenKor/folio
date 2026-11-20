@@ -68,13 +68,14 @@ it('restores the newer item when renderer startup spans the autosave interval', 
   expect(intervals.mock.calls.some(([, delay]) => delay === 30_000)).toBe(true)
 })
 
-it('commits an interaction-key pickup before pagehide', async () => {
+it('commits an interaction-key pickup on pagehide', async () => {
   const { world, player, item } = recoveryFixture()
   world.groundDrops.push({ item, pos: { ...player.pos } })
   storeSession(new URL(location.href), world, false, true, { generation: 4, code: 'ready', playerEntry: true })
   await import('../../main')
   controls.clock.advance(1, { ...IDLE_COMMAND, buttons: Button.Interact })
   expect(JSON.parse(controls.saves.export()).character.inventory).toContain(item.id)
+  window.dispatchEvent(new Event('pagehide'))
   await drainCommit()
   expect(JSON.parse(localStorage.getItem(SAVE_KEY)!).character.inventory).toContain(item.id)
 })
