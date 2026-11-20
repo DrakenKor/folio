@@ -81,8 +81,8 @@ export function validateSourceItems(data: CharacterData, content: M2Content) {
 }
 
 export function refundGraphAndItems(character: CharacterState, content: M2Content, refunds: string[]) {
-  const profile = content.graphProfiles.find(profile => profile.id === character.graph.profileId)
-  if (!profile || !Number.isSafeInteger(character.graph.version) || character.graph.version < 1) throw new TypeError('Invalid graph profile')
+  const profile = content.graphProfiles.find(p => p.id === character.graph.profileId && p.version === character.graph.version)
+  if (!profile) throw new TypeError('Invalid graph profile')
   refundGraph(character, profile, refunds)
   const families = [...content.affixes].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
   for (const item of character.items) {
