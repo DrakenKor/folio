@@ -1,3 +1,4 @@
+import { sharedBuildView } from '../core/profile'
 import type { CharacterState, GraphProfile, Operation, OperationReason, QueryResult, World } from '../core/types'
 
 const ROOT = '0,0'
@@ -44,9 +45,10 @@ export function markedShapes(profile: GraphProfile): Shape[] {
 
 /** Enumerate the player's lattice and marked boundaries in perimeter order; all arrays are detached. */
 export function graphTopology(world: World): QueryResult<GraphTopology> {
-  if (!world.content.m2) return { ok: false, reason: 'unsupported' }
+  const { m2 } = sharedBuildView(world).content
+  if (!m2) return { ok: false, reason: 'unsupported' }
   const graph = world.entities.find(e => e.id === world.playerId)?.character?.graph
-  const profile = world.content.m2.graphProfiles.find(p => p.id === graph?.profileId && p.version === graph.version)
+  const profile = m2.graphProfiles.find(p => p.id === graph?.profileId && p.version === graph.version)
   if (!profile) return { ok: false, reason: 'no-player' }
   const vertices: GraphTopology['vertices'] = []
   const edges: GraphTopology['edges'] = []
