@@ -30,6 +30,7 @@ export class Clock {
   resume(): void { this.explicitlyPaused = false; this.resetTime() }
 
   suspend(reason: string, active: boolean): void {
+    if (this.suspensions.has(reason) === active) return
     if (active) this.suspensions.add(reason)
     else this.suspensions.delete(reason)
     this.resetTime()

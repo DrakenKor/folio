@@ -149,7 +149,8 @@ export function stepM3(world: M3World, input: Command, systems: M3Systems): SimE
     if (cmd.cancelHeld) {
       if (m.held) actor.action = null
       m.held = null
-      m.rearmButtons = cmd.buttons
+      // A new physical press after focus returns can share the cancellation tick.
+      m.rearmButtons = cmd.buttons & ~(cmd.pressedButtons ?? 0)
     } else {
       m.rearmButtons &= cmd.buttons
       if (m.held && ((cmd.releasedButtons ?? 0) & m.held.button)) m.held.releasePending = true
