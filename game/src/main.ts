@@ -91,6 +91,8 @@ window.addEventListener('focus', suspension, options)
 document.addEventListener('visibilitychange', suspension, options)
 suspension()
 
+let finishRecovery!: () => void
+const recoveryReady = new Promise<void>(resolve => { finishRecovery = resolve })
 renderer.onDeviceLost = async () => {
   if (lost) return
   lost = true
@@ -101,10 +103,11 @@ renderer.onDeviceLost = async () => {
   const { code, generation } = saves.status()
   storeSession(url, clock.world, clock.userPaused, playerSession, { code, generation, playerEntry: initial.playerEntry })
   graphicsStopped()
+  finishRecovery()
 }
 
-function loseDevice(): void {
-  if (lost) return
+function loseDevice(): Promise<void> {
+  if (lost) return recoveryReady
   if ('isWebGPUBackend' in renderer.backend) {
     const backend = renderer.backend as unknown as { device: { destroy(): void } }
     backend.device.destroy()
@@ -115,6 +118,7 @@ function loseDevice(): void {
     if (!extension) throw new Error('WEBGL_lose_context is unavailable')
     extension.loseContext()
   }
+  return recoveryReady
 }
 
 const api = createAPI(clock, input, view.camera, ready, loseDevice, () => activeSaves, enterDebug)

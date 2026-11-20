@@ -11,7 +11,7 @@ import { SaveController } from '../platform/saves'
 
 export interface ScriptEntry { tick: number; command: Command }
 
-export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: Promise<void>, loseDevice: () => void, saves?: SaveController | (() => SaveController),
+export function createAPI(clock: Clock, input: Input, camera: CameraRig, ready: Promise<void>, loseDevice: () => void | Promise<void>, saves?: SaveController | (() => SaveController),
   onDebugWorld: (world: World) => void = () => {}) {
   const replace = (text: string) => {
     const world = restore(text)

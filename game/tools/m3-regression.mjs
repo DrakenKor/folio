@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // The historical M2 runner retains its original default entry and schema-1 expectations.
 // Player input, panels, persistence, F8 and device recovery now exercise the M3a default.
-// Long/Kiln Pleat, the three Creasebacks' drop fixture and schema-0 source data use explicit M2.
+// The M3 inventory lists the stores behind Gear & stores.
+// Long/Kiln Pleat, M2's detailed damage ledger, three-Creaseback drops and schema-0 input use explicit M2.
 // The M1 fight uses its original seed, inputs and hashes on the explicit m1-fight entry.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
@@ -283,6 +284,7 @@ try {
     const full = await evaluate(page, `(() => {const save=JSON.parse(__game.save.export()),c=save.character;const source=c.items.find(i=>i.id===c.equipment.weapon);for(let n=0;n<60;n++){const item={...structuredClone(source),id:save.nextItemId++};c.items.push(item);c[n<30?'inventory':'stash'].push(item.id)}return JSON.stringify(save)})()`)
     assert((await evaluate(page, `__game.save.import(${JSON.stringify(full)})`)).ok)
     await key(page, 'KeyI')
+    await click(page, '^Gear & stores$')
     await until(() => evaluate(page, `[...document.querySelectorAll('.store .section-title')].filter(row =>
       row.innerText.includes('30 / 30')).length === 2`), 'both rendered 30 / 30 counters')
     assert.match(await evaluate(page, 'document.body.innerText'), /inventory[\s\S]*stash/i)
@@ -346,7 +348,7 @@ try {
     assert.deepEqual(results[0], results[1]); assert.deepEqual(results[1], results[2])
   })
   await check('B05 damage tooltip vocabulary/stages equals public preview and explains boost addition/multiplier product', async () => {
-    const page = await newWriter(); await click(page, '^Start'); await key(page, 'KeyK'); await click(page, 'Span Cut')
+    await closeTabs(); const page = await tab({ query: { scenario: 'm2-clearing' } }); await click(page, '^Start'); await key(page, 'KeyK'); await click(page, 'Span Cut')
     const text = await evaluate(page, 'document.body.innerText')
     assert.match(text, /boost/i); assert.match(text, /multiplier/i); assert.match(text, /add/i); assert.match(text, /multipl/i)
     assert.doesNotMatch(text, /\b(increased|more|reduced|less) (damage|modifier)\b/i)

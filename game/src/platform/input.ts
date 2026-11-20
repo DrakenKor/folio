@@ -131,17 +131,13 @@ export class Input {
       this.reset()
       return copyCommand(command)
     }
-    if (this.cancelHeld && isM3(world)) {
-      this.cancelHeld = false
-      const command = this.queued ?? fallback ?? IDLE_COMMAND
-      this.queued = null
-      return { ...copyCommand(command), cancelHeld: true }
-    }
     this.held.pointer = this.pointer ? this.groundPoint(this.pointer.x, this.pointer.y) : null
     const live = this.held.command(this.basis(), isM3(world))
     const command = this.queued ?? (fallback ? copyCommand(fallback) : live)
     const overridden = this.queued !== null || fallback !== undefined
     this.queued = null
+    if (this.cancelHeld && isM3(world)) command.cancelHeld = true
+    this.cancelHeld = false
     if (this.target && !overridden) {
       const player = world.entities.find(entity => entity.id === world.playerId)
       if (!player) this.finish(false)
