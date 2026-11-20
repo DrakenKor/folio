@@ -33,26 +33,23 @@ export function shotContacts(world: M3World, states: Map<number, ActorTick>, eve
     const limit = foldOf(world, r, 'through')?.maxContacts ?? 1
     const ray = hitGroup(world, source, shot.actionStartTick, 'shot:' + shot.id)
     const shared = world.actionGroups.find(g => g.id === shot.groupId)
-    const attack: Attack = { owner: source, origin: from, recipe: r, factor: price(world, r), impact: shot,
-      startTick: shot.actionStartTick, effectId: shot.id, projectileId: shot.id, accept(t) {
+    const attack: Attack = { owner: source, origin: from, recipe: r, factor: price(world, r), projectile: shot,
+      startTick: shot.actionStartTick, effectId: shot.id, accept(t) {
+        if (ray.hitTargetIds.length >= limit) return false
+        remember(ray.hitTargetIds, t.id)
+        if (ray.hitTargetIds.length === limit) remove()
+        // Each Splay ray spends a contact, but only the first damages this target.
         if (shared?.hitTargetIds.includes(t.id)) return false
         if (shared) remember(shared.hitTargetIds, t.id)
         return true
       } }
-    const crossings = []
     const tickFraction = stride ? distance(from, shot.pos) / stride : 0
     for (const t of world.entities) {
       if (t.death || t.faction === source.faction || ray.hitTargetIds.includes(t.id) || !visible(world, from, t.pos)) continue
       const travel = sweepCircle(from, shot.pos, t.pos, shot.radius + t.radius)
-      if (travel !== null) crossings.push(contact(world, attack, t, travel * tickFraction, events))
+      if (travel !== null) contacts.push(contact(world, attack, t, travel * tickFraction, events))
     }
-    // The ray spends its geometric budget even if a sibling kills or claims the body first.
-    crossings.sort((a, b) => a.travelFraction - b.travelFraction || a.targetId - b.targetId)
-    for (const crossing of crossings.slice(0, limit - ray.hitTargetIds.length)) {
-      remember(ray.hitTargetIds, crossing.targetId)
-      contacts.push(crossing)
-    }
-    if (ray.hitTargetIds.length >= limit || wall || fraction < 1) remove()
+    if (wall || fraction < 1) remove()
   }
   return contacts
 }

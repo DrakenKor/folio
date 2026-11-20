@@ -1,6 +1,7 @@
 import type { PendingChild, PendingContact } from '../../core/m3-loop'
 import { sharedBuildView } from '../../core/profile'
-import type { AilmentState, Entity, Footprint, M3World, OwnedEffect, ResolvedAction, SimEvent, SkillDefinition, Vec2 } from '../../core/types'
+import type { AilmentState, Entity, Footprint, M3World, OwnedEffect, Projectile, ResolvedAction, SimEvent, Vec2 } from '../../core/types'
+import { movementInput } from '../actions'
 import { AILMENT_RULES, applyAilments } from '../ailments'
 import { multiply } from '../decimal'
 import { calculateDamage } from '../damage-model'
@@ -19,8 +20,8 @@ export interface Attack {
   factor: number
   secondary?: boolean
   charged?: boolean
-  projectileId?: number
-  impact?: Pick<SkillDefinition, 'impactPauseTicks' | 'hitFlashTicks' | 'knockback'>
+  projectile?: Projectile
+  effectKind?: OwnedEffect['kind']
   /** Return false for a spent geometric contact, including immunity. */
   accept?: (target: Entity) => boolean
   canTrigger?: () => boolean
@@ -72,7 +73,7 @@ function hit(world: M3World, attack: Attack, target: Entity, events: SimEvent[],
   const damage = calculateDamage(scaled(r, multiply(attack.factor, counter?.m.incomingFactor ?? 1)),
     actorStats(sharedBuildView(world), target, r.tags).reductions, target.health)
   const common = { tick: world.tick, actorId: owner.id, targetId: target.id, skillId: r.skillId, position: { ...target.pos } }
-  events.push({ ...common, type: 'hit', actionStartTick: attack.startTick, projectileId: attack.projectileId ?? null })
+  events.push({ ...common, type: 'hit', actionStartTick: attack.startTick, projectileId: attack.projectile?.id ?? null })
   if (!damage.applied) return counter ? answerBrace(world, counter, target, owner, events) : []
   const triggers = !attack.secondary && (attack.canTrigger?.() ?? true)
   let condition: AilmentState['id'] | undefined
@@ -89,17 +90,21 @@ function hit(world: M3World, attack: Attack, target: Entity, events: SimEvent[],
     if (prepared) types[AILMENT_RULES.find(rule => rule.id === prepared.id)!.damageType] = 0
     applyAilments(world, owner.id, target.id, types)
   }
-  const impact = attack.impact ?? card ?? world.content.skills.find(s => s.id === r.skillId)!
+  const impact = attack.projectile ?? card ?? world.content.skills.find(s => s.id === r.skillId)!
   if (!counter) {
     // A committed enemy finishes both the advertised strike and its recovery.
     if (!target.ai?.committedEffectIds && !world.content.enemies.find(e => e.id === target.ai?.enemyId)?.boss) target.action = null
     if (!target.action) target.mechanics!.held = null
-    const vel = along({ x: 0, z: 0 }, heading(attack.origin, target.pos), impact.knockback.speed)
+    const direction = attack.projectile ? movementInput(attack.projectile.vel).direction :
+      along({ x: 0, z: 0 }, heading(attack.origin, target.pos), 1)
+    const vel = { x: direction.x * impact.knockback.speed, z: direction.z * impact.knockback.speed }
     target.knockback = impact.knockback.ticks ? { vel, remainingTicks: impact.knockback.ticks } : null
   }
   target.hitFlashTicks = Math.max(target.hitFlashTicks, impact.hitFlashTicks)
   target.impactPauseTicks = Math.max(target.impactPauseTicks, impact.impactPauseTicks)
-  if (!attack.secondary && !attack.projectileId) owner.impactPauseTicks = Math.max(owner.impactPauseTicks, impact.impactPauseTicks)
+  if (!attack.secondary && !attack.projectile && attack.effectKind !== 'eye') {
+    owner.impactPauseTicks = Math.max(owner.impactPauseTicks, impact.impactPauseTicks)
+  }
   if (!target.health) kill(world, target, owner.id, events)
   attack.onPositive?.(target)
   const children: PendingChild[] = []
@@ -150,6 +155,6 @@ export function areaContacts(world: M3World, attack: Attack, shapes: Footprint[]
 
 export function effectAttack(world: M3World, owner: Entity, e: OwnedEffect): Attack {
   const startTick = world.actionGroups.find(group => group.id === e.groupId)?.actionStartTick ?? e.startTick
-  return { owner, recipe: e.recipe, origin: e.footprint.origin, startTick, effectId: e.id,
+  return { owner, recipe: e.recipe, origin: e.footprint.origin, startTick, effectId: e.id, effectKind: e.kind,
     childOrdinal: e.childOrdinal, factor: price(world, e.recipe) }
 }
