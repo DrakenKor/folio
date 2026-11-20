@@ -64,8 +64,7 @@ function pathLabel(path: Path) {
   if (path.chargedAt) return 'Full charge ≥ ' + path.chargedAt + ' ticks · auto-release ' + path.autoReleaseAt
   if (path.trigger === 'catch') return 'Answer at striker · only if caught'
   if (path.trigger === 'occupancy') return 'Armed at ' + path.delayTicks + ' ticks · triggers on entry'
-  if (path.trigger === 'entry') return 'Catch mark · next new entrant'
-  if (path.trigger === 'emberprint') return 'Impression · around printed target'
+  if (path.trigger === 'entry' || path.trigger === 'emberprint') return null
   if (path.trigger === 'draftbind') return 'Stitch · to a nearby target'
   if (path.startDistance) return 'Reverse stroke · tick ' + path.delayTicks
   return path.role === 'secondary' ? 'Echo · tick ' + path.delayTicks : null
@@ -77,9 +76,13 @@ function Blueprint({ drawing, label, scale, time }: { drawing: DrawingPreview; l
   const paths = drawing.paths.filter((p, i, list) => list.findIndex(q =>
     q.shape === p.shape && q.role === p.role && q.angleDegrees === p.angleDegrees &&
     q.lateralOffset === p.lateralOffset && q.trigger === p.trigger) === i)
+  const circlePaths = paths.filter(p => p.trigger === 'entry' || p.trigger === 'emberprint')
   const notes = [...new Set(drawing.paths.map(pathLabel).filter(Boolean))]
   const pulses = [...new Set(drawing.paths.filter(p => p.role === 'primary').map(p => p.delayTicks))]
   const primary = paths[0]!
+  const liftPrint = drawing.recipe.skillId === 'lift-print'
+  const directPosition = 100 * primary.delayTicks / time
+  const delay = primary.delayTicks - windupTicks
   const targetDistance = primary.reach * .65
   const needsTarget = paths.some(p => p.trigger === 'emberprint' || p.trigger === 'entry' || p.trigger === 'draftbind' || p.trigger === 'catch')
   const centred = primary.shape === 'sector' || primary.shape === 'disc' && primary.reach === 0
@@ -90,6 +93,7 @@ function Blueprint({ drawing, label, scale, time }: { drawing: DrawingPreview; l
         <g transform={`translate(${centred ? 104 : 25} 51)`}>
           <path className="axis" d="M-105 0H200M0 -51V51"/>
           {paths.map((p, i) => <g key={i} className={p.role === 'primary' ? 'draft' : 'trace'}
+            data-trigger={p.trigger}
             transform={`translate(${(p.startDistance ?? (['emberprint', 'entry', 'draftbind'].includes(p.trigger ?? '') ? targetDistance : 0)) * scale} ${(p.lateralOffset ?? 0) * scale}) rotate(${p.angleDegrees ?? 0})`}>
             {pathShape(p, scale)}
           </g>)}
@@ -98,10 +102,15 @@ function Blueprint({ drawing, label, scale, time }: { drawing: DrawingPreview; l
         </g>
       </svg>
     </div>
-    <div className="m3-timing" aria-hidden="true">
+    <div className={'m3-timing' + (liftPrint ? ' m3-timing-labeled' : '')}>
       {phases.map((ticks, i) => <i key={i} style={{ width: 100 * ticks / time + '%' }}/>)}
       {[...new Set(drawing.paths.map(p => p.delayTicks))].map(tick =>
-        <b key={tick} style={{ left: 100 * tick / time + '%' }}/>)}
+        <b key={tick} className={liftPrint && tick === primary.delayTicks ? 'm3-direct-tick' : undefined}
+          style={{ left: 100 * tick / time + '%' }}/>)}
+      {liftPrint && <span className="m3-direct-label"
+        style={{ left: directPosition + '%', transform: `translateX(-${directPosition}%)` }}>
+        Direct contact · <strong>tick {primary.delayTicks}</strong>{delay > 0 && ` (+${delay})`}
+      </span>}
     </div>
     <div className="m3-phases">{phases.map((ticks, i) => <span key={i}>{phaseNames[i]} <b>{ticks}</b></span>)}</div>
     <div className="m3-path-notes">
@@ -109,13 +118,19 @@ function Blueprint({ drawing, label, scale, time }: { drawing: DrawingPreview; l
         {primary.maxContacts ? ' · ' + primary.maxContacts + ' / ' + (primary.shape === 'path' ? 'path' : 'lane') : ''}</span>
       {pulses.length > 1 && <span>Pulses at {pulses.join(' · ')} ticks</span>}
       {notes.map(note => <span key={note}>{note}</span>)}
+      {circlePaths.map(p => <span key={p.trigger} className="m3-circle-key">
+        <svg className="trace" data-trigger={p.trigger} viewBox="0 0 20 8" aria-hidden="true"><path d="M0 4H20"/></svg>
+        <span>{p.trigger === 'entry' ? 'Catch mark' : 'Impression'} · {num(p.radius)} m radius
+          {' · '}{p.trigger === 'entry' ? 'next new entrant' : 'around printed target'}</span>
+      </span>)}
     </div>
   </section>
 }
 
+const factor = (n: number) => '×' + n.toFixed(2)
+
 function foldPrice(fold: M3FoldDefinition) {
   const m = fold.mechanic
-  const factor = (n: number) => '×' + n.toFixed(2)
   switch (m.kind) {
     case 'splay': return m.angles.join('°, ') + '° · ' + factor(m.primaryFactor) + ' per dart'
     case 'through': return m.maxContacts + ' contacts per path · ' + factor(m.primaryFactor) + ' each'
@@ -155,6 +170,8 @@ export function M3Drawings({ props, world, initialSlot }: { props: FieldProps; w
   const editable = world.encounter?.phase === 'rest'
   const legal = result?.result.accepted
   const tension = folds.filter(f => ids.includes(f.id)).reduce((sum, f) => sum + f.tension, 0)
+  const pairedDartFolds = id === 'fold-dart' && edited.recipe.folds.length > 1
+    ? folds.filter(f => edited.recipe.folds.includes(f.id)).sort((a, b) => b.tension - a.tension) : []
   const select = (skillId: string) => { setId(skillId); setFold(null); trace(false); report('') }
   const selectFold = (pattern: M3FoldDefinition) => { setFold(pattern.id); trace(false); report('') }
   const { condition, payoff } = edited
@@ -219,14 +236,21 @@ export function M3Drawings({ props, world, initialSlot }: { props: FieldProps; w
       <aside className="ink m3-price">
         <small>Undefended damage per contact</small>
         <ContactDamage base={base} edited={edited}/>
+        {pairedDartFolds.length > 0 && <dl className="m3-fold-prices">
+          {pairedDartFolds.map(f => <div key={f.id}>
+            <dt>{f.name} <strong>{factor(f.mechanic.primaryFactor)}</strong></dt>
+            <dd>{f.tension} tension</dd>
+          </div>)}
+        </dl>}
         {condition && payoff && <p>{ailmentSetup[condition]} sets up {conditions[condition]}. {'rootTicks' in payoff
           ? 'Full charge roots for ' + payoff.rootTicks + ' ticks.' : 'Adds ' + payoff.secondaryDamage + ' damage to a secondary contact.'}</p>}
         <hr/>
-        <small>{fold?.name ?? 'Fold price'}</small>
+        <small>{pairedDartFolds.length ? 'Fold price' : fold?.name ?? 'Fold price'}</small>
         <div className="counters"><div><b>{tension} / 3</b><small>Tension</small></div>
           <div><b>{ids.length} / 2</b><small>Folds</small></div></div>
         {!!edited.cost.seams && <p>Spends {edited.cost.seams} seams</p>}
-        {fold && <><p>{foldPrice(fold)}</p>{!legal && <p>{words(result?.result.reason ?? 'unsupported')}</p>}
+        {fold && <>{!pairedDartFolds.length && <p>{foldPrice(fold)}</p>}
+          {!legal && <p>{words(result?.result.reason ?? 'unsupported')}</p>}
           <button className="primary" disabled={!legal} onClick={() => {
             const r = api.character.setFolds(id, ids)
             report(r.accepted ? (removing ? 'Fold removed' : 'Fold applied') : words(r.reason)); setFold(null)

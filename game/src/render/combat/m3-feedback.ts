@@ -2,7 +2,7 @@ import {
   BufferGeometry, CanvasTexture, Color, DoubleSide, Group, Mesh, MeshBasicNodeMaterial,
   OctahedronGeometry, Sprite, SpriteNodeMaterial, Vector3, type Camera
 } from 'three/webgpu'
-import { TICK_DT, type Entity, type Footprint, type M3World, type OwnedEffect, type Vec2 } from '../../sim/core/types'
+import { TICK_DT, type Entity, type Footprint, type M3World, type OwnedEffect, type SimEvent, type Vec2 } from '../../sim/core/types'
 import type { Heightfield } from '../terrain/heightfield'
 import type { Frame } from '../view'
 import { disposeInk, inkShape, makeInk, offset, perimeter, updateGeometry, type Ink } from './ground-ink'
@@ -14,6 +14,8 @@ const palettes = {
   sole: [0x3e2b26, 0xe7c486],
   chalk: [0x707a68, 0xfbeec9],
   heat: [0xe48436, 0xffc377],
+  impression: [0xd45d25, 0xffdb86],
+  stitch: [0x2e7169, 0xe4ffdd],
   echo: [0x777b51, 0xf2e4a3],
   spent: [0x7b796e, 0xeee5cf]
 } as const
@@ -21,6 +23,7 @@ const palettes = {
 type Palette = keyof typeof palettes
 type Entry = { ink: Ink; vertices: string }
 type Aftermath = { effect: OwnedEffect; tick: number; text: string; label?: Sprite }
+type Payoff = { footprint: Footprint; tick: number; end?: Vec2 }
 
 const disc = (origin: Vec2, radius: number): Footprint =>
   ({ kind: 'disc', origin, radius, direction: 0, reach: 0, halfWidth: 0, arcRadians: 0 })
@@ -34,6 +37,8 @@ export class M3Feedback {
   private readonly live = new Set<string>()
   private readonly previous = new Map<number, OwnedEffect>()
   private readonly aftermath = new Map<number, Aftermath>()
+  private readonly payoffs = new Map<string, Payoff>()
+  private prepared = new Map<string, number>()
   private readonly thread = new Mesh(new BufferGeometry(), new MeshBasicNodeMaterial({
     color: 0xfad69c, side: DoubleSide, depthWrite: false
   }))
@@ -83,17 +88,19 @@ export class M3Feedback {
         case 'tile': {
           const rim = world.content.m3.folds.find(fold => e.recipe.folds.includes(fold.id) && fold.mechanic.kind === 'rim')?.mechanic
           const armed = e.leg === 1 && world.tick >= e.dueTick
-          const heat = armed ? .55 : .12 + progress * .19
+          const heat = armed ? .22 : .12 + progress * .19
           const pieces = rim?.kind === 'rim' ? [-rim.offset, rim.offset].map(side =>
             ({ ...f, origin: offset(f.origin, f.direction, 0, side), radius: rim.tileRadius })) : [f]
           for (const [i, piece] of pieces.entries()) {
             this.shape(key + '-' + i, piece, 'heat', heat, armed ? 1 : .62, armed ? .11 : .055, true)
+            if (armed) this.shape(key + '-inset-' + i, { ...piece, radius: piece.radius * .72 }, 'chalk', 0, .95, .05, true)
           }
           break
         }
         case 'counter':
           if (e.recipe.skillId === 'brace-mark' && !e.acceptedTargetIds.length) {
-            this.shape(key, { ...f, reach: .68 }, 'chalk', .15, 1, .07)
+            const guard = this.shape(key, { ...f, reach: .68 }, 'chalk', .15, 1, .07)
+            guard.edge.material.depthTest = false
             this.shape(key + '-heel', { ...f, kind: 'lane', origin: offset(f.origin, f.direction, .53, -.22),
               direction: f.direction + Math.PI / 2, reach: .44, halfWidth: .035 }, 'chalk', .75, 1, .04)
           }
@@ -105,12 +112,10 @@ export class M3Feedback {
           this.shape(key, f, 'chalk', .11, .92, .075)
           this.rune(key + '-rune', f.origin, f.direction, .38, .88)
           break
-        case 'impression':
-          this.aftermath.set(e.id, { effect: e, tick: world.tick, text: '' })
-          break
       }
       this.previous.set(e.id, e)
     }
+    this.payoffInk(frame, world, player, time)
     for (const [id, e] of this.previous) {
       if (effects.has(id)) continue
       this.previous.delete(id)
@@ -138,7 +143,7 @@ export class M3Feedback {
       const anchor = f.kind === 'sector' ? offset(f.origin, f.direction, f.reach * .72) : centerOf(f)
       const opacity = Math.max(0, 1 - age / hitLife)
       this.shape('spent-' + id, f, text ? 'spent' : e.kind === 'warning' ? 'danger' : 'heat',
-        opacity * (text ? .10 : .43), opacity * .85, .058, e.kind === 'impression')
+        opacity * (text ? .10 : .43), opacity * .85, .058)
       if (text) {
         this.rune('miss-' + id, anchor, f.direction, .27, opacity)
         impact.label ??= this.label(text)
@@ -182,6 +187,78 @@ export class M3Feedback {
     for (const [key, entry] of this.ink) if (!this.live.has(key)) {
       disposeInk(entry.ink)
       this.ink.delete(key)
+    }
+  }
+
+  private payoffInk(frame: Frame, world: Readonly<M3World>, player: Entity, time: number) {
+    if (world.encounter?.phase === 'rest') {
+      this.payoffs.clear()
+      this.prepared.clear()
+      return
+    }
+    const hits = frame.events.filter((event): event is Extract<SimEvent, { type: 'hit' }> => event.type === 'hit' && event.actorId === player.id)
+    const damaged = new Set(frame.events.filter((event): event is Extract<SimEvent, { type: 'damage' }> => event.type === 'damage' && event.actorId === player.id)
+      .map(event => `${event.skillId}:${event.tick}:${event.targetId}`))
+    for (const [i, hit] of hits.entries()) {
+      const { skillId, tick, targetId, position } = hit
+      const impression = skillId === 'lift-print'
+      if ((!impression && skillId !== 'gather-line') || time - tick >= hitLife) continue
+      const kind = impression ? 'impression' : 'stitch'
+      const ailment = (impression ? 'emberprint:' : 'draftbind:') + targetId
+      const effect = world.effects.find(e => e.kind === kind && e.ownerId === player.id && e.startTick === tick &&
+        e.footprint.origin.x === position.x && e.footprint.origin.z === position.z)
+      // A frame can advance past the one-tick effect record. Keep the contact if it consumed a visible setup.
+      if (!effect && (tick >= world.tick || (this.prepared.get(ailment) ?? 0) <= tick || !damaged.has(`${skillId}:${tick}:${targetId}`) ||
+        world.ailments.some(a => `${a.id}:${a.targetId}` === ailment))) continue
+      this.prepared.delete(ailment)
+      const mechanic = world.content.m3.actions.find(card => card.id === skillId)?.mechanic
+      if (impression && mechanic?.kind === 'lift-print') {
+        this.payoffs.set(`${kind}:${tick}:${targetId}`, { footprint: effect?.footprint ?? disc(position, mechanic.impressionRadius), tick })
+      } else if (mechanic?.kind === 'gather-line') {
+        // Secondary hits follow the paid primary contact in the same tick and action.
+        const next = hits[i + 1]
+        const eye = [...this.previous.values()].find(e => e.kind === 'eye' && e.groupId === player.id + ':' + hit.actionStartTick)
+        if (next?.skillId !== skillId || next.targetId === targetId || next.tick !== tick || next.actionStartTick !== hit.actionStartTick ||
+          !damaged.has(`${skillId}:${tick}:${next.targetId}`) ||
+          Math.hypot(next.position.x - position.x, next.position.z - position.z) > mechanic.stitchReach ||
+          (eye?.acceptedTargetIds.includes(next.targetId) && hits[i + 2]?.targetId !== next.targetId)) continue
+        this.payoffs.set(`${kind}:${tick}:${targetId}`, { footprint: disc(position, 0), end: next.position, tick })
+      }
+    }
+    this.prepared = new Map(world.ailments.map(a => [`${a.id}:${a.targetId}`, a.expiresTick]))
+    for (const [key, { footprint, end, tick }] of this.payoffs) {
+      const age = time - tick
+      if (age >= hitLife) {
+        this.payoffs.delete(key)
+        continue
+      }
+      const opacity = Math.min(1, (hitLife - age) / 14)
+      if (end) {
+        const { origin } = footprint
+        const dx = end.x - origin.x, dz = end.z - origin.z
+        this.shape(key, { ...footprint, kind: 'lane', direction: Math.atan2(dz, dx),
+          reach: Math.hypot(dx, dz), halfWidth: .065 }, 'stitch', opacity * .95, opacity, .04)
+        this.shape(key + '-end', disc(end, .23), 'stitch', opacity * .33, opacity, .055)
+      } else {
+        const radius = footprint.radius * (.3 + .7 * Math.min(1, age / 6))
+        this.shape(key, { ...footprint, radius }, 'impression', opacity * .43, opacity, .095)
+      }
+    }
+    for (const actor of world.entities) {
+      if (actor.death || !actor.mechanics?.rootedUntil || actor.mechanics.rootedUntil < world.tick) continue
+      const prev = actor.impactPauseTicks > 0 ? undefined : frame.prev.get(actor.id)
+      const pos = prev ? { x: prev.x + (actor.pos.x - prev.x) * frame.alpha, z: prev.z + (actor.pos.z - prev.z) * frame.alpha } : actor.pos
+      const radius = actor.radius
+      for (const side of [-1, 1]) {
+        const origin = offset(pos, actor.facing, -radius * .79, side * radius * .73)
+        const key = `root-${actor.id}-${side}`
+        this.shape(key, { ...disc(origin, 0), kind: 'lane', direction: actor.facing,
+          reach: 1.58 * radius, halfWidth: .075 }, 'sole', .89, 1, .045)
+        for (const [i, distance] of [0, 1.58 * radius].entries()) {
+          const at = offset(origin, actor.facing, distance)
+          this.shape(key + '-' + i, disc(at, .105), 'sole', .94, 1, .062)
+        }
+      }
     }
   }
 
@@ -321,6 +398,8 @@ export class M3Feedback {
     this.previous.clear()
     this.aftermath.forEach(impact => this.removeLabel(impact))
     this.aftermath.clear()
+    this.payoffs.clear()
+    this.prepared.clear()
     this.ink.forEach(({ ink }) => disposeInk(ink))
     this.ink.clear()
     this.eye.visible = this.thread.visible = false
