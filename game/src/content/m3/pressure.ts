@@ -9,10 +9,10 @@ type PressureCard = Pick<EnemyDefinition, 'id' | 'maxHealth' | 'radius' | 'moveS
 }
 
 const cards: PressureCard[] = [
-  { id: 'creaseback', maxHealth: 84, radius: .45, moveSpeed: 1.2, attackRange: 3.15, damage: 38,
-    windup: 24, recovery: 30, footprint: { kind: 'sector', reach: 3.15, arcRadians: 135 * Math.PI / 180 } },
+  { id: 'creaseback', maxHealth: 84, radius: .45, moveSpeed: 1.2, attackRange: 3.3, damage: 38,
+    windup: 24, recovery: 30, footprint: { kind: 'sector', reach: 3.3, arcRadians: 135 * Math.PI / 180 } },
   { id: 'furrow-skater', maxHealth: 88, radius: .36, moveSpeed: 3.4, attackRange: 4.5, damage: 40,
-    windup: 36, recovery: 46, footprint: { kind: 'lane', reach: 5.5, halfWidth: .92 } },
+    windup: 37, recovery: 46, footprint: { kind: 'lane', reach: 5.5, halfWidth: .92 } },
   { id: 'silt-bell', maxHealth: 88, radius: .45, moveSpeed: 1.4, attackRange: 3.5, damage: 62,
     windup: 48, recovery: 46, footprint: { kind: 'disc', radius: 1.43 } }
 ]
