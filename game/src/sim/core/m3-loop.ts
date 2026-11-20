@@ -118,6 +118,7 @@ export const m3Systems: M3Systems = {
 export function stepM3(world: M3World, input: Command, systems: M3Systems): SimEvent[] {
   const events: SimEvent[] = []
   const ops = [...(input.operations ?? [])]
+  const physicalButtons = input.buttons
   const player = world.entities.find(a => a.id === world.playerId)
   const previous = player?.previousButtons ?? 0
   input.pressedButtons = (input.pressedButtons ?? 0) | (input.buttons & ~previous)
@@ -164,6 +165,8 @@ export function stepM3(world: M3World, input: Command, systems: M3Systems): SimE
   commitContacts(world, systems.contacts(world, states, events))
   systems.rewards(world, events)
   for (const actor of world.entities) {
+    // A transition consumes this tick's actions while retaining the physical state for the next edge.
+    if (actor.id === world.playerId) actor.previousButtons = physicalButtons
     const m = actor.mechanics!
     if (actor.death || world.encounter?.phase === 'rest' || travelled) {
       m.held = null

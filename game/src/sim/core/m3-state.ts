@@ -102,6 +102,11 @@ export function validateM3State(world: M3World): void {
         integer(h.eligibleTicks) && h.eligibleTicks <= world.tick - a.action.startTick + 1 &&
         h.eligibleTicks <= (card.kind === 'plinth-blow' ? card.autoReleaseAt : card.maxPulses * card.pulseTicks +
           a.action.recipe!.timing.windupTicks) && typeof h.releasePending === 'boolean', 'held phase')
+      if (h.kind === 'charge') {
+        const charges = world.effects.filter(e => e.kind === 'counter' && e.ownerId === a.id && e.recipe.skillId === h.skillId)
+        check(charges.length === 1 && charges[0]!.groupId === a.id + ':' + a.action.startTick &&
+          charges[0]!.startTick === a.action.startTick, 'held charge effect')
+      }
     }
     if (a.ai) {
       const card = world.content.enemies.find(e => e.id === a.ai!.enemyId)!
