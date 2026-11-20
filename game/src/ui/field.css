@@ -1,7 +1,7 @@
 .field-ui {
   --moss: #253a32; --deep: #192f28; --ink: #293c32; --cream: #f4ebcf; --paper: #e9e2c9;
   --gold: #e6c27b; --line: #b2a98a; --muted: #c6cfb8;
-  --focus-ring: #ffe09a;
+  --focus-ring: #b8e3ff;
   position: fixed; inset: 0; pointer-events: none; color: var(--cream);
   font: 14px/1.45 system-ui,sans-serif; font-variant-numeric: tabular-nums;
 }
@@ -11,7 +11,7 @@
 .field-ui button, .field-ui select { cursor: pointer }
 .field-ui button:disabled { opacity: .53; cursor: default }
 .field-ui button:not(:disabled):hover { box-shadow: inset 0 0 0 1px currentColor }
-.field-ui :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px }
+.field-ui :focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px }
 .field-ui button:focus-visible { position: relative; z-index: 1 }
 .field-ui h1:focus { outline: none }
 .field-ui h1, .field-ui h2, .field-ui h3, .field-ui .loadout b { font-family: Georgia,serif; font-weight: 400; line-height: 1.1 }
@@ -54,7 +54,7 @@
 .folio-head nav [aria-current=page] { color:var(--cream); border-bottom-color:var(--gold) }
 .folio-head .close { border:1px solid #a2ab9577; font-size:22px; line-height:1; padding:4px 9px }
 .folio-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(256px,29%) }
-.paper, .action-index { --focus-ring:#334984; background:var(--paper); color:var(--ink) }
+.paper, .action-index { --focus-ring:#284782; background:var(--paper); color:var(--ink) }
 .paper { padding:22px 26px }
 .ink { padding:24px; background:linear-gradient(135deg,#344c3f,#22372f 68%); border-left:1px solid #99a88c55; min-width:0 }
 .ink > h2, .record-copy h2 { margin:7px 0 10px }

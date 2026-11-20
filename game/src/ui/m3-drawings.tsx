@@ -10,6 +10,42 @@ const phaseNames = ['Windup', 'Active', 'Recovery']
 
 type Path = DrawingPreview['paths'][number]
 
+function DamageValue({ from, to }: { from?: number | string; to: number | string }) {
+  return <b>{from !== undefined && from !== to && <span className="damage-base">{from} <span className="damage-arrow">→</span></span>}
+    <span>{to}</span></b>
+}
+
+function liftContacts(drawing: DrawingPreview, prepared: boolean) {
+  return [
+    { label: 'Direct', path: drawing.paths.find(p => p.role === 'primary') },
+    { label: 'Entrant', path: drawing.paths.find(p => p.trigger === 'entry') },
+    { label: 'Impression', path: prepared ? drawing.paths.find(p => p.trigger === 'emberprint') : undefined }
+  ]
+}
+
+function ContactDamage({ base, edited }: { base: DrawingPreview; edited: DrawingPreview }) {
+  const skill = edited.recipe.skillId
+  const dart = edited.paths[0]!
+  const dartLimit = dart.maxContacts ?? 1
+  const splayedThrough = skill === 'fold-dart' && dartLimit > 1 && edited.recipe.footprint.projectileAngles.length > 1
+  return <div className="contact-values">
+    {(edited.condition ? [false, true] : [false]).map(prepared => {
+      const outcome = prepared ? 'prepared' : 'clean'
+      const baseContacts = skill === 'lift-print' ? liftContacts(base, prepared) : []
+      return <div key={outcome}>
+        <span>{prepared && edited.condition ? 'With ' + conditions[edited.condition] : 'Clean'}</span>
+        {skill === 'lift-print' ? <dl>
+          {liftContacts(edited, prepared).map(({ label, path }, i) => path && <div key={label}>
+            <dt>{label}</dt><dd><DamageValue from={baseContacts[i]?.path?.damage} to={path.damage}/></dd>
+          </div>)}
+        </dl> : splayedThrough ? <p><DamageValue from={base.paths[0]?.damage} to={dart.damage}/>{' '}
+          per distinct target, up to {dartLimit === 2 ? 'two' : dartLimit} per dart</p> :
+          <DamageValue from={base.conditionalDamage[outcome].join(' · ')} to={edited.conditionalDamage[outcome].join(' · ')}/>}
+      </div>
+    })}
+  </div>
+}
+
 function pathShape(path: Path, scale: number) {
   const r = path.reach * scale
   const w = Math.max(2, (path.halfWidth || path.radius) * scale)
@@ -121,11 +157,7 @@ export function M3Drawings({ props, world, initialSlot }: { props: FieldProps; w
   const tension = folds.filter(f => ids.includes(f.id)).reduce((sum, f) => sum + f.tension, 0)
   const select = (skillId: string) => { setId(skillId); setFold(null); trace(false); report('') }
   const selectFold = (pattern: M3FoldDefinition) => { setFold(pattern.id); trace(false); report('') }
-  const { condition, payoff, conditionalDamage } = edited
-  const damageRow = (from: number[], to: number[]) => {
-    const initial = from.join(' · '), final = to.join(' · ')
-    return <b>{initial !== final && <span className="damage-base">{initial} <span className="damage-arrow">→</span></span>}<span>{final}</span></b>
-  }
+  const { condition, payoff } = edited
   const both = [base, edited]
   const scale = Math.min(...both.flatMap(d => d.paths.map(p => (p.shape === 'sector' || p.shape === 'disc' && p.reach === 0 ? 46 : 141) /
     Math.max(.01, p.reach + (p.shape === 'disc' ? p.radius : 0), Math.abs(p.lateralOffset ?? 0) * 3))))
@@ -186,10 +218,7 @@ export function M3Drawings({ props, world, initialSlot }: { props: FieldProps; w
       </section>
       <aside className="ink m3-price">
         <small>Undefended damage per contact</small>
-        <div className="contact-values">
-          <div><span>Clean</span>{damageRow(base.conditionalDamage.clean, conditionalDamage.clean)}</div>
-          {condition && <div><span>With {conditions[condition]}</span>{damageRow(base.conditionalDamage.prepared, conditionalDamage.prepared)}</div>}
-        </div>
+        <ContactDamage base={base} edited={edited}/>
         {condition && payoff && <p>{ailmentSetup[condition]} sets up {conditions[condition]}. {'rootTicks' in payoff
           ? 'Full charge roots for ' + payoff.rootTicks + ' ticks.' : 'Adds ' + payoff.secondaryDamage + ' damage to a secondary contact.'}</p>}
         <hr/>

@@ -7,7 +7,7 @@
 .family-grid span, .tally-card span { font-size:12px }
 .family-grid .tool-glyph { grid-row:span 2 }
 .tool-glyph { width:38px; height:38px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linejoin:round }
-.field-ui .family-grid [aria-pressed=true], .field-ui .binding-slots [aria-pressed=true], .field-ui .tally-card[aria-pressed=true] {
+.field-ui .family-grid [aria-pressed=true], .field-ui .tally-card[aria-pressed=true] {
   background:#d8d7b6; color:#263f32; border-color:#4e6b52; box-shadow:inset 3px 0 #54745c;
 }
 .field-ui .tally-card { width:100%; display:flex; align-items:center; gap:12px; text-align:left }
@@ -20,6 +20,9 @@
 .m3-slots small { color:var(--gold); letter-spacing:.05em }
 .binding-slots { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:16px }
 .field-ui .binding-slots button { text-align:left; padding:12px }
+.field-ui .m3-editor .binding-slots [aria-pressed=true] {
+  background:#cad5b5; color:#203b2d; border-color:#2f5340; box-shadow:inset 7px 0 #315642, inset 0 0 0 1px #315642;
+}
 .binding-slots kbd { display:block; margin-bottom:5px }
 .binding-options { display:grid; gap:3px; margin-top:12px }
 .field-ui .binding-options button { display:flex; justify-content:space-between; align-items:baseline; gap:8px; text-align:left; padding:4px 6px }
@@ -44,6 +47,8 @@
 .m3-path-notes { display:grid; gap:3px; margin-top:7px; font-size:12px }
 .tick-caption { display:block; margin-top:9px }
 .m3-editor .handle-row { margin:12px 0 6px }
+.field-ui .m3-editor .handle-row [data-selected=true] { box-shadow:inset 0 -3px #49634c }
+.field-ui .m3-editor .patterns [aria-pressed=true] { box-shadow:inset 0 -4px #e6c27b, inset 0 0 0 1px #e6c27b }
 .contact-values { display:grid; gap:8px; margin:12px 0 }
 .contact-values > div { display:grid; gap:3px }
 .contact-values > div > span { font-size:12px }
@@ -52,8 +57,23 @@
 .contact-values .damage-arrow { font:14px system-ui,sans-serif; color:var(--muted) }
 .contact-values .damage-base { font:16px Georgia,serif; color:var(--cream) }
 .contact-values b { font:23px/1 Georgia,serif; color:var(--gold) }
+.contact-values dl { margin:0 }
+.contact-values dl > div { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:3px 0; border-bottom:1px solid #99a88c55 }
+.contact-values dd, .ink .contact-values p { margin:0 }
+.contact-values p b { display:inline-flex }
 .m3-price hr { margin:14px 0 }
-.field-ui .paper { --focus-ring:#784227 }
+.reel-eye-marker {
+  position:fixed; width:32px; height:32px; transform:translate(-50%,-50%); pointer-events:none;
+  border:2px solid #ffe6ab; border-radius:50%; background:#22372f; box-shadow:0 0 0 2px #22372f;
+  color:#ffe6ab;
+}
+.reel-eye-marker::before, .reel-eye-marker::after { content:''; position:absolute; inset:50% auto auto 50%; width:9px; height:9px }
+.reel-eye-marker::before { background:currentColor; transform:translate(-50%,-50%) rotate(45deg) }
+.reel-eye-marker::after {
+  border:solid currentColor; border-width:2px 2px 0 0;
+  transform:translate(-50%,-50%) rotate(var(--eye-angle)) translateX(22px) rotate(45deg);
+  filter:drop-shadow(0 0 2px #22372f);
+}
 @media(max-width:720px) {
   .family-grid { grid-template-columns:1fr }
   .bench-tabs { padding-inline:12px }

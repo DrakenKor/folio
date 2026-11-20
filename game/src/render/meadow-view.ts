@@ -51,7 +51,7 @@ export class MeadowView implements RenderView {
     this.camera.camera.far = 4000
     this.meadow = createMeadow(world.seed, world.arena)
     this.feedback = new CombatFeedback(this.meadow.field)
-    this.m3Feedback = new M3Feedback(this.meadow.field)
+    this.m3Feedback = new M3Feedback(this.meadow.field, renderer.domElement)
     this.meadow.scene.add(this.feedback.object, this.m3Feedback.object)
     this.knight = new CharacterView(asset, { env: this.meadow.env })
     this.meadow.scene.add(this.knight.object, this.aim.object, this.drops.object)
@@ -88,7 +88,7 @@ export class MeadowView implements RenderView {
       this.disposeScene()
       this.meadow = createMeadow(frame.world.seed, frame.world.arena)
       this.feedback = new CombatFeedback(this.meadow.field)
-      this.m3Feedback = new M3Feedback(this.meadow.field)
+      this.m3Feedback = new M3Feedback(this.meadow.field, this.renderer.domElement)
       this.meadow.scene.add(this.feedback.object, this.m3Feedback.object)
       this.knight.setEnvironment(this.meadow.env)
       this.meadow.scene.add(this.knight.object, this.aim.object, this.drops.object)
@@ -166,6 +166,7 @@ export class MeadowView implements RenderView {
       this.framing = name
     }
     this.feedback.layout(this.camera.camera)
+    if (m3) this.m3Feedback.layout(this.camera.camera)
     this.meadow.update(time, this.camera.camera)
   }
 
