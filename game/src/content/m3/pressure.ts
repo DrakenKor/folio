@@ -9,12 +9,12 @@ type PressureCard = Pick<EnemyDefinition, 'id' | 'maxHealth' | 'radius' | 'moveS
 }
 
 const cards: PressureCard[] = [
-  { id: 'creaseback', maxHealth: 72, radius: .45, moveSpeed: 1.8, attackRange: 1.4, damage: 38,
-    windup: 24, recovery: 30, footprint: { kind: 'sector', reach: 1.4, arcRadians: 70 * Math.PI / 180 } },
-  { id: 'furrow-skater', maxHealth: 64, radius: .36, moveSpeed: 2.1, attackRange: 5, damage: 40,
-    windup: 36, recovery: 36, footprint: { kind: 'lane', reach: 5, halfWidth: .45 } },
-  { id: 'silt-bell', maxHealth: 64, radius: .45, moveSpeed: 1.2, attackRange: 4.5, damage: 62,
-    windup: 48, recovery: 42, footprint: { kind: 'disc', radius: .85 } }
+  { id: 'creaseback', maxHealth: 84, radius: .45, moveSpeed: 1.2, attackRange: 3.15, damage: 38,
+    windup: 24, recovery: 30, footprint: { kind: 'sector', reach: 3.15, arcRadians: 135 * Math.PI / 180 } },
+  { id: 'furrow-skater', maxHealth: 88, radius: .36, moveSpeed: 3.4, attackRange: 4.5, damage: 40,
+    windup: 36, recovery: 46, footprint: { kind: 'lane', reach: 5.5, halfWidth: .92 } },
+  { id: 'silt-bell', maxHealth: 88, radius: .45, moveSpeed: 1.4, attackRange: 3.5, damage: 62,
+    windup: 48, recovery: 46, footprint: { kind: 'disc', radius: 1.43 } }
 ]
 
 export const enemies: EnemyDefinition[] = cards.map(({ id, maxHealth, radius, moveSpeed, attackRange, windup, recovery, footprint }) => ({
