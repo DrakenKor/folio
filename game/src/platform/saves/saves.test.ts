@@ -1,4 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import m2Save from '../../../scenarios/m3a-save-v1.json'
+import { exportCharacter, loadCharacter } from '../../sim/core'
+import { buildM3Clearing } from '../../sim/m3-clearing'
 import { fixture, neutralContent } from '../../sim/acceptance/m2/fixtures'
 import { restore, serialize } from '../../sim/core/snapshot'
 import type { CharacterData, World } from '../../sim/core/types'
@@ -149,6 +152,7 @@ it('waits for an in-flight commit before freezing the graphics recovery generati
   const { save, writes } = session(null)
   try {
     await save.load()
+    save.startAutosave()
     save.commitBarrier('arm')
     const commit = save.flush()
     await vi.waitFor(() => expect(save.commitBarrier('reached')).toBe(true))
@@ -201,5 +205,62 @@ it('keeps explicit debug entries playable and isolated across save operations', 
     expect((await save.flush()).ok).toBe(false)
     expect(writes()).toBe(0)
     expect(bytes()).toBe('{')
+  } finally { save.dispose() }
+})
+
+it('keeps saving earned XP after a malformed import', async () => {
+  const { save, world, bytes } = session(null)
+  try {
+    await save.load()
+    await save.flush()
+    const prior = bytes()
+    world().entities[0]!.character!.xp = 41
+    expect(await save.import('{')).toMatchObject({ ok: false, reason: 'corrupt' })
+    expect(bytes()).toBe(prior)
+    expect(await save.flush()).toMatchObject({ ok: true, status: { writable: true } })
+    expect(JSON.parse(bytes()!).character.xp).toBe(41)
+  } finally { save.dispose() }
+})
+
+function m3Session(initial: string | null, quota = false) {
+  let world: World = buildM3Clearing(1)
+  let bytes = initial
+  const save = new SaveController({
+    build: 'platform-test', content: world.content, getWorld: () => world, replaceWorld: next => { world = next },
+    exportCharacter, loadCharacter, storage: {
+      getItem: () => bytes,
+      setItem(_, text) {
+        if (quota) throw new DOMException('Full', 'QuotaExceededError')
+        bytes = text
+      },
+      removeItem() { throw new Error('Unexpected removal') }
+    }
+  })
+  return { save, bytes: () => bytes }
+}
+
+it('exports the validated M3 character after a first-load migration hits quota', async () => {
+  const prior = JSON.stringify(m2Save)
+  const { save, bytes } = m3Session(prior, true)
+  try {
+    expect(await save.load()).toMatchObject({ ok: false, reason: 'quota', status: { text: prior, writable: false } })
+    const migrated = JSON.parse(save.export())
+    expect(migrated).toMatchObject({ schema: 2, generation: m2Save.generation, nextItemId: m2Save.nextItemId,
+      character: { rank: 5, xp: 23, items: m2Save.character.items, stash: m2Save.character.stash } })
+    expect(bytes()).toBe(prior)
+  } finally { save.dispose() }
+})
+
+it('rejects a future M2 graph version before replacing a healthy M3 slot', async () => {
+  const { save, bytes } = m3Session(null)
+  try {
+    await save.load()
+    await save.flush()
+    const prior = bytes(), live = save.export()
+    const future = structuredClone(m2Save)
+    future.character.graph.version = 999
+    expect(await save.import(JSON.stringify(future))).toMatchObject({ ok: false, reason: 'invalid-character' })
+    expect(bytes()).toBe(prior)
+    expect(save.export()).toBe(live)
   } finally { save.dispose() }
 })

@@ -111,11 +111,11 @@ export class SaveController {
     return { ok: false, reason: code, status: this.status() }
   }
 
-  private run(action: () => Promise<void>): Promise<SaveResult> {
+  private run(action: () => Promise<void | SaveResult>): Promise<SaveResult> {
     if (this.recovering) return Promise.resolve(this.failure('read-only'))
     const result = this.queue.then(async (): Promise<SaveResult> => {
       if (this.disposed) return this.failure('lost-writer')
-      try { await action(); return { ok: true, status: this.status() } }
+      try { return await action() ?? { ok: true, status: this.status() } }
       catch (error) {
         const code = reason(error)
         if (error instanceof SaveError && error.text !== undefined) this.state.text = error.text
@@ -163,10 +163,10 @@ export class SaveController {
     const save = this.observe(this.read())
     if (save) {
       const loaded = this.decode(save)
-      if (code === 'ready' && this.options.isPlayerSession?.() !== false && (save.schema !== this.schema || loaded.refunds.length > 0)) {
-        return this.write(loaded)
-      }
       this.install(loaded)
+      if (code === 'ready' && this.options.isPlayerSession?.() !== false && (save.schema !== this.schema || loaded.refunds.length > 0)) {
+        return this.write()
+      }
     }
     this.state.text = null
     this.setCode(code)
@@ -176,19 +176,22 @@ export class SaveController {
     if (this.isolated) return Promise.resolve(this.failure('read-only'))
     return this.run(async () => {
       if (!this.writer) return this.readWorld('read-only')
-      this.listen()
+      globalThis.window?.addEventListener('storage', this.onStorage)
       if (!await this.writer.acquire(false)) return this.readWorld('blocked')
       this.setCode('blocked')
       await this.writer.transaction(() => this.readWorld('ready'))
     })
   }
 
-  private listen(): void {
-    globalThis.window?.addEventListener('storage', this.onStorage)
-    if (globalThis.window && this.options.isPlayerSession && this.timer === undefined) {
-      this.timer = window.setInterval(this.autosave, 30_000)
-      window.addEventListener('pagehide', this.autosave)
-    }
+  startAutosave(): void {
+    if (!this.writer || !globalThis.window || !this.options.isPlayerSession || this.timer !== undefined) return
+    this.timer = window.setInterval(this.autosave, 30_000)
+    window.addEventListener('pagehide', this.autosave)
+    globalThis.document?.addEventListener('visibilitychange', this.onVisibility)
+  }
+
+  private onVisibility = (): void => {
+    if (document.hidden) this.autosave()
   }
 
   private autosave = (): void => {
@@ -239,7 +242,9 @@ export class SaveController {
 
   private replace(load: () => CharacterLoad): Promise<SaveResult> {
     return this.run(async () => {
-      const loaded = load()
+      let loaded: CharacterLoad
+      try { loaded = load() }
+      catch (error) { return this.failure(reason(error)) }
       if (!this.writer) {
         this.encode(loaded.world, this.state.generation)
         this.install(loaded)
@@ -262,7 +267,7 @@ export class SaveController {
     return this.run(async () => {
       this.setCode('blocked')
       if (!await this.writer!.acquire(true)) throw new SaveError('blocked')
-      this.listen()
+      globalThis.window?.addEventListener('storage', this.onStorage)
       await this.writer!.transaction(() => {
         const save = this.observe(this.read())
         return this.write(save === null ? this.fresh() : this.decode(save))
@@ -295,6 +300,7 @@ export class SaveController {
     this.writer?.dispose()
     globalThis.window?.removeEventListener('storage', this.onStorage)
     globalThis.window?.removeEventListener('pagehide', this.autosave)
+    globalThis.document?.removeEventListener('visibilitychange', this.onVisibility)
     globalThis.window?.clearInterval(this.timer)
   }
 }
