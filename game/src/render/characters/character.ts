@@ -4,6 +4,8 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { applyToon } from './toon'
 import { createEnvironment, type Environment } from '../materials/environment'
+import { ToolHeads } from './tool-heads'
+import type { WeaponFamily } from '../../sim/core/types'
 import { characterPose, type CharacterPose, type PoseState } from './pose'
 
 /** Clips that repeat; every other clip holds its last frame. */
@@ -61,6 +63,8 @@ export class CharacterView {
   readonly walk: Gait
   readonly run: Gait
   private readonly model: Object3D
+  private readonly sword: Object3D | undefined
+  private toolHeads?: ToolHeads
   private readonly mixer: AnimationMixer
   private readonly actions = new Map<string, AnimationAction>()
   private readonly ownEnvironment: Environment | null
@@ -70,6 +74,7 @@ export class CharacterView {
     this.model = cloneSkinned(asset.scene)
     applyToon(this.model, env ?? this.ownEnvironment!)
     this.object.add(this.model)
+    this.sword = this.model.getObjectByName('1H_Sword')
     this.mixer = new AnimationMixer(this.model)
     for (const source of asset.clips) {
       const clip = source.clone()
@@ -112,6 +117,15 @@ export class CharacterView {
     return pose
   }
 
+  tool(family?: WeaponFamily): void {
+    if (!this.toolHeads && this.sword && family && family !== 'hemblade') this.toolHeads = new ToolHeads(this.sword)
+    this.toolHeads?.show(family)
+  }
+
+  handPosition(target: Vector3): Vector3 {
+    return (this.sword?.parent ?? this.object).getWorldPosition(target)
+  }
+
   /** Idle, walk and run blended by speed, with cadence matched to speed so the feet plant. */
   pose({ speed, facing, time, phase }: LocomotionPose): void {
     const { walk, run } = this
@@ -140,7 +154,13 @@ export class CharacterView {
   }
 
   /** Rebinds scene uniforms and noise when the meadow seed changes. */
-  setEnvironment(env: Environment): void { applyToon(this.model, env) }
+  setEnvironment(env: Environment): void {
+    const heads = this.toolHeads ? [...this.toolHeads.heads.values()] : []
+    const parent = this.sword?.parent
+    heads.forEach(head => head.removeFromParent())
+    applyToon(this.model, env)
+    if (parent) for (const head of heads) parent.add(head)
+  }
 
   dispose(): void {
     this.mixer.stopAllAction()

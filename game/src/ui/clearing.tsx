@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import { actionPhase, type World } from '../sim/core'
+import { actionPhase, IDLE_COMMAND, isM3, type WeaponFamily, type World } from '../sim/core'
 import type { Clock } from '../platform/clock'
 import type { Input } from '../platform/input'
 import type { SaveController, SaveStatus } from '../platform/saves'
@@ -9,7 +9,10 @@ import { Passives } from './passives'
 import { Drawings } from './drawings'
 import { Records, locked, recordTitle, type RecordMode } from './records'
 import { keys, words } from './field'
+import { FamilyBench, toolNames } from './families'
+import { M3Drawings } from './m3-drawings'
 import './field.css'
+import './m3.css'
 
 const pages = { Inventory: 'I', Passives: 'P', Drawings: 'K', Save: '' } as const
 type Page = keyof typeof pages
@@ -19,7 +22,7 @@ export interface Controls { clock: Clock; input: Input; api: ReturnType<typeof c
 
 export function Clearing({ clock, input, api, saves, world, status, refresh }: Controls & { world: World; status: SaveStatus; refresh: () => void }) {
   const [page, setPage] = useState<Page | null>(null)
-  const [drawingSlot, setDrawingSlot] = useState(0)
+  const [drawingSlot, setDrawingSlot] = useState<number | null>(null)
   const [mode, setMode] = useState<RecordMode>('status')
   const [notice, report] = useState('')
   const [cleared, setCleared] = useState<number | null>(null)
@@ -29,11 +32,13 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
   const blocked = locked(status.code)
   const visible = blocked ? 'Save' : page
   const player = world.entities.find(e => e.id === world.playerId)!
-  const character = player.character!, content = world.content.m2!
+  const m3 = isM3(world) ? world : null
+  const character = player.character!, content = m3?.content.m3 ?? world.content.m2!
+  const place = m3 ? 'Hem Rest' : 'Windstep clearing'
   const inventoryFull = character.inventory.length === 30
   const clearedNotice = world.encounter?.phase === 'active' && cleared !== null ?
     cleared + ' uncollected ' + (cleared === 1 ? 'drop' : 'drops') + ' cleared' : ''
-  const open = useCallback((next: Page | null, slot = 0) => {
+  const open = useCallback((next: Page | null, slot: number | null = null) => {
     input.release()
     clock.suspend('inspection', next !== null)
     if (next === 'Drawings') setDrawingSlot(slot)
@@ -79,7 +84,19 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
     return () => window.removeEventListener('keydown', keyboard, true)
   }, [blocked, visible, open])
   const props = { world, character, content, api, report }
+  const refit = (familyId: WeaponFamily) => {
+    input.release()
+    const event = clock.advance(1, { ...IDLE_COMMAND, operations: [{ type: 'refitWeapon', familyId }] })
+      .find(e => e.type === 'operationAccepted' || e.type === 'operationRejected')
+    if (event) report(event.type === 'operationAccepted' ? toolNames[familyId] + ' equipped' : words(event.reason))
+  }
   const action = player.action
+  const held = player.mechanics?.held
+  const charge = m3?.content.m3.actions.find(a => a.id === held?.skillId)?.mechanic
+  const seams = player.mechanics?.counter?.value ?? 0
+  const eye = m3?.effects.find(e => e.kind === 'eye' && e.ownerId === player.id)
+  const tile = m3?.effects.find(e => e.kind === 'tile' && e.ownerId === player.id)
+
   const phase = action ? actionPhase(action.recipe?.timing ?? world.content.dodge.timing, action.ageTicks) : null
   const goRecord = (next: RecordMode) => { setMode(next); open('Save') }
   const play = () => {
@@ -91,17 +108,18 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
     document.querySelector('canvas')?.focus()
   }
   return <div className="field-ui">{visible ? <div className="veil"><section ref={panel} className="folio" role="dialog" aria-modal="true" aria-label={titles[visible]}>
-    <header className="folio-head"><span className="marker-seal" aria-hidden="true"/><div><small>Windstep clearing · Rank {character.rank}</small><h1 ref={heading} tabIndex={-1}>{titles[visible]}</h1></div>
+    <header className="folio-head"><span className="marker-seal" aria-hidden="true"/><div><small>{place} · Rank {character.rank}</small><h1 ref={heading} tabIndex={-1}>{titles[visible]}</h1></div>
       <nav>{(Object.keys(pages) as Page[]).map(p => <button key={p} aria-current={visible === p ? 'page' : undefined} disabled={blocked && p !== 'Save'}
         onClick={() => { if (p === 'Save') setMode('status'); open(p) }}>{p}</button>)}</nav>
       {!blocked && <button className="close" aria-label="Close panel" onClick={() => open(null)}>×</button>}</header>
-    {visible === 'Inventory' && <Inventory {...props}/>}
+    {visible === 'Inventory' && (m3 ? <FamilyBench world={m3} props={props} refit={refit}/> : <Inventory {...props}/>)}
     {visible === 'Passives' && <Passives {...props}/>}
-    {visible === 'Drawings' && <Drawings {...props} initialSlot={drawingSlot}/>}
+    {visible === 'Drawings' && (m3 ? <M3Drawings key={drawingSlot ?? 'editor'} world={m3} props={props} initialSlot={drawingSlot}/> :
+      <Drawings key={drawingSlot ?? 'editor'} {...props} initialSlot={drawingSlot ?? 0}/>)}
     {visible === 'Save' && <Records saves={saves} status={status} mode={mode} change={m => { setPage('Save'); clock.suspend('inspection',true); setMode(m) }} updated={refresh}/>}
     <footer className="folio-foot"><span>{world.encounter?.phase === 'rest' ? 'At the marker' : 'Away from marker · inspection only'}</span>
       <span role="status">{notice}</span><span>{blocked ? 'Waiting for writer access' : 'Paused · Esc to return'}</span></footer></section></div> :
-    <><div className="vital-card"><small>Windstep clearing · Rank {character.rank}</small><strong>{player.health} / {player.maxHealth}</strong>
+    <><div className="vital-card"><small>{place} · Rank {character.rank}</small><strong>{player.health} / {player.maxHealth}</strong>
       <div className="hud-health-track"><i style={{ width: player.health / player.maxHealth * 100 + '%' }}/></div>
       <p>{character.xp} XP · {character.points} passive points</p></div>
     <div className="tool-card"><nav>{(['Inventory','Passives','Drawings'] as const).map(p => <button key={p} onClick={() => open(p)}><kbd>{pages[p]}</kbd> {p}</button>)}</nav>
@@ -113,8 +131,17 @@ export function Clearing({ clock, input, api, saves, world, status, refresh }: C
       {notice && <p role="status">{notice}</p>}</div>
     <div className="loadout" role="group" aria-label="Inspect action slots">{character.loadout.map((id,i) => {
       const cooldown = id ? player.skillCooldowns[id] ?? 0 : 0
+      const cue = held?.skillId === id && charge?.kind === 'plinth-blow' ?
+        held.eligibleTicks >= charge.chargedAt ? 'Full charge' : 'Charging · ' + held.eligibleTicks + ' / ' + charge.chargedAt :
+        id === 'span-cut' && seams ? seams + ' / 2 seams' :
+        id === 'open-hem' && seams < 2 && action?.id !== id ? 'Needs 2 seams' :
+        id === 'gather-line' && eye ? eye.recipe.skillId === id ? 'Eye returning' : 'Eye on the line' :
+        id === 'gather-line' ? 'Needs an eye' :
+        id === 'cast-loop' && eye ? eye.leg === 2 ? 'Eye placed' : 'Eye travelling' :
+        id === 'lay-bed' && tile ? tile.leg === 2 ? 'Catch pending' :
+          tile.leg === 1 && world.tick >= tile.dueTick ? 'Tile armed' : 'Tile arming' : null
       const state = !id ? 'Empty' : player.death ? 'Fallen' : cooldown ? (cooldown / 60).toFixed(1) + ' s' :
-        action?.id === id && phase ? words(phase) : action || player.impactPauseTicks || player.knockback ? 'Waiting' : 'Ready'
+        cue ?? (action?.id === id && phase ? words(phase) : action || player.impactPauseTicks || player.knockback ? 'Waiting' : 'Ready')
       return <button key={i} type="button" data-ready={state === 'Ready'} onClick={() => open('Drawings', i)}>
         <kbd>{keys[i]}</kbd><b>{id ? content.actions.find(a => a.id === id)?.name : 'Unassigned'}</b><span>{state}</span></button>
     })}</div><div className="field-help">WASD move · Mouse aim · Space dodge{player.cooldowns.dodge > 0 && ' (' + (player.cooldowns.dodge / 60).toFixed(1) + ' s)'}{!inventoryFull && ' · F collect'}</div></>}

@@ -45,7 +45,7 @@ export function createHUD(controls: Controls) {
     sync(world: World): void {
       const player = world.entities.find(actor => actor.id === world.playerId)
       root.hidden = !player || !!player.character
-      if (player?.character && world.content.m2) {
+      if (player?.character && (world.content.m2 || world.content.m3)) {
         const status = controls.saves.status()
         if (rendered !== world || tick !== world.tick || record !== status.code + status.generation) refresh()
         return

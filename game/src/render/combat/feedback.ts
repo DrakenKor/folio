@@ -1,4 +1,5 @@
 import { BufferAttribute, BufferGeometry, CanvasTexture, DoubleSide, Group, Mesh, MeshBasicNodeMaterial, Sprite, SpriteNodeMaterial, Vector3, type Camera, type Object3D } from 'three/webgpu'
+import { isM3 } from '../../sim/core'
 import type { Entity, SimEvent, World } from '../../sim/core/types'
 import type { Heightfield } from '../terrain/heightfield'
 import type { Frame } from '../view'
@@ -53,8 +54,8 @@ export class CombatFeedback {
       const sector = action?.recipe?.footprint ?? (skill?.kind === 'melee' ? { kind: skill.kind, reach: skill.range, arcRadians: skill.arcRadians } : undefined)
       const timing = action?.recipe?.timing ?? skill?.timing
       const age = action?.ageTicks ?? 0
-      const warning = actor.ai && sector?.kind === 'melee' && timing && age < timing.windupTicks
-      const cut = !actor.ai && sector?.kind === 'melee' && timing && age >= timing.windupTicks && age < timing.windupTicks + timing.activeTicks
+      const warning = !isM3(world) && actor.ai && sector?.kind === 'melee' && timing && age < timing.windupTicks
+      const cut = (!isM3(world) || action?.id === 'span-cut') && !actor.ai && sector?.kind === 'melee' && timing && age >= timing.windupTicks && age < timing.windupTicks + timing.activeTicks
       if (!actor.death && action && sector && timing && (warning || cut)) {
         live.add(actor.id)
         let footprint = this.footprints.get(actor.id)

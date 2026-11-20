@@ -1,0 +1,63 @@
+.bench-tabs { display:flex; gap:6px; padding:8px 24px; border-bottom:1px solid #b7ad824d }
+.field-ui .bench-tabs button { border-color:transparent; padding:5px 12px }
+.field-ui .bench-tabs [aria-pressed=true] { border-color:#d8bf82; color:var(--gold) }
+.family-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0 12px }
+.field-ui .family-grid button { display:grid; grid-template-columns:46px 1fr; align-items:center; gap:4px 12px; text-align:left; min-height:82px }
+.family-grid strong, .binding-slots strong, .tally-card strong { font:21px/1.05 Georgia,serif }
+.family-grid span, .tally-card span { font-size:12px }
+.family-grid .tool-glyph { grid-row:span 2 }
+.tool-glyph { width:38px; height:38px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linejoin:round }
+.field-ui .family-grid [aria-pressed=true], .field-ui .binding-slots [aria-pressed=true], .field-ui .tally-card[aria-pressed=true] {
+  background:#d8d7b6; color:#263f32; border-color:#4e6b52; box-shadow:inset 3px 0 #54745c;
+}
+.field-ui .tally-card { width:100%; display:flex; align-items:center; gap:12px; text-align:left }
+.tally-card .tool-glyph { width:25px; height:25px }
+.tally-card span { margin-left:auto }
+.m3-slots { display:grid; gap:5px; margin:14px 0 }
+.m3-slots > div { display:grid; grid-template-columns:45px 1fr; border-bottom:1px solid #c7bb8e44; padding:3px 0 }
+.m3-slots dt { color:var(--gold); font-size:11px }
+.m3-slots dd { margin:0; display:flex; align-items:center; justify-content:space-between; gap:6px }
+.m3-slots small { color:var(--gold); letter-spacing:.05em }
+.binding-slots { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:16px }
+.field-ui .binding-slots button { text-align:left; padding:12px }
+.binding-slots kbd { display:block; margin-bottom:5px }
+.binding-options { display:grid; gap:3px; margin-top:12px }
+.field-ui .binding-options button { display:flex; justify-content:space-between; align-items:baseline; gap:8px; text-align:left; padding:4px 6px }
+.field-ui .binding-options [aria-pressed=true] { border-color:var(--gold); color:var(--gold) }
+.binding-options span, .m3-editor .action-index span { font-size:11px }
+.m3-editor .action-index > small { margin-bottom:7px }
+.field-ui .m3-editor .action-index button { display:grid; gap:2px; padding:4px 5px; margin:1px 0 }
+.m3-editor .action-index span { letter-spacing:0; text-transform:none; font-size:10px }
+.m3-editor .drawing-paper { padding:18px }
+.drawing-lock { color:#743d26; font-size:12px }
+.m3-plates { display:grid; grid-template-columns:1fr 1fr; gap:9px }
+.m3-plate { min-width:0 }
+.m3-plate h3 { margin:0 0 6px }
+.m3-plate .blueprint { padding:0; overflow:hidden }
+.m3-plate .blueprint svg { height:auto; aspect-ratio:224 / 102 }
+.m3-timing { position:relative; display:flex; height:6px; margin:12px 0 7px; background:#d7d1b6 }
+.m3-timing i { background:#947645 }
+.m3-timing i:nth-child(2) { background:#9d5137 }
+.m3-timing i:nth-child(3) { background:#52765d }
+.m3-timing b { position:absolute; top:-3px; width:2px; height:12px; background:#343d31 }
+.m3-phases { display:flex; justify-content:space-between; flex-wrap:wrap; gap:2px 5px; font-size:11px }
+.m3-path-notes { display:grid; gap:3px; margin-top:7px; font-size:12px }
+.tick-caption { display:block; margin-top:9px }
+.m3-editor .handle-row { margin:12px 0 6px }
+.contact-values { display:grid; gap:8px; margin:12px 0 }
+.contact-values > div { display:grid; gap:3px }
+.contact-values > div > span { font-size:12px }
+.contact-values b { display:flex; align-items:baseline; flex-wrap:wrap; gap:5px }
+.contact-values b > span { white-space:nowrap }
+.contact-values .damage-arrow { font:14px system-ui,sans-serif; color:var(--muted) }
+.contact-values .damage-base { font:16px Georgia,serif; color:var(--cream) }
+.contact-values b { font:23px/1 Georgia,serif; color:var(--gold) }
+.m3-price hr { margin:14px 0 }
+.field-ui .paper { --focus-ring:#784227 }
+@media(max-width:720px) {
+  .family-grid { grid-template-columns:1fr }
+  .bench-tabs { padding-inline:12px }
+}
+
+.m3-plate .target-diamond { fill:#8f552f; stroke:#f0e9cb; stroke-width:1 }
+.field-ui .binding-options button:disabled span { color:var(--cream) }
