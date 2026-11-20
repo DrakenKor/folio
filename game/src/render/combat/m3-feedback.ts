@@ -1,6 +1,6 @@
 import {
   BufferGeometry, CanvasTexture, Color, DoubleSide, Group, Mesh, MeshBasicNodeMaterial,
-  OctahedronGeometry, Sprite, SpriteNodeMaterial, Vector3
+  OctahedronGeometry, Sprite, SpriteNodeMaterial, Vector3, type Camera
 } from 'three/webgpu'
 import { TICK_DT, type Entity, type Footprint, type M3World, type OwnedEffect, type Vec2 } from '../../sim/core/types'
 import type { Heightfield } from '../terrain/heightfield'
@@ -11,6 +11,7 @@ const palettes = {
   danger: [0xc24732, 0xffc079],
   seam: [0x95482c, 0xffdda0],
   charge: [0xa8763f, 0xffebac],
+  sole: [0x3e2b26, 0xe7c486],
   chalk: [0x707a68, 0xfbeec9],
   heat: [0xe48436, 0xffc377],
   echo: [0x777b51, 0xf2e4a3],
@@ -37,14 +38,22 @@ export class M3Feedback {
     color: 0xfad69c, side: DoubleSide, depthWrite: false
   }))
   private readonly eye = new Mesh(new OctahedronGeometry(.14), new MeshBasicNodeMaterial({ color: 0xffe6ab }))
+  private readonly eyeMarker = document.createElement('span')
+  private readonly eyeView = new Vector3()
+  private parkedEye = false
   private world: Readonly<M3World> | null = null
   private tick = -1
 
-  constructor(private readonly field: Heightfield) {
+  constructor(private readonly field: Heightfield, private readonly canvas: HTMLCanvasElement) {
     this.object.name = 'm3-combat-feedback'
     this.object.add(this.eye, this.thread)
     this.thread.renderOrder = 2
     this.eye.renderOrder = 3
+    this.eyeMarker.className = 'reel-eye-marker'
+    this.eyeMarker.setAttribute('role', 'img')
+    this.eyeMarker.setAttribute('aria-label', 'Parked Reel eye')
+    this.eyeMarker.hidden = true
+    canvas.after(this.eyeMarker)
   }
 
   sync(frame: Frame, world: Readonly<M3World>, player: Entity, hand: Vector3): void {
@@ -53,6 +62,7 @@ export class M3Feedback {
     this.tick = world.tick
     this.live.clear()
     this.eye.visible = this.thread.visible = false
+    this.parkedEye = false
     const time = world.tick + frame.alpha
     const cards = world.content.m3.actions
     const effects = new Set<number>()
@@ -62,9 +72,11 @@ export class M3Feedback {
       const f = e.footprint
       const progress = Math.max(0, Math.min(1, (time - e.startTick) / Math.max(1, e.dueTick - e.startTick)))
       switch (e.kind) {
-        case 'warning':
-          this.shape(key, f, 'danger', .19 + progress * .39, .92, .085)
+        case 'warning': {
+          const ink = this.shape(key, f, 'danger', .19 + progress * .39, .92, f.kind === 'sector' ? .11 : .085)
+          ink.edge.material.depthTest = f.kind !== 'sector'
           break
+        }
         case 'eye':
           if (e.ownerId === player.id) this.reel(e, time, hand)
           break
@@ -143,20 +155,22 @@ export class M3Feedback {
       for (let i = 0; i < 2; i++) {
         const cutting = action?.id === 'open-hem'
         if (i >= seams && !cutting) continue
-        const origin = offset(player.pos, facing, .34, (i ? 1 : -1) * .75)
+        const origin = offset(player.pos, facing, .33, (i ? 1 : -1) * .85)
         this.shape('seam-' + i, { ...disc(origin, 0), kind: 'lane', direction: facing + (i ? -.44 : .44),
-          reach: cutting ? 1.02 : .74, halfWidth: .042 }, 'seam', .9, .96, .048)
+          reach: cutting ? 1.16 : .92, halfWidth: .11 }, 'seam', .98, 1, .065)
       }
       if (held?.kind === 'charge' && mechanic?.kind === 'plinth-blow' && action?.recipe) {
         const progress = Math.min(1, held.eligibleTicks / mechanic.chargedAt)
-        const charged = progress === 1
         this.shape('charge', disc(player.pos, action.recipe.footprint.reach), 'charge',
-          charged ? .32 : .1, charged ? .98 : .46, charged ? .09 : .035)
-        for (let i = 0; i < 4; i++) {
-          const a = facing + i * Math.PI / 2
-          const origin = offset(player.pos, a, 1.18 - progress * .42)
-          this.shape('heel-' + i, { ...disc(origin, 0), kind: 'lane', direction: a + Math.PI / 2,
-            halfWidth: .065, reach: .28 }, 'charge', .74, .88, .04)
+          .06 + progress * .08, .35 + progress * .26, .045)
+        for (const side of [-.98, .98]) {
+          const print = (part: string, start: number, reach: number, width: number) => {
+            const origin = offset(player.pos, facing, start, side)
+            this.shape(`sole-${side}-${part}`, { ...disc(origin, 0), kind: 'lane', direction: facing,
+              halfWidth: width + progress * .025, reach }, 'sole', .28 + progress * .66, .36 + progress * .61, .035 + progress * .025)
+          }
+          print('heel', -.45, .12, .105)
+          print('toe', -.02, .3, .14)
         }
       }
       if (action?.recipe && action.ageTicks >= action.recipe.timing.windupTicks &&
@@ -171,12 +185,46 @@ export class M3Feedback {
     }
   }
 
+  layout(camera: Camera): void {
+    const marker = this.eyeMarker
+    if (!this.parkedEye) {
+      marker.hidden = true
+      return
+    }
+    const p = this.eyeView.copy(this.eye.position).applyMatrix4(camera.matrixWorldInverse)
+    const depth = Math.max(.001, -p.z)
+    const x = p.x * camera.projectionMatrix.elements[0]! / depth
+    const y = -p.y * camera.projectionMatrix.elements[5]! / depth
+    if (p.z < 0 && Math.abs(x) <= 1 && Math.abs(y) <= 1) {
+      marker.hidden = true
+      return
+    }
+
+    const halfWidth = this.canvas.clientWidth / 2, halfHeight = this.canvas.clientHeight / 2
+    const inset = 30
+    if (halfWidth <= inset || halfHeight <= inset) {
+      marker.hidden = true
+      return
+    }
+    const dx = x * halfWidth, dy = y * halfHeight
+    const scale = 1 / Math.max(Math.abs(dx) / (halfWidth - inset), Math.abs(dy) / (halfHeight - inset))
+    if (!Number.isFinite(scale)) {
+      marker.hidden = true
+      return
+    }
+    marker.style.left = halfWidth + dx * scale + 'px'
+    marker.style.top = halfHeight + dy * scale + 'px'
+    marker.style.setProperty('--eye-angle', Math.atan2(dy, dx) + 'rad')
+    marker.hidden = false
+  }
+
   private reel(e: OwnedEffect, time: number, hand: Vector3) {
     const f = e.footprint
     const distance = e.leg === 2 ? 0 : Math.min(f.reach, Math.max(0, time - e.dueTick + 1) * e.recipe.footprint.speed * TICK_DT)
     const point = offset(f.origin, f.direction, distance)
     const returning = e.recipe.skillId === 'gather-line'
     const p = this.ground(point, e.leg === 2 ? .25 : .34)
+    this.parkedEye = e.leg === 2 && !returning
     this.eye.visible = true
     this.eye.position.copy(p)
     this.eye.rotation.set(.35, time * .11, Math.PI / 4)
@@ -225,6 +273,7 @@ export class M3Feedback {
     }
     ink.fill.material.opacity = fill
     ink.edge.material.opacity = edge
+    return ink
   }
 
   private rune(key: string, at: Vec2, direction: number, reach: number, opacity: number) {
@@ -275,6 +324,8 @@ export class M3Feedback {
     this.ink.forEach(({ ink }) => disposeInk(ink))
     this.ink.clear()
     this.eye.visible = this.thread.visible = false
+    this.parkedEye = false
+    this.eyeMarker.hidden = true
     this.world = null
   }
 
@@ -284,6 +335,7 @@ export class M3Feedback {
     this.thread.material.dispose()
     this.eye.geometry.dispose()
     this.eye.material.dispose()
+    this.eyeMarker.remove()
     this.object.removeFromParent()
   }
 }

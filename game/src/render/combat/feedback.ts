@@ -28,6 +28,7 @@ export class CombatFeedback {
   sync(frame: Frame): void {
     if (this.world !== frame.world) { this.clear(); this.world = frame.world }
     const { world } = frame
+    const m3 = isM3(world)
     const time = world.tick + frame.alpha
     for (const event of frame.events) if (event.type === 'damage' && world.tick - event.tick < NUMBER_TICKS) this.contact(event)
     this.bursts = this.bursts.filter(burst => {
@@ -54,8 +55,8 @@ export class CombatFeedback {
       const sector = action?.recipe?.footprint ?? (skill?.kind === 'melee' ? { kind: skill.kind, reach: skill.range, arcRadians: skill.arcRadians } : undefined)
       const timing = action?.recipe?.timing ?? skill?.timing
       const age = action?.ageTicks ?? 0
-      const warning = !isM3(world) && actor.ai && sector?.kind === 'melee' && timing && age < timing.windupTicks
-      const cut = (!isM3(world) || action?.id === 'span-cut') && !actor.ai && sector?.kind === 'melee' && timing && age >= timing.windupTicks && age < timing.windupTicks + timing.activeTicks
+      const warning = !m3 && actor.ai && sector?.kind === 'melee' && timing && age < timing.windupTicks
+      const cut = (!m3 || action?.id === 'span-cut') && !actor.ai && sector?.kind === 'melee' && timing && age >= timing.windupTicks && age < timing.windupTicks + timing.activeTicks
       if (!actor.death && action && sector && timing && (warning || cut)) {
         live.add(actor.id)
         let footprint = this.footprints.get(actor.id)
@@ -73,9 +74,11 @@ export class CombatFeedback {
         }
         const [fill, rim] = footprint.children as [Mesh<BufferGeometry, MeshBasicNodeMaterial>, Mesh<BufferGeometry, MeshBasicNodeMaterial>]
         fill.visible = !!warning
+        rim.material.opacity = m3 ? 0.35 : 0.95
         const progress = Math.min(1, (age + 1) / Math.max(1, timing.windupTicks))
         this.sector(fill, actor, action.direction, sector.reach * (0.25 + 0.75 * progress), sector.arcRadians, 0)
-        this.sector(rim, actor, action.direction, sector.reach, sector.arcRadians, sector.reach - (warning ? 0.14 : 0.065), !!warning)
+        const width = warning ? 0.14 : m3 ? 0.035 : 0.065
+        this.sector(rim, actor, action.direction, sector.reach, sector.arcRadians, sector.reach - width, !!warning)
       }
     }
     for (const [id, footprint] of this.footprints) if (!live.has(id)) { this.removeMeshGroup(footprint); this.footprints.delete(id) }
