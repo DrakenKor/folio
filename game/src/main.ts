@@ -18,12 +18,7 @@ let playerSession = initial.playerEntry
 function saveBoundary(world: World): string {
   return [world.encounter?.phase, world.zoneId, world.progress?.repairs.length, world.progress?.stage].join('/')
 }
-function rewardBoundary(world: World): string {
-  const player = world.entities.find(entity => entity.id === world.playerId)
-  return [world.encounter?.rewardedIds.length, player?.character?.items.length].join('/')
-}
 let boundary = saveBoundary(initial.world)
-let rewards = rewardBoundary(initial.world)
 let releaseInput = () => {}
 const clock: Clock = new Clock(initial.world, world => {
   if (view instanceof MeadowView) view.advance(world)
@@ -32,19 +27,15 @@ const clock: Clock = new Clock(initial.world, world => {
   input.afterStep(world)
   if (view instanceof MeadowView) view.advance(world)
   const next = saveBoundary(world)
-  const transition = boundary !== next
-  boundary = next
-  if (transition) input.reset()
-  if (playerSession) {
-    const nextRewards = rewardBoundary(world)
-    if (transition || rewards !== nextRewards || clock.recorder.lastCommand?.operations?.length) void saves.flush()
-    rewards = nextRewards
+  if (boundary !== next) {
+    boundary = next
+    input.reset()
+    if (playerSession) void saves.flush()
   }
 })
 const replaceWorld = (world: World) => {
   releaseInput()
   boundary = saveBoundary(world)
-  rewards = rewardBoundary(world)
   clock.replace(world)
 }
 function controller(world: World, player: boolean): SaveController {
