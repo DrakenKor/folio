@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { previewBuild, type Loadout, type M3FoldDefinition, type M3World } from '../sim/core'
 import type { DrawingPreview } from '../sim/combat/m3/preview'
 import { keys, num, words, type FieldProps } from './field'
@@ -80,6 +80,7 @@ function Blueprint({ drawing, label, scale, time }: { drawing: DrawingPreview; l
   const notes = [...new Set(drawing.paths.map(pathLabel).filter(Boolean))]
   const pulses = [...new Set(drawing.paths.filter(p => p.role === 'primary').map(p => p.delayTicks))]
   const primary = paths[0]!
+  const dartCount = drawing.recipe.skillId === 'fold-dart' ? paths.filter(p => p.role === 'primary').length : 0
   const liftPrint = drawing.recipe.skillId === 'lift-print'
   const directPosition = 100 * primary.delayTicks / time
   const delay = primary.delayTicks - windupTicks
@@ -115,7 +116,9 @@ function Blueprint({ drawing, label, scale, time }: { drawing: DrawingPreview; l
     <div className="m3-phases">{phases.map((ticks, i) => <span key={i}>{phaseNames[i]} <b>{ticks}</b></span>)}</div>
     <div className="m3-path-notes">
       <span>{num(primary.reach || primary.radius)} m {primary.shape === 'disc' && !primary.reach ? 'radius' : 'reach'}
-        {primary.maxContacts ? ' · ' + primary.maxContacts + ' / ' + (primary.shape === 'path' ? 'path' : 'lane') : ''}</span>
+        {primary.maxContacts && (dartCount
+          ? ` · ${dartCount} ${dartCount === 1 ? 'dart' : 'darts'} · up to ${primary.maxContacts} ${primary.maxContacts === 1 ? 'target' : 'targets'}${dartCount > 1 ? ' each' : ''}`
+          : ' · ' + primary.maxContacts + ' / ' + (primary.shape === 'path' ? 'path' : 'lane'))}</span>
       {pulses.length > 1 && <span>Pulses at {pulses.join(' · ')} ticks</span>}
       {notes.map(note => <span key={note}>{note}</span>)}
       {circlePaths.map(p => <span key={p.trigger} className="m3-circle-key">
@@ -144,6 +147,7 @@ function foldPrice(fold: M3FoldDefinition) {
 export function M3Drawings({ props, world, initialSlot }: { props: FieldProps; world: M3World; initialSlot: number | null }) {
   const { character: c, api, report } = props
   const { actions, folds } = world.content.m3
+  const patternId = useId()
   const [slot, setSlot] = useState(initialSlot ?? 0)
   const [id, setId] = useState(c.loadout[slot] ?? actions[0]!.id)
   const [foldId, setFold] = useState<string | null>(null)
@@ -228,10 +232,14 @@ export function M3Drawings({ props, world, initialSlot }: { props: FieldProps; w
             onLostPointerCapture={() => trace(false)}
             onClick={() => { if (matching) selectFold(matching) }}>{words(handle)}</button>
         })}</div>
-        <div className="patterns">{folds.filter(f => f.whitelist.includes(id)).map(f =>
-          <button key={f.id} aria-label={f.name} aria-pressed={fold?.id === f.id} onClick={() => selectFold(f)}>
-            {f.name}{installed.includes(f.id) && ' ✓'}
-          </button>)}</div>
+        <div className="patterns">{folds.filter(f => f.whitelist.includes(id)).map(f => {
+          const selected = fold?.id === f.id
+          const state = installed.includes(f.id) ? 'Equipped' : selected ? 'Proposed' : undefined
+          const stateId = state ? `${patternId}-${f.id}` : undefined
+          return <button key={f.id} aria-label={f.name} aria-describedby={stateId} aria-pressed={selected} onClick={() => selectFold(f)}>
+            {f.name}{state && <> · <span id={stateId}>{state}</span></>}
+          </button>
+        })}</div>
       </section>
       <aside className="ink m3-price">
         <small>Undefended damage per contact</small>
@@ -243,7 +251,9 @@ export function M3Drawings({ props, world, initialSlot }: { props: FieldProps; w
           </div>)}
         </dl>}
         {condition && payoff && <p>{ailmentSetup[condition]} sets up {conditions[condition]}. {'rootTicks' in payoff
-          ? 'Full charge roots for ' + payoff.rootTicks + ' ticks.' : 'Adds ' + payoff.secondaryDamage + ' damage to a secondary contact.'}</p>}
+          ? `Full charge roots for ${payoff.rootTicks} ticks.` : condition === 'emberprint'
+            ? `Each nearby enemy other than the printed target takes ${payoff.secondaryDamage}.`
+            : `The closest other enemy within stitch reach of the original target takes ${payoff.secondaryDamage}.`}</p>}
         <hr/>
         <small>{pairedDartFolds.length ? 'Fold price' : fold?.name ?? 'Fold price'}</small>
         <div className="counters"><div><b>{tension} / 3</b><small>Tension</small></div>
